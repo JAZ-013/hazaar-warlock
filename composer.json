@@ -33,6 +33,7 @@
   },
   "require": {
     "php": "^5.6 || ^7.0",
-    "ext-sockets": "*"
+    "ext-sockets": "*",
+    "hazaarlabs/hazaar-mvc": "^2.1.2"
   }
 }
