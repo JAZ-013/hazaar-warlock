@@ -39,10 +39,8 @@ class Control extends WebSockets {
 
     function __construct($autostart = NULL) {
 
-        if(! extension_loaded('sockets')) {
-
+        if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
-        }
 
         parent::__construct('warlock');
 
@@ -82,7 +80,7 @@ class Control extends WebSockets {
             )
         );
 
-        $this->config = new \Hazaar\Application\Config('warlock.ini', NULL, $defaults);
+        $this->config = new \Hazaar\Application\Config('warlock', NULL, $defaults);
 
         $app = \Hazaar\Application::getInstance();
 
@@ -97,11 +95,8 @@ class Control extends WebSockets {
         /**
          * First we check to see if we need to start the Warlock server process
          */
-        if($autostart === NULL) {
-
+        if($autostart === NULL)
             $autostart = (boolean)$this->config->sys->autostart;
-
-        }
 
         if($this->isRunning()) {
 
