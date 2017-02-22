@@ -80,7 +80,7 @@ class Control extends WebSockets {
             )
         );
 
-        $this->config = new \Hazaar\Application\Config('warlock', NULL, $defaults);
+        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
 
         $app = \Hazaar\Application::getInstance();
 
@@ -327,11 +327,21 @@ class Control extends WebSockets {
 
             $pid = (int)file_get_contents($this->pidfile);
 
-            if(file_exists('/proc/' . $pid)) {
+            if(substr(PHP_OS, 0, 3) == 'WIN'){
 
-                $this->server_pid = $pid;
+                exec('tasklist /FI "PID eq ' . $pid . '"', $tasklist, $return_var);
 
-                return TRUE;
+                return ($return_var == 0);
+
+            }else{
+
+                if(file_exists('/proc/' . $pid)) {
+
+                    $this->server_pid = $pid;
+
+                    return TRUE;
+
+                }
 
             }
 
@@ -343,9 +353,9 @@ class Control extends WebSockets {
 
     public function start($timeout = NULL) {
 
-        if(! $this->isRunning()) {
+        if(!$this->isRunning()) {
 
-            $php_binary = PHP_BINDIR . '/php';
+            $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
             if(! file_exists($php_binary))
                 throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
@@ -353,19 +363,36 @@ class Control extends WebSockets {
             if(! is_executable($php_binary))
                 throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-            $this->cmd = $php_binary . ' ' . realpath(LIBRARY_PATH . '/Warlock/Server.php');
+            $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+
+            if(!file_exists($server))
+                throw new \Exception('Warlock server script could not be found!');
+
+            if(substr(PHP_OS, 0, 3) == 'WIN')
+                $this->cmd = 'start /B "warlock" "' . $php_binary . '" "' . $server . '"';
+            else
+                $this->cmd = $php_binary . ' "' . $server . '"';
 
             $env = array(
-                'APPLICATION_PATH=' . APPLICATION_PATH,
-                'APPLICATION_ENV=' . APPLICATION_ENV,
-                'WARLOCK_EXEC=1',
-                'WARLOCK_OUTPUT=file'
+                'APPLICATION_PATH' => APPLICATION_PATH,
+                'APPLICATION_ENV' => APPLICATION_ENV,
+                'WARLOCK_EXEC' => 1,
+                'WARLOCK_OUTPUT' => 'file'
             );
 
-            $this->server_pid = (int)exec(implode(' ', $env) . ' ' . sprintf("%s >> %s 2>&1 & echo $!", $this->cmd, $this->outputfile));
+            foreach($env as $name => $value)
+                putenv($name . '=' . $value);
 
+            //Start the server.  This should work on Linux and Windows
+            pclose(popen($this->cmd, 'r'));
+
+            //The above replaces this:
+
+            /*
+            $this->server_pid = (int)exec(implode(' ', $env) . ' ' . sprintf("%s >> %s 2>&1 & echo $!", $this->cmd, $this->outputfile));
             if(! $this->server_pid > 0)
-                return FALSE;
+            return FALSE;
+             */
 
             $start_check = time();
 
@@ -374,11 +401,8 @@ class Control extends WebSockets {
 
             while(! $this->isRunning()) {
 
-                if(time() > ($start_check + $timeout)) {
-
+                if(time() > ($start_check + $timeout))
                     return FALSE;
-
-                }
 
                 usleep(100);
 
