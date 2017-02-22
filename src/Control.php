@@ -44,7 +44,7 @@ class Control extends WebSockets {
 
         parent::__construct('warlock');
 
-        $cache = new \Hazaar\Cache('session');
+        $cache = new \Hazaar\Cache();
 
         if(($this->id = $cache->get('warlock_guid')) == FALSE) {
 
@@ -325,13 +325,23 @@ class Control extends WebSockets {
 
         if(file_exists($this->pidfile)) {
 
-            $pid = (int)file_get_contents($this->pidfile);
+            if(!($pid = (int)file_get_contents($this->pidfile)))
+                return false;
 
             if(substr(PHP_OS, 0, 3) == 'WIN'){
 
-                exec('tasklist /FI "PID eq ' . $pid . '"', $tasklist, $return_var);
+                //Uses windows "tasklist" command to look for $pid (FI PID eq) and output in CSV format (FO CSV) with no header (NH).
+                exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH', $tasklist, $return_var);
 
-                return ($return_var == 0);
+                if($return_var !== 0 || count($tasklist) < 1)
+                    return false;
+
+                $parts = str_getcsv($tasklist[0]);
+
+                if(count($parts) <= 1) //A non-CSV response was probably returned.  like a "not found" info line
+                    return false;
+
+                return ($parts[1] == $pid && strpos(strtolower($parts[0]), 'php') !== false);
 
             }else{
 
