@@ -413,7 +413,7 @@ abstract class Service implements ServiceInterface {
 
     public function start() {
 
-        $init = $this->init();
+        $init = $this->init($this->config);
 
         if($this->state === HAZAAR_SERVICE_INIT) {
 
