@@ -356,16 +356,22 @@ class Server extends WebSockets {
     /**
      * SOCKETS & STREAMS
      */
-    private $master = NULL;
+
     // The main socket for listening for incomming connections.
-    private $sockets = array();
+    private $master = NULL;
+
     // Currently connected sockets we are listening for data on.
-    private $client_lookup = array();
+    private $sockets = array();
+
     // Socket to client lookup table. Required as clients can have multiple connections.
-    private $clients = array();
+    private $client_lookup = array();
+
     // Currently connected clients.
-    private $protocol;
+    private $clients = array();
+
     // The Warlock protocol encoder/decoder.
+    private $protocol;
+
     function __construct($silent = FALSE) {
 
         parent::__construct(array(
@@ -979,8 +985,7 @@ class Server extends WebSockets {
 
             /**
              * Sometimes we can get multiple frames in a single buffer so we cycle through them until they are all processed.
-             * This will
-             * even allow partial frames to be added to the client frame buffer.
+             * This will even allow partial frames to be added to the client frame buffer.
              */
             while($frame = $this->processFrame($buf, $client)) {
 
@@ -1397,7 +1402,7 @@ class Server extends WebSockets {
 
             case 'stream' :
 
-                stdout(W_DECODE, "STREAM->: $packet");
+                stdout(W_DECODE, "STREAM >>: $packet");
 
                 $read = $except = NULL;
 
@@ -1795,8 +1800,6 @@ class Server extends WebSockets {
 
     private function commandTrigger($resource, &$client, $event_id, $data) {
 
-        stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
-
         $this->stats['events']++;
 
         $this->rrd->setValue('events', 1);
@@ -1823,7 +1826,13 @@ class Server extends WebSockets {
 
         stdout(W_NOTICE, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
 
-        $this->send($resource, 'ok', NULL, $client->isLegacy());
+        if($client instanceof Client){
+
+            stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
+
+            $this->send($resource, 'ok', NULL, $client->isLegacy());
+
+        }
 
         return TRUE;
 
@@ -2758,6 +2767,8 @@ class Server extends WebSockets {
 
     private function processStreamPacket($id, &$proc, &$job, $packet) {
 
+        $payload = null;
+
         $type = $this->protocol->decode($packet, $payload);
 
         if ($type == FALSE) {
@@ -2768,9 +2779,19 @@ class Server extends WebSockets {
 
         }
 
-        switch ($type) {
+        $typename = $this->protocol->getTypeName($type);
 
-            case $this->protocol->getType('sync') :
+        switch ($typename) {
+
+            case 'SYNC' :
+
+                if(!is_array($payload)){
+
+                    stdout(W_ERR, 'SYNC received with non-array payload!');
+
+                    return false;
+
+                }
 
                 $job['client'] = $payload['client_id'];
 
@@ -2794,7 +2815,7 @@ class Server extends WebSockets {
 
                 break;
 
-            case $this->protocol->getType('status') :
+            case 'STATUS' :
 
                 if (array_key_exists($id, $this->procs)) {
 
@@ -2831,21 +2852,40 @@ class Server extends WebSockets {
 
                 break;
 
-            case $this->protocol->getType('error') :
+            case 'ERROR' :
+
+                if(is_array($payload))
+                    $payload = 'ERROR #' . ake($payload, 'code') . ' in file ' . ake($payload, 'file') . ': ' . ake($payload, 'message');
 
                 stdout(W_ERR, $payload);
 
                 break;
 
-            case $this->protocol->getType('debug') :
+            case 'DEBUG' :
 
                 stdout(W_DEBUG, $payload);
 
                 break;
 
+            case 'OK' :
+
+                stdout(W_INFO, 'OK: ' . $payload);
+
+                break;
+
+            case 'TRIGGER':
+
+                if($id = ake($payload, 'id'))
+                    $this->commandTrigger(null, $this, $id, ake($payload, 'data'));
+
+                break;
+
             default :
 
-                $this->processCommand(NULL, $this->clients[$job['client']], $type, $payload);
+                if($client = ake($job, 'client'))
+                    $this->processCommand(NULL, $this->clients[$client], $type, $payload);
+                else
+                    stdout(W_WARN, "Command '$type_name' received without a client!");
 
         }
 
