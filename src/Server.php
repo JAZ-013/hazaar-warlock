@@ -2305,12 +2305,6 @@ class Server extends WebSockets {
 
                     if (is_resource($process)) {
 
-                        fwrite($pipes[0], '<?php print_r($_ENV); ?>');
-                        //fclose($pipes[0]);
-
-                        echo stream_get_contents($pipes[1]);
-                        //fclose($pipes[1]);
-
                         $status = proc_get_status($process);
 
                         stdout(W_NOTICE, 'PID: ' . $status['pid'], $id);
@@ -2712,30 +2706,41 @@ class Server extends WebSockets {
 
                             $start = microtime(TRUE);
 
-                            while($packet = fgets($stream)) {
+                            $input = '';
 
-                                stdout(W_DECODE, "<-STREAM: " . trim($packet));
+                            while($input .= fgets($stream)) {
 
-                                $ret = $this->processStreamPacket($id, $proc, $job, $packet);
+                                stdout(W_DECODE, "STREAM >> $input");
 
-                                if (!$ret)
-                                    echo str_repeat('-', 15) . "\n" . trim($packet, "\n") . "\n" . str_repeat('-', 15) . "\n";
+                                while($packet = $this->protocol->process($input)){
+
+                                    stdout(W_DECODE, "PACKET >> " . trim($packet));
+
+                                    //If we can't process the packet then display it
+                                    if ( $ret = $this->processStreamPacket($id, $proc, $job, $packet))
+                                        $start = microtime(TRUE); //Reset the exec timeout start after each successful packet.
+                                    else
+                                        echo str_repeat('-', 15) . "\n" . trim($packet, "\n") . "\n" . str_repeat('-', 15) . "\n";
+
+                                }
 
                                 // Only process for a little bit then jump out so we don't lock up the main thread
-                                if ((microtime(TRUE) - $start) > 0.05) {
+                                if ((microtime(TRUE) - $start) > 0.2) {
+
+                                    stdout(W_WARN, "Processing timeout. Taking too long processing packets. Aborting.");
 
                                     $this->tv = 0;
 
                                     break;
+
                                 }
 
                             }
 
                         } else {
 
-                            $error = fread($stream, 65535);
-
-                            stdout(W_DEBUG, '>> ' . $error, $id);
+                            if($error = fread($stream, 65535))
+                                stdout(W_DEBUG, '>> ' . $error, $id);
 
                         }
 

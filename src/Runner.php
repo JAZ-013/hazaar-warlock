@@ -9,8 +9,6 @@ defined('APPLICATION_ENV') || define('APPLICATION_ENV', (getenv('APPLICATION_ENV
 // Composer autoloading
 include APPLICATION_PATH . '/../vendor/autoload.php';
 
-putenv('HOME=' . APPLICATION_PATH);
-
 // Create application, bootstrap, and run
 $application = new \Hazaar\Application(APPLICATION_ENV);
 
