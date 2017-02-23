@@ -56,6 +56,8 @@ abstract class Service implements ServiceInterface {
 
     private   $name;
 
+    private   $stdin         = NULL;
+
     private   $start         = NULL;
 
     private   $state         = HAZAAR_SERVICE_INIT;
@@ -92,18 +94,22 @@ abstract class Service implements ServiceInterface {
 
         $this->name = $name;
 
+        $this->stdin = fopen('php://stdin', 'r');
+
+        stream_set_blocking($this->stdin, true);
+
         $this->protocol = $protocol;
 
         $defaults = array(
             $name => array(
-                'enabled'   => TRUE,
+                'enabled'   => true,
                 'heartbeat' => 60
             )
         );
 
-        $config = new \Hazaar\Application\Config('service.ini', NULL, $defaults);
+        $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
 
-        $this->config = $config[$name]->toArray();
+        $this->config = ake($config, $name);
 
         $admin_key = getenv('HAZAAR_ADMIN_KEY');
 
@@ -132,19 +138,17 @@ abstract class Service implements ServiceInterface {
     public function send($command, $payload = NULL) {
 
         if(! $this->protocol)
-            return FALSE;
+            throw new \Exception('No protocol object.  How can I talk without it!?!?');
 
         echo $this->protocol->encode($command, $payload) . "\n";
 
         $this->sleep();
 
-        return TRUE;
+        return true;
 
     }
 
     public function main() {
-
-        $null = NULL;
 
         if(! $this->start())
             return 1;
@@ -159,7 +163,10 @@ abstract class Service implements ServiceInterface {
 
             $this->state = HAZAAR_SERVICE_RUNNING;
 
-            $this->run();
+            $ret = $this->run();
+
+            if($ret === false)
+                $this->state = HAZAAR_SERVICE_STOPPING;
 
             if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
                 $this->sendHeartbeat();
@@ -200,16 +207,18 @@ abstract class Service implements ServiceInterface {
         if(! $this->protocol)
             return FALSE;
 
-        $start = microtime(TRUE);
+        $start = microtime(true);
+
+        $read = array(
+            STDIN
+        );
 
         $null = NULL;
 
         $slept = FALSE;
 
         //Sleep if we are still sleeping and the timeout is not reached.  If the timeout is NULL or 0 do this process at least once.
-        while($this->state < 4 && ($slept === FALSE || ($start + $timeout) >= microtime(TRUE))) {
-
-            $read = array(STDIN);
+        while($this->state < 4 && ($slept === FALSE || ($start + $timeout) >= microtime(true))) {
 
             $tv_sec = 0;
 
@@ -219,7 +228,7 @@ abstract class Service implements ServiceInterface {
 
                 $this->state = HAZAAR_SERVICE_SLEEP;
 
-                $diff = ($start + $timeout) - microtime(TRUE);
+                $diff = ($start + $timeout) - microtime(true);
 
                 $hb = $this->lastHeartbeat + $this->config['heartbeat'];
 
@@ -246,11 +255,8 @@ abstract class Service implements ServiceInterface {
 
                 $payload = NULL;
 
-                if($type = $this->protocol->decode(fgets(STDIN), $payload)) {
-
+                if($type = $this->protocol->decode(fgets(STDIN), $payload))
                     $this->processCommand($type, $payload);
-
-                }
 
             }
 
@@ -260,19 +266,23 @@ abstract class Service implements ServiceInterface {
             if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
                 $this->sendHeartbeat();
 
-            $slept = TRUE;
+            $slept = true;
 
         }
 
-        $this->slept = TRUE;
+        $this->slept = true;
+
+        return true;
 
     }
 
     private function processCommand($command, $payload = NULL) {
 
-        switch($command) {
+        $type_name = $this->protocol->getTypeName($command);
 
-            case $this->protocol->getType('event'):
+        switch($type_name) {
+
+            case 'EVENT':
 
                 if(! (array_key_exists('id', $payload) && array_key_exists($payload['id'], $this->subscriptions)))
                     return FALSE;
@@ -281,7 +291,8 @@ abstract class Service implements ServiceInterface {
 
                     call_user_func_array(array($this, $this->subscriptions[$payload['id']]), array($payload));
 
-                } catch(\Exception $e) {
+                }
+                catch(\Exception $e) {
 
                     error_log('ERROR: ' . $e->getMessage());
 
@@ -289,13 +300,13 @@ abstract class Service implements ServiceInterface {
 
                 break;
 
-            case $this->protocol->getType('cancel'):
+            case 'CANCEL':
 
                 $this->stop();
 
                 break;
 
-            case $this->protocol->getType('status'):
+            case 'STATUS':
 
                 $this->sendHeartbeat();
 
@@ -303,7 +314,7 @@ abstract class Service implements ServiceInterface {
 
         }
 
-        return TRUE;
+        return true;
 
     }
 
@@ -323,7 +334,7 @@ abstract class Service implements ServiceInterface {
 
         $this->send('status', $status);
 
-        return TRUE;
+        return true;
 
     }
 
@@ -380,7 +391,7 @@ abstract class Service implements ServiceInterface {
      */
     public function init() {
 
-        return TRUE;
+        return true;
 
     }
 
@@ -392,7 +403,7 @@ abstract class Service implements ServiceInterface {
 
     public function shutdown() {
 
-        return TRUE;
+        return true;
 
     }
 
@@ -415,7 +426,7 @@ abstract class Service implements ServiceInterface {
 
         }
 
-        return TRUE;
+        return true;
 
     }
 
@@ -590,10 +601,8 @@ abstract class Service implements ServiceInterface {
 
         unset($this->schedule[$id]);
 
-        return TRUE;
+        return true;
 
     }
 
 }
-
-

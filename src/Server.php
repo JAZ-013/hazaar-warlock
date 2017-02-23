@@ -1402,17 +1402,17 @@ class Server extends WebSockets {
 
             case 'stream' :
 
-                stdout(W_DECODE, "STREAM >>: $packet");
+                stdout(W_DECODE, "<< STREAM: $packet");
 
-                $read = $except = NULL;
+                $read = null;
 
                 $write = array(
                     $resource
                 );
 
-                $streams = stream_select($read, $write, $except, 0);
+                $except = null;
 
-                if ($streams > 0) {
+                if (stream_select($read, $write, $except, 0) > 0) {
 
                     foreach($write as $stream)
                         fwrite($stream, $packet . "\n");
@@ -2306,11 +2306,7 @@ class Server extends WebSockets {
                     if (!is_executable($php_binary))
                         throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-                    $options = array(
-                        'bypass_shell' => true
-                    );
-
-                    $process = proc_open('"' . $php_binary . '" "' . $cmd . '"', $descriptorspec, $pipes, APPLICATION_PATH, $env, $options);
+                    $process = proc_open($php_binary . ' ' . $cmd, $descriptorspec, $pipes, APPLICATION_PATH, $env);
 
                     if (is_resource($process)) {
 
@@ -2356,9 +2352,9 @@ class Server extends WebSockets {
 
                         fwrite($pipes[0], $output . "\n");
 
-                        stream_set_blocking($pipes[1], FALSE);
+                        stream_set_blocking($pipes[1], false);
 
-                        stream_set_blocking($pipes[2], FALSE);
+                        stream_set_blocking($pipes[2], false);
 
                         $this->procs[$id] = array(
                             'id' => $id,
@@ -2703,35 +2699,30 @@ class Server extends WebSockets {
                     $proc['pipes'][2]
                 );
 
-                $write = $except = NULL;
+                $write = null;
 
-                $streams = stream_select($read, $write, $except, 0);
+                $except = null;
 
-                if ($streams > 0) {
+                if(stream_select($read, $write, $except, 0) > 0){
 
                     foreach($read as $stream) {
 
+                        //Process the input stream
                         if ($stream == $proc['pipes'][1]) {
 
                             $start = microtime(TRUE);
 
                             $input = '';
 
-                            while($input .= fgets($stream)) {
+                            if($packet = fgets($stream)) {
 
-                                stdout(W_DECODE, "STREAM >> $input");
+                                stdout(W_DECODE, "RECV_PACKET: " . trim($packet));
 
-                                while($packet = $this->protocol->process($input)){
-
-                                    stdout(W_DECODE, "PACKET >> " . trim($packet));
-
-                                    //If we can't process the packet then display it
-                                    if ( $ret = $this->processStreamPacket($id, $proc, $job, $packet))
-                                        $start = microtime(TRUE); //Reset the exec timeout start after each successful packet.
-                                    else
-                                        echo str_repeat('-', 15) . "\n" . trim($packet, "\n") . "\n" . str_repeat('-', 15) . "\n";
-
-                                }
+                                //If we can't process the packet then display it
+                                if ( $ret = $this->processStreamPacket($id, $proc, $job, $packet))
+                                    $start = microtime(TRUE); //Reset the exec timeout start after each successful packet.
+                                else
+                                    echo str_repeat('-', 15) . "\n" . trim($packet, "\n") . "\n" . str_repeat('-', 15) . "\n";
 
                                 // Only process for a little bit then jump out so we don't lock up the main thread
                                 if ((microtime(TRUE) - $start) > 0.2) {
@@ -2744,11 +2735,19 @@ class Server extends WebSockets {
 
                                 }
 
+                            }else{
+
+                                stdout(W_ERR, 'No line!');
+
+                                var_dump(fread($stream, 1024));
+
+                                exit;
+
                             }
 
-                        } else {
+                        } else { //Otherwise it's STDERR
 
-                            if($error = fread($stream, 65535))
+                            if($error = fgets($stream, 65535))
                                 stdout(W_DEBUG, '>> ' . $error, $id);
 
                         }
@@ -2771,7 +2770,7 @@ class Server extends WebSockets {
 
         $type = $this->protocol->decode($packet, $payload);
 
-        if ($type == FALSE) {
+        if ($type === FALSE) {
 
             stdout(W_ERR, $this->protocol->getLastError());
 
@@ -2779,9 +2778,9 @@ class Server extends WebSockets {
 
         }
 
-        $typename = $this->protocol->getTypeName($type);
+        $type_name = $this->protocol->getTypeName($type);
 
-        switch ($typename) {
+        switch ($type_name) {
 
             case 'SYNC' :
 
@@ -2812,6 +2811,12 @@ class Server extends WebSockets {
                         'legacy' => $client->isLegacy()
                     )
                 ));
+
+                break;
+
+            case 'NOOP':
+
+                stdout(W_INFO, 'NOOP: ' . $payload);
 
                 break;
 
@@ -3331,6 +3336,9 @@ class Server extends WebSockets {
 }
 
 if (($we = getenv('WARLOCK_EXEC')) && $we == 1) {
+
+    if(substr(PHP_OS, 0, 3) == 'WIN')
+        die('Warlock will NOT run on Windows due to a deficiency with stream_select().');
 
     $warlock = new Server(boolify(getenv('WARLOCK_OUTPUT') == 'file'));
 
