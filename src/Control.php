@@ -44,13 +44,14 @@ class Control extends WebSockets {
 
         parent::__construct('warlock');
 
-        $cache = new \Hazaar\Cache();
+        $guid_file = \Hazaar\Application::getInstance()->runtimePath('warlock.guid');
 
-        if(($this->id = $cache->get('warlock_guid')) == FALSE) {
+        if(!file_exists($guid_file) 
+            || ($this->id = file_get_contents($guid_file)) == FALSE) {
 
             $this->id = guid();
 
-            $cache->set('warlock_guid', $this->id);
+            file_put_contents($guid_file, $this->id);
 
         }
 
