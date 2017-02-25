@@ -994,7 +994,7 @@ class Server extends WebSockets {
 
                     if (!$this->processCommand($socket, $client, $type, $payload)) {
 
-                        stdout(W_ERR, 'An error occurred processing the command TYPE: ' . $this->protocol->getTypeName($type));
+                        stdout(W_ERR, 'An error occurred processing the command TYPE: ' . $type);
 
                         $this->send($socket, 'error', array(
                             'reason' => 'An error occurred processing the command',
@@ -1546,8 +1546,6 @@ class Server extends WebSockets {
         if (!$command)
             return FALSE;
 
-        $command = $this->protocol->getTypeName($command);
-
         $type = $client->isLegacy() ? 'Legacy' : 'WebSocket';
 
         stdout(W_NOTICE, "COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL) . " TYPE=$type");
@@ -1644,6 +1642,13 @@ class Server extends WebSockets {
                     return $this->ping($payload['client']);
 
                 break;
+
+            case 'NOOP':
+
+                stdout(W_DEBUG, $payload);
+
+                return true;
+
         }
 
         return FALSE;
@@ -2326,6 +2331,7 @@ class Server extends WebSockets {
                         $output = '';
 
                         $payload = array(
+                            'application_name' => APPLICATION_NAME,
                             'server_port' => $this->config->server['port'] ,
                             'job_id' => $id,
                             'access_key' => $job['access_key'] = uniqid()

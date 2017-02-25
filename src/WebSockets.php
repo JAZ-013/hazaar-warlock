@@ -95,8 +95,6 @@ abstract class WebSockets {
 
         $this->headers = $headers;
 
-        $url = NULL;
-
         if(array_key_exists('get', $headers)) {
 
             if(! array_key_exists('host', $headers) || ! ($results['host'] = $this->checkHost($headers['host']))) {

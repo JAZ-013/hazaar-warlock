@@ -34,29 +34,18 @@ abstract class Service extends Process implements ServiceInterface {
 
     private   $next          = NULL;
 
-    final function __constructdkjasdkjashd($application, $protocol = NULL) {
+    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
-        $this->application = $application;
+        parent::__construct($application, $protocol);
 
         $this->start = time();
 
-        if(preg_match('/^(\w*)Service$/', get_class($this), $matches)) {
-
+        if(preg_match('/^(\w*)Service$/', get_class($this), $matches))
             $name = $matches[1];
-
-        } else {
-
+        else
             throw new \Exception('Invalid service name ' . get_class($this));
 
-        }
-
         $this->name = $name;
-
-        $this->stdin = fopen('php://stdin', 'r');
-
-        stream_set_blocking($this->stdin, true);
-
-        $this->protocol = $protocol;
 
         $defaults = array(
             $name => array(
@@ -68,10 +57,6 @@ abstract class Service extends Process implements ServiceInterface {
         $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
 
         $this->config = ake($config, $name);
-
-        $admin_key = getenv('HAZAAR_ADMIN_KEY');
-
-        $this->send('sync', array('client_id' => guid(), 'user' => base64_encode(get_current_user()), 'admin_key' => $admin_key));
 
     }
 
@@ -210,6 +195,14 @@ abstract class Service extends Process implements ServiceInterface {
 
     public function start() {
 
+        $admin_key = getenv('HAZAAR_ADMIN_KEY');
+
+        $this->send('sync', array(
+            'client_id' => $this->id,
+            'user' => base64_encode(get_current_user()),
+            'admin_key' => $admin_key
+        ));
+
         $init = $this->init($this->config);
 
         if($this->state === HAZAAR_SERVICE_INIT) {
@@ -241,9 +234,48 @@ abstract class Service extends Process implements ServiceInterface {
 
     }
 
+    private function sendHeartbeat() {
+
+        $status = array(
+            'pid'        => getmypid(),
+            'name'       => $this->name,
+            'start'      => $this->start,
+            'state_code' => $this->state,
+            'state'      => $this->stateString($this->state),
+            'mem'        => memory_get_usage(),
+            'peak'       => memory_get_peak_usage()
+        );
+
+        $this->lastHeartbeat = time();
+
+        $this->send('status', $status);
+
+        return true;
+
+    }
+
     public function state() {
 
         return $this->state;
+
+    }
+
+    public function stateString($state = NULL) {
+
+        if($state === NULL)
+            $state = $this->state;
+
+        $strings = array(
+            HAZAAR_SERVICE_ERROR    => 'Error',
+            HAZAAR_SERVICE_INIT     => 'Initializing',
+            HAZAAR_SERVICE_READY    => 'Ready',
+            HAZAAR_SERVICE_RUNNING  => 'Running',
+            HAZAAR_SERVICE_SLEEP    => 'Sleeping',
+            HAZAAR_SERVICE_STOPPING => 'Stopping',
+            HAZAAR_SERVICE_STOPPED  => 'Stopped'
+        );
+
+        return $strings[$state];
 
     }
 

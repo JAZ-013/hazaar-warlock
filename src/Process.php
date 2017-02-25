@@ -30,23 +30,29 @@ define('HAZAAR_SCHEDULE_NORM', 2);
 
 define('HAZAAR_SCHEDULE_CRON', 3);
 
-abstract class Process {
+abstract class Process extends WebSockets {
+
+    private   $id;
+
+    private   $key;
+
+    protected $socket;
 
     protected $application;
 
-    private   $socket;
+    protected $state         = HAZAAR_SERVICE_INIT;
 
-    private   $state         = HAZAAR_SERVICE_INIT;
-
-    private   $slept         = FALSE;
+    protected $slept         = FALSE;
 
     protected $options       = array();
 
-    private   $protocol;
+    protected $protocol;
 
-    private   $next          = NULL;
+    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
-    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
+        parent::__construct(array(
+            'warlock'
+        ));
 
         $this->start = time();
 
@@ -54,24 +60,101 @@ abstract class Process {
 
         $this->protocol = $protocol;
 
+        $this->id = guid();
+
+        $this->key = uniqid();
+
     }
 
-    public function connect($port, $job_id, $access_key){
+    final function __destruct(){
+
+        $this->disconnect(true);
+
+    }
+
+    public function connect($application_name, $port, $job_id, $access_key){
 
         if(!($this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)))
             throw new \Exception('Unable to create TCP socket!');
 
-        if(!socket_connect($this->socket, '127.0.0.1', $port))
+        $host = '127.0.0.1';
+
+        if(!socket_connect($this->socket, $host, $port))
             throw new \Exception('Unable to connecto to localhost:' . $port);
 
-        //TODO: Initiate the WebSockets handshake!
+        /**
+         * Initiate a WebSockets connection
+         */
+        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, NULL, $this->key);
 
-        /*$this->send('sync', array(
+        socket_write($this->socket, $handshake, strlen($handshake));
+
+        /**
+         * Wait for the response header
+         */
+        $read = array($this->socket);
+
+        $write = $except = NULL;
+
+        $sockets = socket_select($read, $write, $except, 3000);
+
+        if($sockets == 0) return FALSE;
+
+        socket_recv($this->socket, $buf, 65536, 0);
+
+        $response = $this->parseHeaders($buf);
+
+        if($response['code'] != 101)
+            throw new \Exception('Walock server returned status: ' . $response['code'] . ' ' . $response['status']);
+
+        if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
+            throw new \Exception('Warlock server denied our connection attempt!');
+
+        return true;
+
+        $this->send('sync', array(
             'job_id' => $job_id,
             'access_key' => $access_key,
             'process_id' => getmypid(),
             'user' => base64_encode(get_current_user())
-        ));*/
+        ));
+
+        $response = $this->recv($payload);
+
+        if($response == $this->protocol->getType('ok'))
+            return TRUE;
+
+        $this->disconnect(TRUE);
+
+        return FALSE;
+
+    }
+
+    private function disconnect($send_close = TRUE) {
+
+        if($this->socket) {
+
+            if($send_close) {
+
+                $this->closing = TRUE;
+
+                $frame = $this->frame('', 'close');
+
+                socket_write($this->socket, $frame, strlen($frame));
+
+                $this->recv($payload);
+
+            }
+
+            socket_close($this->socket);
+
+            $this->socket = NULL;
+
+            return TRUE;
+
+        }
+
+        return FALSE;
 
     }
 
@@ -93,24 +176,102 @@ abstract class Process {
 
     }
 
-    public function send($command, $payload = NULL) {
+    protected function send($command, $payload = NULL) {
 
-        if(!$this->socket)
-            return false;
+        if(! $this->socket)
+            return FALSE;
 
         $packet = $this->protocol->encode($command, $payload);
 
-        if(!socket_write($this->socket, $packet)){
+        $frame = $this->frame($packet, 'text');
 
-            socket_close($this->socket);
+        $len = strlen($frame);
 
-            throw new \Exception('Socket write error!');
+        $bytes_sent = socket_write($this->socket, $frame, $len);
+
+        if($bytes_sent == -1) {
+
+            throw new \Exception('An error occured while sending to the socket');
+
+        } elseif($bytes_sent != $len) {
+
+            throw new \Exception($bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
 
         }
 
-        return true;
+        return TRUE;
 
     }
+
+    private function recv(&$payload = NULL, $tv_sec = 3, $tv_usec = 0) {
+
+        if(! $this->socket)
+            return FALSE;
+
+        $read = array(
+            $this->socket
+        );
+
+        $write = $except = NULL;
+
+        if(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
+
+            // will block to wait server response
+            $bytes_received = socket_recv($this->socket, $buf, 65536, 0);
+
+            if($bytes_received == -1) {
+
+                throw new \Exception('An error occured while receiving from the socket');
+
+            } elseif($bytes_received == 0) {
+
+                throw new \Exception('Received response of zero bytes.');
+
+            }
+
+            $opcode = $this->getFrame($buf, $packet);
+
+            switch($opcode) {
+
+                case 0:
+                case 1:
+                case 2:
+
+                    return $this->protocol->decode($packet, $payload);
+
+                case 8:
+
+                    if($this->closing === TRUE)
+                        return TRUE;
+
+                    return $this->disconnect(TRUE);
+
+                case 9: //PING received
+
+                    $frame = $this->protocol->encode('pong');
+
+                    socket_write($this->socket, $frame, strlen($frame));
+
+                    return TRUE;
+
+                case 10: //PONG received
+
+                    return TRUE;
+
+                default:
+
+                    $this->disconnect(TRUE);
+
+                    throw new \Exception('Invalid/Unsupported frame received from Warlock server. OPCODE=' . $opcode);
+
+            }
+
+        }
+
+        return NULL;
+
+    }
+
 
     /**
      * Sleep for a number of seconds.  If data is received during the sleep it is processed.  If the timeout is greater
@@ -237,51 +398,6 @@ abstract class Process {
         }
 
         return true;
-
-    }
-
-    private function sendHeartbeat() {
-
-        $status = array(
-            'pid'        => getmypid(),
-            'name'       => $this->name,
-            'start'      => $this->start,
-            'state_code' => $this->state,
-            'state'      => $this->stateString($this->state),
-            'mem'        => memory_get_usage(),
-            'peak'       => memory_get_peak_usage()
-        );
-
-        $this->lastHeartbeat = time();
-
-        $this->send('status', $status);
-
-        return true;
-
-    }
-
-    public function state() {
-
-        return $this->state;
-
-    }
-
-    public function stateString($state = NULL) {
-
-        if($state === NULL)
-            $state = $this->state;
-
-        $strings = array(
-            HAZAAR_SERVICE_ERROR    => 'Error',
-            HAZAAR_SERVICE_INIT     => 'Initializing',
-            HAZAAR_SERVICE_READY    => 'Ready',
-            HAZAAR_SERVICE_RUNNING  => 'Running',
-            HAZAAR_SERVICE_SLEEP    => 'Sleeping',
-            HAZAAR_SERVICE_STOPPING => 'Stopping',
-            HAZAAR_SERVICE_STOPPED  => 'Stopped'
-        );
-
-        return $strings[$state];
 
     }
 
