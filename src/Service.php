@@ -1,34 +1,6 @@
 <?php
 
-/**
- * @package     Socket
- */
 namespace Hazaar\Warlock;
-
-/*
- * Service Status Codes
- */
-define('HAZAAR_SERVICE_ERROR', -1);
-
-define('HAZAAR_SERVICE_INIT', 0);
-
-define('HAZAAR_SERVICE_READY', 1);
-
-define('HAZAAR_SERVICE_RUNNING', 2);
-
-define('HAZAAR_SERVICE_SLEEP', 3);
-
-define('HAZAAR_SERVICE_STOPPING', 4);
-
-define('HAZAAR_SERVICE_STOPPED', 5);
-
-define('HAZAAR_SCHEDULE_DELAY', 0);
-
-define('HAZAAR_SCHEDULE_INTERVAL', 1);
-
-define('HAZAAR_SCHEDULE_NORM', 2);
-
-define('HAZAAR_SCHEDULE_CRON', 3);
 
 /**
  * @brief       The Warlock application service class
@@ -48,25 +20,13 @@ define('HAZAAR_SCHEDULE_CRON', 3);
  *
  * @module      warlock
  */
-abstract class Service implements ServiceInterface {
+abstract class Service extends Process implements ServiceInterface {
 
     protected $config;
 
-    protected $application;
-
     private   $name;
 
-    private   $stdin         = NULL;
-
-    private   $start         = NULL;
-
-    private   $state         = HAZAAR_SERVICE_INIT;
-
-    private   $slept         = FALSE;
-
     protected $options       = array();
-
-    private   $protocol;
 
     private   $subscriptions = array();
 
@@ -74,9 +34,7 @@ abstract class Service implements ServiceInterface {
 
     private   $next          = NULL;
 
-    private   $lastHeartbeat = 0;
-
-    final function __construct($application, $protocol = NULL) {
+    final function __constructdkjasdkjashd($application, $protocol = NULL) {
 
         $this->application = $application;
 
@@ -114,37 +72,6 @@ abstract class Service implements ServiceInterface {
         $admin_key = getenv('HAZAAR_ADMIN_KEY');
 
         $this->send('sync', array('client_id' => guid(), 'user' => base64_encode(get_current_user()), 'admin_key' => $admin_key));
-
-    }
-
-    protected function setErrorHandler($methodName) {
-
-        if(! method_exists($this, $methodName))
-            throw new \Exception('Unable to set error handler.  Method does not exist!', E_ALL);
-
-        return set_error_handler(array($this, $methodName));
-
-    }
-
-    protected function setExceptionHandler($methodName) {
-
-        if(! method_exists($this, $methodName))
-            throw new \Exception('Unable to set exception handler.  Method does not exist!');
-
-        return set_exception_handler(array($this, $methodName));
-
-    }
-
-    public function send($command, $payload = NULL) {
-
-        if(! $this->protocol)
-            throw new \Exception('No protocol object.  How can I talk without it!?!?');
-
-        echo $this->protocol->encode($command, $payload) . "\n";
-
-        $this->sleep();
-
-        return true;
 
     }
 
@@ -194,147 +121,17 @@ abstract class Service implements ServiceInterface {
 
     }
 
-    /**
-     * Sleep for a number of seconds.  If data is received during the sleep it is processed.  If the timeout is greater
-     * than zero and data is received, the remaining timeout amount will be used in subsequent selects to ensure the
-     * full sleep period is used.  If the timeout parameter is not set then the loop will just dump out after one
-     * execution.
-     *
-     * @param int $timeout
-     */
-    protected function sleep($timeout = 0) {
+    protected function processCommand($command, $payload = NULL) {
 
-        if(! $this->protocol)
-            return FALSE;
-
-        $start = microtime(true);
-
-        $read = array(
-            STDIN
-        );
-
-        $null = NULL;
-
-        $slept = FALSE;
-
-        //Sleep if we are still sleeping and the timeout is not reached.  If the timeout is NULL or 0 do this process at least once.
-        while($this->state < 4 && ($slept === FALSE || ($start + $timeout) >= microtime(true))) {
-
-            $tv_sec = 0;
-
-            $tv_usec = 0;
-
-            if($timeout > 0) {
-
-                $this->state = HAZAAR_SERVICE_SLEEP;
-
-                $diff = ($start + $timeout) - microtime(true);
-
-                $hb = $this->lastHeartbeat + $this->config['heartbeat'];
-
-                $next = ((! $this->next || $hb < $this->next) ? $hb : $this->next);
-
-                if($next != NULL && $next < ($diff + time()))
-                    $diff = $next - time();
-
-                if($diff > 0) {
-
-                    $tv_sec = floor($diff);
-
-                    $tv_usec = round(($diff - floor($diff)) * 1000000);
-
-                } else {
-
-                    $tv_sec = 1;
-
-                }
-
-            }
-
-            if(stream_select($read, $null, $null, $tv_sec, $tv_usec) > 0) {
-
-                $payload = NULL;
-
-                if($type = $this->protocol->decode(fgets(STDIN), $payload))
-                    $this->processCommand($type, $payload);
-
-            }
-
-            if($this->next > 0 && $this->next <= time())
-                $this->processSchedule();
-
-            if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
-                $this->sendHeartbeat();
-
-            $slept = true;
-
-        }
-
-        $this->slept = true;
-
-        return true;
-
-    }
-
-    private function processCommand($command, $payload = NULL) {
-
-        $type_name = $this->protocol->getTypeName($command);
-
-        switch($type_name) {
-
-            case 'EVENT':
-
-                if(! (array_key_exists('id', $payload) && array_key_exists($payload['id'], $this->subscriptions)))
-                    return FALSE;
-
-                try {
-
-                    call_user_func_array(array($this, $this->subscriptions[$payload['id']]), array($payload));
-
-                }
-                catch(\Exception $e) {
-
-                    error_log('ERROR: ' . $e->getMessage());
-
-                }
-
-                break;
+        switch($command) {
 
             case 'CANCEL':
 
-                $this->stop();
-
-                break;
-
-            case 'STATUS':
-
-                $this->sendHeartbeat();
-
-                break;
+                return $this->stop();
 
         }
 
-        return true;
-
-    }
-
-    private function sendHeartbeat() {
-
-        $status = array(
-            'pid'        => getmypid(),
-            'name'       => $this->name,
-            'start'      => $this->start,
-            'state_code' => $this->state,
-            'state'      => $this->stateString($this->state),
-            'mem'        => memory_get_usage(),
-            'peak'       => memory_get_peak_usage()
-        );
-
-        $this->lastHeartbeat = time();
-
-        $this->send('status', $status);
-
-        return true;
+        return parent::processCommand($command, $payload);
 
     }
 
@@ -432,7 +229,7 @@ abstract class Service implements ServiceInterface {
 
     public function stop() {
 
-        $this->state = HAZAAR_SERVICE_STOPPING;
+        return $this->state = HAZAAR_SERVICE_STOPPING;
 
     }
 
@@ -440,63 +237,13 @@ abstract class Service implements ServiceInterface {
 
         $this->stop();
 
-        $this->start();
+        return $this->start();
 
     }
 
     public function state() {
 
         return $this->state;
-
-    }
-
-    public function stateString($state = NULL) {
-
-        if($state === NULL)
-            $state = $this->state;
-
-        $strings = array(
-            HAZAAR_SERVICE_ERROR    => 'Error',
-            HAZAAR_SERVICE_INIT     => 'Initializing',
-            HAZAAR_SERVICE_READY    => 'Ready',
-            HAZAAR_SERVICE_RUNNING  => 'Running',
-            HAZAAR_SERVICE_SLEEP    => 'Sleeping',
-            HAZAAR_SERVICE_STOPPING => 'Stopping',
-            HAZAAR_SERVICE_STOPPED  => 'Stopped'
-        );
-
-        return $strings[$state];
-
-    }
-
-    /*
-     * COMMUNICATIONS
-     */
-    protected function subscribe($event, $callback, $filter = NULL) {
-
-        if(! method_exists($this, $callback))
-            return FALSE;
-
-        $this->subscriptions[$event] = $callback;
-
-        return $this->send('subscribe', array('id' => $event, 'filter' => $filter));
-
-    }
-
-    protected function unsubscribe($event) {
-
-        if(! array_key_exists($event, $this->subscriptions))
-            return FALSE;
-
-        unset($this->subscriptions[$event]);
-
-        return $this->send('unsubscribe', array('id' => $event));
-
-    }
-
-    protected function trigger($event, $payload) {
-
-        return $this->send('trigger', array('id' => $event, 'data' => $payload));
 
     }
 
@@ -606,3 +353,5 @@ abstract class Service implements ServiceInterface {
     }
 
 }
+
+
