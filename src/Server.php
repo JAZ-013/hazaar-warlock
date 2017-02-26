@@ -148,6 +148,8 @@ class Client {
 
     public $admin = FALSE;
 
+    public $system = FALSE;
+
     public $subscriptions = array();
     // This is an array of event_id and socket pairs
     function __construct(&$server, $id, $resource = NULL, $uid = NULL) {
@@ -186,7 +188,7 @@ class Client {
 
     public function isSystem() {
 
-        return is_resource($this->resource) && (get_resource_type($this->resource) == 'stream');
+        return $this->system;
 
     }
 
@@ -1552,43 +1554,35 @@ class Server extends WebSockets {
 
         switch ($command) {
 
-            case 'SYNC' :
+            case 'NOOP':
 
-                stdout(W_NOTICE, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
+                stdout(W_DEBUG, 'NOOP: ' . $payload);
 
-                if (is_array($payload) && array_key_exists('admin_key', $payload) && $payload['admin_key'] === $this->config->admin->key) {
+                return true;
 
-                    stdout(W_INFO, 'Warlock control authorised to ' . $client->id);
+            case 'SYNC':
 
-                    $client->admin = TRUE;
+                return $this->commandSync($resource, $client, $payload);
 
-                    $this->send($resource, 'ok', NULL, $client->isLegacy());
+            case 'OK':
 
-                    $this->sendAdminEvent('update', array(
-                        'type' => 'client',
-                        'client' => array(
-                            'id' => $client->id,
-                            'admin' => $client->admin
-                        )
-                    ));
+                stdout(W_WARN, "Received OK, but I don't know why!");
 
-                } else {
+                break;
 
-                    stdout(W_ERR, 'Client requested bad sync!');
+            case 'ERROR':
 
-                    $client->closing = TRUE;
+                stdout(W_ERR, $payload);
 
-                }
-
-                return TRUE;
-
-            case 'SHUTDOWN' :
-
-                return $this->commandStop($resource, $client);
+                break;
 
             case 'STATUS' :
 
                 return $this->commandStatus($resource, $client, $payload);
+
+            case 'SHUTDOWN' :
+
+                return $this->commandStop($resource, $client);
 
             case 'DELAY' :
 
@@ -1643,15 +1637,61 @@ class Server extends WebSockets {
 
                 break;
 
-            case 'NOOP':
+            case 'PONG':
 
-                stdout(W_DEBUG, $payload);
+                $trip_ms = (microtime(true) - $payload) * 1000;
 
-                return true;
+                stdout(W_INFO, 'PONG received in ' . $trip_ms . 'ms');
+
+                break;
 
         }
 
         return FALSE;
+
+    }
+
+    private function commandSync($resource, &$client, $payload){
+
+        stdout(W_NOTICE, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
+
+        if (is_array($payload)
+            && array_key_exists('admin_key', $payload)
+            && $payload['admin_key'] === $this->config->admin->key) {
+
+            stdout(W_INFO, 'Warlock control authorised to ' . $client->id);
+
+            $client->admin = TRUE;
+
+            $this->send($resource, 'OK', NULL, $client->isLegacy());
+
+            $this->sendAdminEvent('update', array(
+                'type' => 'client',
+                'client' => array(
+                    'id' => $client->id,
+                    'admin' => $client->admin
+                )
+            ));
+
+        }elseif(is_array($payload)
+            && array_key_exists('access_key', $payload)
+            && $payload['access_key'] === $client->id){
+
+            stdout(W_INFO, 'Service connected successfully');
+
+            $client->system = TRUE;
+
+            $this->send($resource, 'OK', NULL, $client->isLegacy());
+
+        } else {
+
+            stdout(W_ERR, 'Client requested bad sync!');
+
+            $client->closing = TRUE;
+
+        }
+
+        return TRUE;
 
     }
 
@@ -2211,7 +2251,8 @@ class Server extends WebSockets {
     }
 
     /*
-     * Main job processor loop This is the main loop that executed scheduled jobs. It uses proc_open to execute jobs in their own process so
+     * Main job processor loop This is the main loop that executed scheduled jobs.
+     * It uses proc_open to execute jobs in their own process so
      * that they don't interfere with other scheduled jobs.
      */
     private function processJobs() {
@@ -2279,25 +2320,13 @@ class Server extends WebSockets {
                         2 => array('pipe', 'w')
                     );
 
-                    $env = array(
+                    $env = array_filter(array_merge($_SERVER, array(
                         'APPLICATION_PATH' => $job['application']['path'],
                         'APPLICATION_ENV' => $job['application']['env'],
                         'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
-                        'HAZAAR_SID' => $this->config->sys->id
-                    );
-
-                    /*
-                     * Hack for windows to copy the $_SERVER array into the environment
-                     * so that there is an authorised user that can do things.
-                     */
-                    foreach($_SERVER as $key => $value){
-
-                        if(is_array($value))
-                            continue;
-
-                        $env[$key] = $value;
-
-                    }
+                        'HAZAAR_SID' => $this->config->sys->id,
+                        'USERNAME' => $_SERVER['USERNAME']
+                    )), 'is_string');
 
                     $cmd = realpath(LIBRAY_PATH . '/Runner.php');
 
