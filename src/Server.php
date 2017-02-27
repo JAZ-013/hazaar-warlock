@@ -951,7 +951,7 @@ class Server extends WebSockets {
 
     private function processClient($socket) {
 
-        $bytes_received = socket_recv($socket, $buf, 65536, 0);
+        @$bytes_received = socket_recv($socket, $buf, 65536, 0);
 
         if ($bytes_received == 0) {
 
@@ -1565,10 +1565,7 @@ class Server extends WebSockets {
 
             case 'CANCEL' :
 
-                if (array_key_exists('job_id', $payload))
-                    return $this->commandCancel($resource, $client, $payload['job_id']);
-
-                break;
+                return $this->commandCancel($resource, $client, $payload);
 
             case 'ENABLE' :
 
@@ -1628,8 +1625,6 @@ class Server extends WebSockets {
     private function commandSync($resource, &$client, $payload){
 
         stdout(W_NOTICE, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
-
-        print_r($payload); exit;
 
         if (is_array($payload)
             && array_key_exists('admin_key', $payload)
@@ -1725,9 +1720,7 @@ class Server extends WebSockets {
 
             stdout(W_INFO, "Successfully scheduled delayed function.  Executing in $command[value] seconds . ", $id);
 
-            return $this->send($resource, 'ok', array(
-                'job_id' => $id
-            ), $client->isLegacy());
+            return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
 
         }
 
@@ -1758,9 +1751,7 @@ class Server extends WebSockets {
 
             stdout(W_INFO, "Function execution successfully scheduled", $id);
 
-            return $this->send($resource, 'ok', array(
-                'job_id' => $id
-            ), $client->isLegacy());
+            return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
 
         }
 
@@ -1850,7 +1841,7 @@ class Server extends WebSockets {
 
         stdout(W_NOTICE, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
 
-        if($client instanceof Client){
+        if($client instanceof SocketClient){
 
             stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
 
@@ -2126,11 +2117,9 @@ class Server extends WebSockets {
 
         stdout(W_DEBUG, 'Trying to cancel job', $job_id);
 
-        if (!array_key_exists($job_id, $this->jobQueue) || $this->jobQueue[$job_id]['status'] != STATUS_QUEUED || $this->jobQueue[$job_id]['status'] != STATUS_QUEUED_RETRY) {
-
+        //If the job IS is not found return false
+        if (!array_key_exists($job_id, $this->jobQueue))
             return FALSE;
-
-        }
 
         if (array_key_exists('tag', $this->jobQueue[$job_id]))
             unset($this->tags[$this->jobQueue[$job_id]['tag']]);
@@ -2167,21 +2156,22 @@ class Server extends WebSockets {
 
     private function setJobStatus($job_id, $status) {
 
-        if (array_key_exists($job_id, $this->jobQueue)) {
+        if (!array_key_exists($job_id, $this->jobQueue))
+            return false;
 
-            $this->jobQueue[$job_id]['status'] = $status;
+        $this->jobQueue[$job_id]['status'] = $status;
 
-            $this->jobQueue[$job_id]['status_text'] = $this->getJobStatus($job_id);
+        $this->jobQueue[$job_id]['status_text'] = $this->getJobStatus($job_id);
 
-            stdout(W_NOTICE, $job_id . ' - ' . strtoupper($this->jobQueue[$job_id]['status_text']));
+        stdout(W_NOTICE, $job_id . ' - ' . strtoupper($this->jobQueue[$job_id]['status_text']));
 
-            $this->sendAdminEvent('update', array(
-                'type' => 'job',
-                'id' => $job_id,
-                'job' => $this->jobQueue[$job_id]
-            ));
+        $this->sendAdminEvent('update', array(
+            'type' => 'job',
+            'id' => $job_id,
+            'job' => $this->jobQueue[$job_id]
+        ));
 
-        }
+        return true;
 
     }
 
@@ -2209,7 +2199,7 @@ class Server extends WebSockets {
                         break;
 
                     case STATUS_COMPLETE :
-                        $ret = 'completed';
+                        $ret = 'complete';
                         break;
 
                     case STATUS_CANCELLED :
@@ -2416,12 +2406,6 @@ class Server extends WebSockets {
                     if (array_key_exists('tag', $job) && $job['tag'])
                         unset($this->tags[$job['tag']]);
 
-                } elseif ($job['status'] == STATUS_CANCELLED) {
-
-                    $job['expire'] = time() + $this->config->job->expire;
-
-                    $this->setJobStatus($id, STATUS_COMPLETE);
-
                 } elseif ($job['status'] == STATUS_ERROR || ($job['status'] == STATUS_COMPLETE && $job['expire'] > 0)) {
 
                     if (!array_key_exists('expire', $job) || time() >= $job['expire']) {
@@ -2487,10 +2471,24 @@ class Server extends WebSockets {
                     'id' => $id
                 ));
 
+                //Make sure we close all the pipes
+                foreach($proc['pipes'] as $sid => $pipe) {
+
+                    //Skip the STDIN pipe for this process
+                    if($sid == 0)
+                        continue;
+
+                    if ($input = stream_get_contents($pipe))
+                        echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30);
+
+                    fclose($pipe);
+
+                }
+
                 /**
-                 * Process a Service exit
+                 * Process a Service shutdown.
                  */
-                if ($proc['type'] == 'service' && $job['status'] != STATUS_CANCELLED) {
+                if ($proc['type'] == 'service') {
 
                     $name = $job['service'];
 
@@ -2503,20 +2501,7 @@ class Server extends WebSockets {
 
                     stdout(W_NOTICE, "SERVICE=$name EXIT=$status[exitcode]");
 
-                    foreach($proc['pipes'] as $sid => $pipe) {
-
-                        //Skip the STDIN pipe for this process
-                        if($sid == 0)
-                            continue;
-
-                        if ($input = stream_get_contents($pipe))
-                            echo $input;
-
-                        fclose($pipe);
-
-                    }
-
-                    if ($status['exitcode'] > 0) {
+                    if ($status['exitcode'] > 0 && $job['status'] !== STATUS_CANCELLED) {
 
                         stdout(W_ERR, "Service '$name' returned status code $status[exitcode]");
 
@@ -2599,6 +2584,9 @@ class Server extends WebSockets {
 
                         foreach($proc['pipes'] as $sid => $pipe) {
 
+                            if($sid == 0)
+                                continue;
+
                             if ($output = stream_get_contents($pipe))
                                 stdout(W_DEBUG, (($sid >= 1) ? (($sid == 1) ? '> ' : '>> ') : '<< ') . $output, $id);
 
@@ -2653,39 +2641,12 @@ class Server extends WebSockets {
 
             } elseif ($job['status'] == STATUS_CANCELLED) {
 
-                stdout(W_INFO, 'Killing cancelled process');
+                stdout(W_INFO, 'Killing cancelled process', $id);
 
-                if ($job['type'] == 'service') {
-
-                    $this->unsubscribe($this->clients[$job['client']]);
-
-                    $this->sendAdminEvent('remove', array(
-                        'type' => 'client',
-                        'client' => $job['client']
-                    ));
-
-                    unset($this->clients[$job['client']]);
-
-                    unset($job['client']);
-
-                }
-
-                proc_terminate($proc['process']);
-
-                $this->stats['processes']--;
-
-                unset($this->procs[$id]);
-
-                $this->sendAdminEvent('remove', array(
-                    'type' => 'process',
-                    'id' => $id
-                ));
-
-                $this->setJobStatus($id, STATUS_COMPLETE);
-
-                $timeout = ($proc['type'] == 'service') ? 0 : $this->config->job->expire;
-
-                $job['expire'] = time() + $timeout;
+                if(substr(PHP_OS, 0, 3) == 'WIN')
+                    exec('taskkill /F /T /PID ' . $proc['pid']);
+                else
+                    proc_terminate($proc['process']);
 
             } elseif ($proc['type'] != 'service' && time() >= ($proc['start'] + $this->config->exec->timeout)) {
 
@@ -2887,7 +2848,7 @@ class Server extends WebSockets {
      * If there are, the first event found is sent to the client,
      * marked as seen and then processing stops.
      *
-     * @param Client $client
+     * @param SocketClient $client
      *
      * @param string $event_id
      *
@@ -3120,9 +3081,12 @@ class Server extends WebSockets {
         if (!array_key_exists($name, $this->services))
             return FALSE;
 
-        stdout(W_INFO, 'Disabling service: ' . $name);
+        $service = &$this->services[$name];
 
-        $service = & $this->services[$name];
+        if(!$service['enabled'])
+            return false;
+
+        stdout(W_INFO, 'Disabling service: ' . $name);
 
         $service['enabled'] = FALSE;
 

@@ -15,13 +15,9 @@ namespace Hazaar\Warlock;
  *
  * @module      warlock
  */
-class Control extends WebSockets {
+class Control extends Process {
 
     public  $config;
-
-    public  $protocol;
-
-    private $id;
 
     private $cmd;
 
@@ -31,22 +27,16 @@ class Control extends WebSockets {
 
     private $server_pid;
 
-    private $socket;
-
-    private $closing = FALSE;
-
-    private $key;
-
     function __construct($autostart = NULL) {
 
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
 
-        parent::__construct('warlock');
+        $app = \Hazaar\Application::getInstance();
 
-        $guid_file = \Hazaar\Application::getInstance()->runtimePath('warlock.guid');
+        $guid_file = $app->runtimePath('warlock.guid');
 
-        if(!file_exists($guid_file) 
+        if(!file_exists($guid_file)
             || ($this->id = file_get_contents($guid_file)) == FALSE) {
 
             $this->id = guid();
@@ -89,9 +79,9 @@ class Control extends WebSockets {
 
         $this->pidfile = $app->runtimePath($this->config->sys->pid);
 
-        $this->key = uniqid();
+        $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
 
-        $this->protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
+        parent::__construct($app, $protocol);
 
         /**
          * First we check to see if we need to start the Warlock server process
@@ -101,13 +91,18 @@ class Control extends WebSockets {
 
         if($this->isRunning()) {
 
-            if(! $this->connect()) {
+            if(! $this->connect(APPLICATION_NAME, $this->config->server['port'])) {
 
                 $this->disconnect(FALSE);
 
                 throw new \Exception('Warlock is already running but we were unable to communicate with it.');
 
             }
+
+            $this->send('sync', array('admin_key' => $this->config->admin->key));
+
+            if($this->recv() !== 'OK')
+                throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
         } elseif($autostart) {
 
@@ -131,293 +126,93 @@ class Control extends WebSockets {
 
     }
 
-    function __destruct() {
-
-        $this->disconnect(FALSE);
-
-    }
-
-    private function connect() {
-
-        $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-
-        if(! $this->socket)
-            die('Unable to create AF_UNIX socket');
-
-        socket_connect($this->socket, $this->config->server->listen, $this->config->server->port);
-
-        $url = NULL;
-
-        if(! array_key_exists('PWD', $_SERVER))
-            $url = new \Hazaar\Application\Url();
-
-        /**
-         * Initiate a WebSockets connection
-         */
-        $handshake = $this->createHandshake('/' . APPLICATION_NAME . '/warlock?CID=' . $this->id, $this->config->server->listen, ($url ? $url->renderObject(FALSE) : NULL), $this->key);
-
-        socket_write($this->socket, $handshake, strlen($handshake));
-
-        /**
-         * Wait for the response header
-         */
-        $read = array($this->socket);
-
-        $write = $except = NULL;
-
-        $sockets = socket_select($read, $write, $except, 3000);
-
-        if($sockets == 0) return FALSE;
-
-        socket_recv($this->socket, $buf, 65536, 0);
-
-        $response = $this->parseHeaders($buf);
-
-        if($response['code'] != 101)
-            throw new \Exception('Walock server returned status: ' . $response['code'] . ' ' . $response['status']);
-
-        if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
-            throw new \Exception('Warlock server denied our connection attempt!');
-
-        $this->send('sync', array('admin_key' => $this->config->admin->key));
-
-        $response = $this->recv($payload);
-
-        if($response == $this->protocol->getType('ok'))
-            return TRUE;
-
-        $this->disconnect(TRUE);
-
-        return FALSE;
-
-    }
-
-    private function disconnect($send_close = TRUE) {
-
-        if($this->socket) {
-
-            if($send_close) {
-
-                $this->closing = TRUE;
-
-                $frame = $this->frame('', 'close');
-
-                socket_write($this->socket, $frame, strlen($frame));
-
-                $this->recv($payload);
-
-            }
-
-            socket_close($this->socket);
-
-            $this->socket = NULL;
-
-            return TRUE;
-
-        }
-
-        return FALSE;
-
-    }
-
-    public function connected() {
-
-        return is_resource($this->socket);
-
-    }
-
-    private function send($command, $payload = NULL) {
-
-        if(! $this->socket)
-            return FALSE;
-
-        $packet = $this->protocol->encode($command, $payload);
-
-        $frame = $this->frame($packet, 'text');
-
-        $len = strlen($frame);
-
-        $bytes_sent = socket_write($this->socket, $frame, $len);
-
-        if($bytes_sent == -1) {
-
-            throw new \Exception('An error occured while sending to the socket');
-
-        } elseif($bytes_sent != $len) {
-
-            throw new \Exception($bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
-
-        }
-
-        return TRUE;
-
-    }
-
-    private function recv(&$payload = NULL, $tv_sec = 3, $tv_usec = 0) {
-
-        if(! $this->socket)
-            return FALSE;
-
-        $read = array(
-            $this->socket
-        );
-
-        $write = $except = NULL;
-
-        if(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
-
-            // will block to wait server response
-            $bytes_received = socket_recv($this->socket, $buf, 65536, 0);
-
-            if($bytes_received == -1) {
-
-                throw new \Exception('An error occured while receiving from the socket');
-
-            } elseif($bytes_received == 0) {
-
-                throw new \Exception('Received response of zero bytes.');
-
-            }
-
-            $opcode = $this->getFrame($buf, $packet);
-
-            switch($opcode) {
-
-                case 0:
-                case 1:
-                case 2:
-
-                    return $this->protocol->decode($packet, $payload);
-
-                case 8:
-
-                    if($this->closing === TRUE)
-                        return TRUE;
-
-                    return $this->disconnect(TRUE);
-
-                case 9: //PING received
-
-                    $frame = $this->protocol->encode('pong');
-
-                    socket_write($this->socket, $frame, strlen($frame));
-
-                    return TRUE;
-
-                case 10: //PONG received
-
-                    return TRUE;
-
-                default:
-
-                    $this->disconnect(TRUE);
-
-                    throw new \Exception('Invalid/Unsupported frame received from Warlock server. OPCODE=' . $opcode);
-
-            }
-
-        }
-
-        return NULL;
-
-    }
-
     public function isRunning() {
 
-        if(file_exists($this->pidfile)) {
+        if(!file_exists($this->pidfile))
+            return false;
 
-            if(!($pid = (int)file_get_contents($this->pidfile)))
+        if(!($pid = (int)file_get_contents($this->pidfile)))
+            return false;
+
+        if(substr(PHP_OS, 0, 3) == 'WIN'){
+
+            //Uses windows "tasklist" command to look for $pid (FI PID eq) and output in CSV format (FO CSV) with no header (NH).
+            exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH', $tasklist, $return_var);
+
+            if($return_var !== 0 || count($tasklist) < 1)
                 return false;
 
-            if(substr(PHP_OS, 0, 3) == 'WIN'){
+            $parts = str_getcsv($tasklist[0]);
 
-                //Uses windows "tasklist" command to look for $pid (FI PID eq) and output in CSV format (FO CSV) with no header (NH).
-                exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH', $tasklist, $return_var);
+            if(count($parts) <= 1) //A non-CSV response was probably returned.  like a "not found" info line
+                return false;
 
-                if($return_var !== 0 || count($tasklist) < 1)
-                    return false;
-
-                $parts = str_getcsv($tasklist[0]);
-
-                if(count($parts) <= 1) //A non-CSV response was probably returned.  like a "not found" info line
-                    return false;
-
-                return ($parts[1] == $pid && strpos(strtolower($parts[0]), 'php') !== false);
-
-            }else{
-
-                if(file_exists('/proc/' . $pid)) {
-
-                    $this->server_pid = $pid;
-
-                    return TRUE;
-
-                }
-
-            }
+            return ($parts[1] == $pid && strpos(strtolower($parts[0]), 'php') !== false);
 
         }
 
-        return FALSE;
+        if(file_exists('/proc/' . $pid))
+            return (($this->server_pid = $pid) > 0);
+
+        return false;
 
     }
 
     public function start($timeout = NULL) {
 
-        if(!$this->isRunning()) {
+        if($this->isRunning())
+            return true;
 
-            $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+        $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
-            if(! file_exists($php_binary))
-                throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
+        if(! file_exists($php_binary))
+            throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
 
-            if(! is_executable($php_binary))
-                throw new \Exception('The PHP CLI binary exists but is not executable!');
+        if(! is_executable($php_binary))
+            throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-            $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
 
-            if(!file_exists($server))
-                throw new \Exception('Warlock server script could not be found!');
+        if(!file_exists($server))
+            throw new \Exception('Warlock server script could not be found!');
 
-            if(substr(PHP_OS, 0, 3) == 'WIN')
-                $this->cmd = 'start /B "warlock" "' . $php_binary . '" "' . $server . '"';
-            else
-                $this->cmd = $php_binary . ' "' . $server . '"';
+        if(substr(PHP_OS, 0, 3) == 'WIN')
+            $this->cmd = 'start /B "warlock" "' . $php_binary . '" "' . $server . '"';
+        else
+            $this->cmd = $php_binary . ' "' . $server . '"';
 
-            $env = array(
-                'APPLICATION_PATH' => APPLICATION_PATH,
-                'APPLICATION_ENV' => APPLICATION_ENV,
-                'WARLOCK_EXEC' => 1,
-                'WARLOCK_OUTPUT' => 'file'
-            );
+        $env = array(
+            'APPLICATION_PATH' => APPLICATION_PATH,
+            'APPLICATION_ENV' => APPLICATION_ENV,
+            'WARLOCK_EXEC' => 1,
+            'WARLOCK_OUTPUT' => 'file'
+        );
 
-            foreach($env as $name => $value)
-                putenv($name . '=' . $value);
+        foreach($env as $name => $value)
+            putenv($name . '=' . $value);
 
-            //Start the server.  This should work on Linux and Windows
-            pclose(popen($this->cmd, 'r'));
+        //Start the server.  This should work on Linux and Windows
+        pclose(popen($this->cmd, 'r'));
 
-            //The above replaces this:
+        //The above replaces this:
 
-            /*
-            $this->server_pid = (int)exec(implode(' ', $env) . ' ' . sprintf("%s >> %s 2>&1 & echo $!", $this->cmd, $this->outputfile));
-            if(! $this->server_pid > 0)
-            return FALSE;
-             */
+        /*
+        $this->server_pid = (int)exec(implode(' ', $env) . ' ' . sprintf("%s >> %s 2>&1 & echo $!", $this->cmd, $this->outputfile));
+        if(! $this->server_pid > 0)
+        return FALSE;
+         */
 
-            $start_check = time();
+        $start_check = time();
 
-            if(! $timeout)
-                $timeout = $this->config->timeouts->connect;
+        if(! $timeout)
+            $timeout = $this->config->timeouts->connect;
 
-            while(! $this->isRunning()) {
+        while(! $this->isRunning()) {
 
-                if(time() > ($start_check + $timeout))
-                    return FALSE;
+            if(time() > ($start_check + $timeout))
+                return FALSE;
 
-                usleep(100);
-
-            }
+            usleep(100);
 
         }
 
@@ -431,7 +226,7 @@ class Control extends WebSockets {
 
             $this->send('shutdown');
 
-            if($this->recv($packet) == $this->protocol->getType('ok')) {
+            if($this->recv($packet) == 'OK') {
 
                 $this->disconnect();
 
@@ -451,11 +246,8 @@ class Control extends WebSockets {
 
             $this->send('status');
 
-            if($this->recv($packet) == $this->protocol->getType('status')) {
-
+            if($this->recv($packet) == 'STATUS')
                 return $packet;
-
-            }
 
         }
 
@@ -518,15 +310,10 @@ class Control extends WebSockets {
 
         $this->send('delay', $data);
 
-        $response = $this->recv();
+        if($this->recv($payload) == 'OK')
+            return $payload['job_id'];
 
-        if($response['result'] == 'error') {
-
-            return FALSE;
-
-        }
-
-        return $response['job_id'];
+        return FALSE;
 
     }
 
@@ -561,15 +348,10 @@ class Control extends WebSockets {
 
         $this->send('schedule', $data);
 
-        $response = $this->recv();
+        if($this->recv($payload) == 'OK')
+            return $payload['job_id'];
 
-        if($response['result'] == 'error') {
-
-            return FALSE;
-
-        }
-
-        return $response['job_id'];
+        return FALSE;
 
     }
 
@@ -577,15 +359,7 @@ class Control extends WebSockets {
 
         $this->send('cancel', $job_id);
 
-        $response = $this->recv();
-
-        if($response['result'] == 'error') {
-
-            return FALSE;
-
-        }
-
-        return TRUE;
+        return ($this->recv() == 'OK');
 
     }
 
@@ -602,7 +376,9 @@ class Control extends WebSockets {
         if(array_key_exists('REMOTE_USER', $_SERVER))
             $subscribe['client_user'] = $_SERVER['REMOTE_USER'];
 
-        return $this->send('subscribe', $subscribe);
+        $this->send('subscribe', $subscribe);
+
+        return ($this->recv() == 'OK');
 
     }
 
@@ -617,19 +393,7 @@ class Control extends WebSockets {
 
         $this->send('trigger', $packet);
 
-        if(($response = $this->recv()) == 2) {
-
-            return TRUE;
-
-        }
-
-        return FALSE;
-
-    }
-
-    public function wait($timeout = 0) {
-
-        return $this->recv($payload, $timeout);
+        return ($this->recv() == 'OK');
 
     }
 
@@ -637,17 +401,7 @@ class Control extends WebSockets {
 
         $this->send('enable', $name);
 
-        if($this->recv($response) == $this->protocol->getType('start')) {
-
-            if($response['result'] == 'ok') {
-
-                return TRUE;
-
-            }
-
-        }
-
-        return FALSE;
+        return ($this->recv() == 'OK');
 
     }
 
@@ -655,35 +409,20 @@ class Control extends WebSockets {
 
         $this->send('disable', $name);
 
-        if($this->recv($response) == $this->protocol->getType('stop')) {
-
-            if($response['result'] == 'ok') {
-
-                return TRUE;
-
-            }
-
-        }
-
-        return FALSE;
+        return ($this->recv() == 'OK');
 
     }
 
-    public function ping($client) {
+    public function ping() {
 
-        $this->send('ping', $client);
+        $this->send('ping');
 
-        if($this->recv($response) == $this->protocol->getType('ping')) {
+        $start = microtime(true);
 
-            if($response['result'] == 'ok') {
+        if($this->recv($payload) == 'PONG')
+            return (microtime(true) - $start);
 
-                return $response;
-
-            }
-
-        }
-
-        return FALSE;
+        return false;
 
     }
 

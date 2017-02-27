@@ -75,7 +75,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    public function connect($application_name, $port, $job_id, $access_key){
+    public function connect($application_name, $port, $job_id = null, $access_key = null){
 
         if(!($this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)))
             throw new \Exception('Unable to create TCP socket!');
@@ -83,7 +83,7 @@ abstract class Process extends WebSockets {
         $host = '127.0.0.1';
 
         if(!socket_connect($this->socket, $host, $port))
-            throw new \Exception('Unable to connecto to localhost:' . $port);
+            throw new \Exception('Unable to connect to localhost:' . $port);
 
         /**
          * Initiate a WebSockets connection
@@ -142,6 +142,12 @@ abstract class Process extends WebSockets {
         }
 
         return FALSE;
+
+    }
+
+    public function connected() {
+
+        return is_resource($this->socket);
 
     }
 
