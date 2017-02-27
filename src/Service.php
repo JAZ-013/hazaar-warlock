@@ -32,8 +32,6 @@ abstract class Service extends Process implements ServiceInterface {
 
     private   $schedule      = array(); //callback execution schedule
 
-    private   $next          = NULL;
-
     final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct($application, $protocol);
@@ -106,6 +104,78 @@ abstract class Service extends Process implements ServiceInterface {
 
     }
 
+    /**
+     * Sleep for a number of seconds.  If data is received during the sleep it is processed.  If the timeout is greater
+     * than zero and data is received, the remaining timeout amount will be used in subsequent selects to ensure the
+     * full sleep period is used.  If the timeout parameter is not set then the loop will just dump out after one
+     * execution.
+     *
+     * @param int $timeout
+     */
+    protected function sleep($timeout = 0) {
+
+        if(!$this->socket)
+            throw new \Exception('Trying to sleep without a socket!');
+
+        $start = microtime(true);
+
+        $slept = FALSE;
+
+        //Sleep if we are still sleeping and the timeout is not reached.  If the timeout is NULL or 0 do this process at least once.
+        while($this->state < 4 && ($slept === FALSE || ($start + $timeout) >= microtime(true))) {
+
+            $tv_sec = 0;
+
+            $tv_usec = 0;
+
+            if($timeout > 0) {
+
+                $this->state = HAZAAR_SERVICE_SLEEP;
+
+                $diff = ($start + $timeout) - microtime(true);
+
+                $hb = $this->lastHeartbeat + $this->config['heartbeat'];
+
+                $next = ((! $this->next || $hb < $this->next) ? $hb : $this->next);
+
+                if($next != NULL && $next < ($diff + time()))
+                    $diff = $next - time();
+
+                if($diff > 0) {
+
+                    $tv_sec = floor($diff);
+
+                    $tv_usec = round(($diff - floor($diff)) * 1000000);
+
+                } else {
+
+                    $tv_sec = 1;
+
+                }
+
+            }
+
+            $payload = null;
+
+            while($type = $this->recv($payload, $tv_sec, $tv_usec))
+                $this->processCommand($type, $payload);
+
+            if($this->next > 0 && $this->next <= time())
+                $this->processSchedule();
+
+            if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
+                $this->sendHeartbeat();
+
+            $slept = true;
+
+        }
+
+        $this->slept = true;
+
+        return true;
+
+    }
+
     protected function processCommand($command, $payload = NULL) {
 
         switch($command) {
@@ -171,7 +241,7 @@ abstract class Service extends Process implements ServiceInterface {
     /*
      * BUILT-IN PLACEHOLDER METHODS
      */
-    public function init() {
+    public function init($config = null) {
 
         return true;
 
@@ -195,13 +265,14 @@ abstract class Service extends Process implements ServiceInterface {
 
     public function start() {
 
+        /*
         $admin_key = getenv('HAZAAR_ADMIN_KEY');
 
         $this->send('sync', array(
-            'client_id' => $this->id,
-            'user' => base64_encode(get_current_user()),
-            'admin_key' => $admin_key
-        ));
+        'client_id' => $this->id,
+        'user' => base64_encode(get_current_user()),
+        'admin_key' => $admin_key
+        ));*/
 
         $init = $this->init($this->config);
 

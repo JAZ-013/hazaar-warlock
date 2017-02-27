@@ -32,21 +32,30 @@ define('HAZAAR_SCHEDULE_CRON', 3);
 
 abstract class Process extends WebSockets {
 
-    private   $id;
+    protected $id;
 
-    private   $key;
+    protected $key;
 
     protected $socket;
 
     protected $application;
 
-    protected $state         = HAZAAR_SERVICE_INIT;
+    protected $state            = HAZAAR_SERVICE_INIT;
 
-    protected $slept         = FALSE;
+    protected $slept            = false;
 
-    protected $options       = array();
+    protected $options          = array();
 
     protected $protocol;
+
+    protected $next             = null;
+
+    //WebSocket Buffers
+    protected $frameBuffer;
+
+    protected $payloadBuffer;
+
+    private $closing            = false;
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -85,7 +94,7 @@ abstract class Process extends WebSockets {
         /**
          * Initiate a WebSockets connection
          */
-        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, NULL, $this->key);
+        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key);
 
         socket_write($this->socket, $handshake, strlen($handshake));
 
@@ -94,7 +103,7 @@ abstract class Process extends WebSockets {
          */
         $read = array($this->socket);
 
-        $write = $except = NULL;
+        $write = $except = null;
 
         $sockets = socket_select($read, $write, $except, 3000);
 
@@ -112,31 +121,15 @@ abstract class Process extends WebSockets {
 
         return true;
 
-        $this->send('sync', array(
-            'job_id' => $job_id,
-            'access_key' => $access_key,
-            'process_id' => getmypid(),
-            'user' => base64_encode(get_current_user())
-        ));
-
-        $response = $this->recv($payload);
-
-        if($response == $this->protocol->getType('ok'))
-            return TRUE;
-
-        $this->disconnect(TRUE);
-
-        return FALSE;
-
     }
 
-    private function disconnect($send_close = TRUE) {
+    protected function disconnect() {
 
         if($this->socket) {
 
-            if($send_close) {
+            if($this->closing === false) {
 
-                $this->closing = TRUE;
+                $this->closing = true;
 
                 $frame = $this->frame('', 'close');
 
@@ -148,7 +141,7 @@ abstract class Process extends WebSockets {
 
             socket_close($this->socket);
 
-            $this->socket = NULL;
+            $this->socket = null;
 
             return TRUE;
 
@@ -176,7 +169,99 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function send($command, $payload = NULL) {
+    protected function processFrame(&$frameBuffer) {
+
+        if ($this->frameBuffer) {
+
+            $frameBuffer = $this->frameBuffer . $frameBuffer;
+
+            $this->frameBuffer = null;
+
+            return $this->processFrame($frameBuffer);
+
+        }
+
+        if (!$frameBuffer)
+            return FALSE;
+
+        $opcode = $this->getFrame($frameBuffer, $payload);
+
+        /**
+         * If we get an opcode that equals FALSE then we got a bad frame.
+         *
+         * If we get a opcode of -1 there are more frames to come for this payload. So, we return FALSE if there are no
+         * more frames to process, or TRUE if there are already more frames in the buffer to process.
+         */
+        if ($opcode === FALSE) {
+
+            $this->disconnect(true);
+
+            return FALSE;
+
+        } elseif ($opcode === -1) {
+
+            $this->payloadBuffer .= $payload;
+
+            return (strlen($frameBuffer) > 0);
+
+        }
+
+        switch ($opcode) {
+
+            case 0 :
+            case 1 :
+            case 2 :
+
+                break;
+
+            case 8 :
+
+                if($this->closing === false)
+                    $this->disconnect();
+
+                return false;
+
+            case 9 :
+
+                $frame = $this->frame('', 'pong', FALSE);
+
+                socket_write($this->socket, $frame, strlen($frame));
+
+                return false;
+
+            case 10 :
+
+                return false;
+
+            default :
+
+                $this->disconnect();
+
+                return false;
+
+        }
+
+        if (strlen($frameBuffer) > 0) {
+
+            $this->frameBuffer = $frameBuffer;
+
+            $frameBuffer = '';
+
+        }
+
+        if ($this->payloadBuffer) {
+
+            $payload = $this->payloadBuffer . $payload;
+
+            $this->payloadBuffer = '';
+
+        }
+
+        return $payload;
+
+    }
+
+    protected function send($command, $payload = null) {
 
         if(! $this->socket)
             return FALSE;
@@ -203,7 +288,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    private function recv(&$payload = NULL, $tv_sec = 3, $tv_usec = 0) {
+    protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
         if(! $this->socket)
             return FALSE;
@@ -212,12 +297,12 @@ abstract class Process extends WebSockets {
             $this->socket
         );
 
-        $write = $except = NULL;
+        $write = $except = null;
 
         if(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
 
             // will block to wait server response
-            $bytes_received = socket_recv($this->socket, $buf, 65536, 0);
+            $bytes_received = socket_recv($this->socket, $buffer, 65536, 0);
 
             if($bytes_received == -1) {
 
@@ -229,139 +314,16 @@ abstract class Process extends WebSockets {
 
             }
 
-            $opcode = $this->getFrame($buf, $packet);
-
-            switch($opcode) {
-
-                case 0:
-                case 1:
-                case 2:
-
-                    return $this->protocol->decode($packet, $payload);
-
-                case 8:
-
-                    if($this->closing === TRUE)
-                        return TRUE;
-
-                    return $this->disconnect(TRUE);
-
-                case 9: //PING received
-
-                    $frame = $this->protocol->encode('pong');
-
-                    socket_write($this->socket, $frame, strlen($frame));
-
-                    return TRUE;
-
-                case 10: //PONG received
-
-                    return TRUE;
-
-                default:
-
-                    $this->disconnect(TRUE);
-
-                    throw new \Exception('Invalid/Unsupported frame received from Warlock server. OPCODE=' . $opcode);
-
-            }
+            if($frame = $this->processFrame($buffer))
+                return $this->protocol->decode($frame, $payload);
 
         }
 
-        return NULL;
+        return null;
 
     }
 
-
-    /**
-     * Sleep for a number of seconds.  If data is received during the sleep it is processed.  If the timeout is greater
-     * than zero and data is received, the remaining timeout amount will be used in subsequent selects to ensure the
-     * full sleep period is used.  If the timeout parameter is not set then the loop will just dump out after one
-     * execution.
-     *
-     * @param int $timeout
-     */
-    protected function sleep($timeout = 0) {
-
-        if(!$this->socket)
-            throw new \Exception('Trying to sleep without a socket!');
-
-        $start = microtime(true);
-
-        $read = array(
-            $this->socket
-        );
-
-        $null = NULL;
-
-        $slept = FALSE;
-
-        //Sleep if we are still sleeping and the timeout is not reached.  If the timeout is NULL or 0 do this process at least once.
-        while($this->state < 4 && ($slept === FALSE || ($start + $timeout) >= microtime(true))) {
-
-            $tv_sec = 0;
-
-            $tv_usec = 0;
-
-            if($timeout > 0) {
-
-                $this->state = HAZAAR_SERVICE_SLEEP;
-
-                $diff = ($start + $timeout) - microtime(true);
-
-                $hb = $this->lastHeartbeat + $this->config['heartbeat'];
-
-                $next = ((! $this->next || $hb < $this->next) ? $hb : $this->next);
-
-                if($next != NULL && $next < ($diff + time()))
-                    $diff = $next - time();
-
-                if($diff > 0) {
-
-                    $tv_sec = floor($diff);
-
-                    $tv_usec = round(($diff - floor($diff)) * 1000000);
-
-                } else {
-
-                    $tv_sec = 1;
-
-                }
-
-            }
-
-            if(socket_select($read, $null, $null, $tv_sec, $tv_usec) > 0) {
-
-                $payload = NULL;
-
-                $blksize = unpack('N', socket_read($this->socket, 4));
-
-                dump($blksize);
-
-                $buffer = socket_read($this->socket, $blksize);
-
-                if($type = $this->protocol->decode($buffer, $payload))
-                    $this->processCommand($type, $payload);
-
-            }
-
-            if($this->next > 0 && $this->next <= time())
-                $this->processSchedule();
-
-            if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
-                $this->sendHeartbeat();
-
-            $slept = true;
-
-        }
-
-        $this->slept = true;
-
-        return true;
-
-    }
-
-    protected function processCommand($command, $payload = NULL) {
+    protected function processCommand($command, $payload = null) {
 
         switch($command) {
 
@@ -389,9 +351,19 @@ abstract class Process extends WebSockets {
 
                 break;
 
+            case 'PONG':
+
+                $trip_ms = (microtime(true) - $payload) * 1000;
+
+                $this->send('DEBUG', 'PONG received in ' . $trip_ms . 'ms');
+
+                break;
+
             default:
 
                 $this->send('DEBUG', 'Unhandled command: ' . $command);
+
+                exit;
 
                 break;
 
@@ -401,7 +373,13 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function subscribe($event, $callback, $filter = NULL) {
+    protected function ping(){
+
+        return $this->send('ping', microtime(true));
+
+    }
+
+    protected function subscribe($event, $callback, $filter = null) {
 
         if(! method_exists($this, $callback))
             return FALSE;
