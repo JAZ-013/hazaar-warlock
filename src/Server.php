@@ -1632,25 +1632,22 @@ class Server extends WebSockets {
 
             stdout(W_INFO, 'Warlock control authorised to ' . $client->id);
 
-            $client->admin = TRUE;
+            $client->type = 'admin';
 
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
-            $this->sendAdminEvent('update', array(
-                'type' => 'client',
-                'client' => array(
-                    'id' => $client->id,
-                    'admin' => $client->admin
-                )
-            ));
-
         }elseif(is_array($payload)
-            && array_key_exists('access_key', $payload)
-            && $payload['access_key'] === $client->id){
+            && array_key_exists('job_id', $payload)
+            && $payload['client_id'] === $client->id
+            && array_key_exists($payload['job_id'], $this->procs)){
 
-            stdout(W_INFO, 'Service connected successfully');
+            $proc = $this->procs[$payload['job_id']];
 
-            $client->system = TRUE;
+            $proc['client'] = $client;
+
+            $client->type = $proc['type'];
+
+            stdout(W_INFO, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
 
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
@@ -1660,7 +1657,17 @@ class Server extends WebSockets {
 
             $client->closing = TRUE;
 
+            return false;
+
         }
+
+        $this->sendAdminEvent('update', array(
+            'type' => 'client',
+            'client' => array(
+                'id' => $client->id,
+                'type' => $client->type
+            )
+        ));
 
         return TRUE;
 
@@ -1668,7 +1675,7 @@ class Server extends WebSockets {
 
     private function commandStop($resource, &$client) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         stdout(W_INFO, "Shutdown requested");
@@ -1683,7 +1690,7 @@ class Server extends WebSockets {
 
         if(!$payload){
 
-            if (!$client->type == 'admin')
+            if ($client->type !== 'admin')
                 return FALSE;
 
             return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
@@ -1696,7 +1703,7 @@ class Server extends WebSockets {
 
     private function commandDelay($resource, &$client, $command) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         if ($command['value'] == NULL)
@@ -1732,7 +1739,7 @@ class Server extends WebSockets {
 
     private function commandSchedule($resource, &$client, $command) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         $tag = NULL;
@@ -1763,7 +1770,7 @@ class Server extends WebSockets {
 
     private function commandCancel($resource, &$client, $job_id) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         if ($this->cancelJob($job_id)) {
@@ -1855,7 +1862,7 @@ class Server extends WebSockets {
 
     private function commandEnable($resource, &$client, $name) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         $result = $this->serviceEnable($name);
@@ -1868,7 +1875,7 @@ class Server extends WebSockets {
 
     private function commandDisable($resource, &$client, $name) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         $result = $this->serviceDisable($name);
@@ -1881,7 +1888,7 @@ class Server extends WebSockets {
 
     private function commandService($resource, &$client, $name) {
 
-        if (!$client->admin)
+        if ($client->type !== 'admin')
             return FALSE;
 
         stdout(W_WARN, 'Request service status not completed yet');
@@ -2560,21 +2567,6 @@ class Server extends WebSockets {
 
                         // Expire the job in 30 seconds
                         $job['expire'] = time();
-
-                    }
-
-                    if (array_key_exists('client', $job)) {
-
-                        $this->unsubscribe($this->clients[$job['client']]);
-
-                        $this->sendAdminEvent('remove', array(
-                            'type' => 'client',
-                            'client' => $job['client']
-                        ));
-
-                        unset($this->clients[$job['client']]);
-
-                        unset($job['client']);
 
                     }
 
