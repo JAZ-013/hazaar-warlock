@@ -107,7 +107,7 @@ function stdout($level, $message, $job = NULL) {
 
 }
 
-class Client {
+class SocketClient {
 
     /*
      * WebSocket specific stuff
@@ -133,13 +133,13 @@ class Client {
      */
     public $id;
 
+    public $type = 'client';  //Possible types are 'client', 'service' or 'admin'.
+
     public $username;
 
     public $since;
 
     public $status;
-
-    private $server;
 
     /*
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
@@ -148,17 +148,22 @@ class Client {
 
     public $admin = FALSE;
 
-    public $system = FALSE;
-
     public $subscriptions = array();
     // This is an array of event_id and socket pairs
-    function __construct(&$server, $id, $resource = NULL, $uid = NULL) {
+    function __construct(&$server, $id, $type = 'client', $resource = NULL, $uid = NULL) {
+
+        $allowed_types = array('client', 'service', 'admin');
+
+        if(!in_array($type, $allowed_types))
+            $type = 'client';
 
         $this->id = $id;
 
         $this->username = base64_decode($uid);
 
         $this->since = time();
+
+        $this->type = $type;
 
         $this->resource = $resource;
 
@@ -167,12 +172,12 @@ class Client {
 
         if (is_resource($this->resource)) {
 
-            $type = get_resource_type($this->resource);
+            $resource_type = get_resource_type($this->resource);
 
-            if ($type == 'Socket')
+            if ($resource_type == 'Socket')
                 socket_getpeername($this->resource, $this->address, $this->port);
 
-            stdout(W_NOTICE, "ADD: TYPE=$type CLIENT=$this->id SOCKET=$this->resource");
+            stdout(W_NOTICE, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->resource");
 
         }
 
@@ -186,9 +191,9 @@ class Client {
 
     }
 
-    public function isSystem() {
+    public function getType() {
 
-        return $this->system;
+        return $this->type;
 
     }
 
@@ -852,7 +857,7 @@ class Server extends WebSockets {
 
         } else {
 
-            $client = new Client($this, $id, $socket, $uid);
+            $client = new SocketClient($this, $id, 'client', $socket, $uid);
 
             // Add it to the client array
             $this->clients[$id] = $client;
@@ -865,8 +870,7 @@ class Server extends WebSockets {
                     'since' => $client->since,
                     'ip' => $client->address,
                     'port' => $client->port,
-                    'admin' => $client->admin,
-                    'system' => $client->isSystem(),
+                    'type' => $client->type,
                     'legacy' => $client->isLegacy()
                 )
             ));
@@ -973,7 +977,7 @@ class Server extends WebSockets {
 
         $client = $this->getClient($socket);
 
-        if (!$client instanceof Client) {
+        if (!$client instanceof SocketClient) {
 
             $result = $this->initiateHandshake($socket, $buf);
 
@@ -990,11 +994,11 @@ class Server extends WebSockets {
 
                 stdout(W_DECODE, "RECV_PACKET: " . $frame);
 
-                if ($type = $this->protocol->decode($frame, $payload, $offset)) {
+                if ($type = $this->protocol->decode($frame, $payload, $time)) {
 
-                    $client->offset = $offset;
+                    $client->offset = (time() - $time);
 
-                    if (!$this->processCommand($socket, $client, $type, $payload)) {
+                    if (!$this->processCommand($socket, $client, $type, $payload, $time)) {
 
                         stdout(W_ERR, 'An error occurred processing the command TYPE: ' . $type);
 
@@ -1056,9 +1060,13 @@ class Server extends WebSockets {
 
     private function initiateHandshake($socket, $request) {
 
-        $headers = $this->parseHeaders($request);
+        if(!($headers = $this->parseHeaders($request))){
 
-        $protocols = NULL;
+            stdout(W_WARN, 'Unable to parse request while initiating WebSocket handshake!');
+
+            return false;
+
+        }
 
         $url = NULL;
 
@@ -1142,7 +1150,7 @@ class Server extends WebSockets {
 
             } else {
 
-                $client = new Client($this, $query['CID'], (array_key_exists('UID', $query) ? $query['UID'] : NULL));
+                $client = new SocketClient($this, $query['CID'], 'client', null, (array_key_exists('UID', $query) ? $query['UID'] : null));
 
                 $client->socketCount = 1;
 
@@ -1160,8 +1168,7 @@ class Server extends WebSockets {
                         'since' => $client->since,
                         'ip' => $client->address,
                         'port' => $client->port,
-                        'admin' => $client->admin,
-                        'system' => $client->isSystem(),
+                        'type' => $client->type,
                         'legacy' => $client->isLegacy()
                     )
                 ));
@@ -1291,15 +1298,19 @@ class Server extends WebSockets {
 
             case 8 :
 
-                stdout(W_DEBUG, "WEBSOCKET_CLOSE: HOST=$client->address:$client->port");
+                if($client->closing === false){
 
-                $client->closing = TRUE;
+                    stdout(W_DEBUG, "WEBSOCKET_CLOSE: HOST=$client->address:$client->port");
 
-                $frame = $this->frame('', 'close', FALSE);
+                    $client->closing = TRUE;
 
-                socket_write($client->resource, $frame, strlen($frame));
+                    $frame = $this->frame('', 'close', FALSE);
 
-                $this->disconnect($client->resource);
+                    socket_write($client->resource, $frame, strlen($frame));
+
+                    $this->disconnect($client->resource);
+
+                }
 
                 return FALSE;
 
@@ -1347,7 +1358,7 @@ class Server extends WebSockets {
 
     }
 
-    public function send($resource, $command, $payload = NULL, $is_legacy = TRUE) {
+    public function send($resource, $command, $payload = NULL, $is_legacy = false, $time = null) {
 
         if (!is_resource($resource))
             return FALSE;
@@ -1355,81 +1366,42 @@ class Server extends WebSockets {
         if (!is_string($command))
             return FALSE;
 
-        $packet = $this->protocol->encode($command, $payload);
+        $packet = $this->protocol->encode($command, $payload, $time); //Override the timestamp.  Only used for PING/PONG really.
 
         stdout(W_DECODE, "SEND_PACKET: $packet");
 
-        $type = get_resource_type($resource);
+        if ($is_legacy) {
 
-        switch ($type) {
+            $frame = $packet;
 
-            case 'Socket' :
+        } else {
 
-                if ($is_legacy) {
+            $frame = $this->frame($packet, 'text', FALSE);
 
-                    $frame = $packet;
+            stdout(W_DECODE, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
 
-                } else {
-
-                    $frame = $this->frame($packet, 'text', FALSE);
-
-                    stdout(W_DECODE, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
-
-                }
-
-                $len = strlen($frame);
-
-                stdout(W_DEBUG, "SOCKET_WRITE: BYTES=$len SOCKET=$resource LEGACY=" . ($is_legacy ? 'TRUE' : 'FALSE'));
-
-                $bytes_sent = socket_write($resource, $frame, $len);
-
-                if ($bytes_sent == -1) {
-
-                    stdout(W_ERR, 'An error occured while sending to the client');
-
-                    return FALSE;
-
-                } elseif ($bytes_sent != $len) {
-
-                    stdout(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
-
-                    return FALSE;
-
-                }
-
-                break;
-
-            case 'stream' :
-
-                stdout(W_DECODE, "<< STREAM: $packet");
-
-                $read = null;
-
-                $write = array(
-                    $resource
-                );
-
-                $except = null;
-
-                if (stream_select($read, $write, $except, 0) > 0) {
-
-                    foreach($write as $stream)
-                        fwrite($stream, $packet . "\n");
-
-                } else {
-
-                    stdout(W_ERR, 'Failed to write to ' . $resource . '.  Make sure your service is processing the read buffer.');
-
-                }
-
-                break;
-
-            default :
-
-                stdout(W_ERR, 'Unknown resource type: ' . $type);
-
-                break;
         }
+
+        $len = strlen($frame);
+
+        stdout(W_DEBUG, "SOCKET_WRITE: BYTES=$len SOCKET=$resource LEGACY=" . ($is_legacy ? 'TRUE' : 'FALSE'));
+
+        $bytes_sent = socket_write($resource, $frame, $len);
+
+        if ($bytes_sent == -1) {
+
+            stdout(W_ERR, 'An error occured while sending to the client');
+
+            return FALSE;
+
+        } elseif ($bytes_sent != $len) {
+
+            stdout(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
+
+            return FALSE;
+
+        }
+
 
         return TRUE;
 
@@ -1471,8 +1443,7 @@ class Server extends WebSockets {
                 'since' => $client->since,
                 'ip' => $client->address,
                 'port' => $client->port,
-                'admin' => $client->admin,
-                'system' => $client->isSystem(),
+                'type' => $client->type,
                 'legacy' => $client->isLegacy()
             );
         }
@@ -1543,7 +1514,7 @@ class Server extends WebSockets {
 
     }
 
-    private function processCommand($resource, &$client, $command, &$payload) {
+    private function processCommand($resource, &$client, $command, &$payload, $time) {
 
         if (!$command)
             return FALSE;
@@ -1632,10 +1603,7 @@ class Server extends WebSockets {
 
             case 'PING' :
 
-                if (array_key_exists('client', $payload))
-                    return $this->ping($payload['client']);
-
-                break;
+                return $this->send($resource, 'pong', $payload);
 
             case 'PONG':
 
@@ -1644,6 +1612,12 @@ class Server extends WebSockets {
                 stdout(W_INFO, 'PONG received in ' . $trip_ms . 'ms');
 
                 break;
+
+            case 'DEBUG':
+
+                stdout(W_DEBUG, $payload);
+
+                return true;
 
         }
 
@@ -1654,6 +1628,8 @@ class Server extends WebSockets {
     private function commandSync($resource, &$client, $payload){
 
         stdout(W_NOTICE, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
+
+        print_r($payload); exit;
 
         if (is_array($payload)
             && array_key_exists('admin_key', $payload)
@@ -1708,12 +1684,18 @@ class Server extends WebSockets {
 
     }
 
-    private function commandStatus($resource, &$client) {
+    private function commandStatus($resource, &$client, $payload = null) {
 
-        if (!$client->admin)
-            return FALSE;
+        if(!$payload){
 
-        return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
+            if (!$client->type == 'admin')
+                return FALSE;
+
+            return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
+
+        }
+
+        return true;
 
     }
 
@@ -2729,140 +2711,6 @@ class Server extends WebSockets {
                 //DO nothing and let it run!
 
             }
-
-        }
-
-        return TRUE;
-
-    }
-
-    private function processStreamPacket($id, &$proc, &$job, $packet) {
-
-        $payload = null;
-
-        $type = $this->protocol->decode($packet, $payload);
-
-        if ($type === FALSE) {
-
-            stdout(W_ERR, $this->protocol->getLastError());
-
-            return FALSE;
-
-        }
-
-        $type_name = $this->protocol->getTypeName($type);
-
-        switch ($type_name) {
-
-            case 'SYNC' :
-
-                if(!is_array($payload)){
-
-                    stdout(W_ERR, 'SYNC received with non-array payload!');
-
-                    return false;
-
-                }
-
-                $job['client'] = $payload['client_id'];
-
-                $client = new Client($this, $job['client'], $proc['pipes'][0], $payload['user']);
-
-                $this->clients[$job['client']] = $client;
-
-                $this->sendAdminEvent('add', array(
-                    'type' => 'client',
-                    'client' => array(
-                        'id' => $client->id,
-                        'username' => $client->username,
-                        'since' => $client->since,
-                        'ip' => $client->address,
-                        'port' => $client->port,
-                        'admin' => $client->admin,
-                        'system' => $client->isSystem(),
-                        'legacy' => $client->isLegacy()
-                    )
-                ));
-
-                break;
-
-            case 'NOOP':
-
-                stdout(W_INFO, 'NOOP: ' . $payload);
-
-                break;
-
-            case 'STATUS' :
-
-                if (array_key_exists($id, $this->procs)) {
-
-                    $proc['status'] = $payload;
-
-                    if ($proc['type'] == 'service') {
-
-                        $service = & $this->services[$proc['tag']];
-
-                        $service['last_heartbeat'] = time();
-
-                        $service['heartbeats']++;
-
-                        $this->sendAdminEvent('update', array(
-                            'type' => 'service',
-                            'id' => $id,
-                            'service' => $service
-                        ));
-
-                    }
-
-                    $bad_keys = array(
-                        'process',
-                        'pipes'
-                    );
-
-                    $this->sendAdminEvent('update', array(
-                        'type' => 'process',
-                        'id' => $id,
-                        'process' => array_diff_key($this->procs[$id], array_flip($bad_keys))
-                    ));
-
-                }
-
-                break;
-
-            case 'ERROR' :
-
-                if(is_array($payload))
-                    $payload = 'ERROR #' . ake($payload, 'code') . ' in file ' . ake($payload, 'file') . ': ' . ake($payload, 'message');
-
-                stdout(W_ERR, $payload);
-
-                break;
-
-            case 'DEBUG' :
-
-                stdout(W_DEBUG, $payload);
-
-                break;
-
-            case 'OK' :
-
-                stdout(W_INFO, 'OK: ' . $payload);
-
-                break;
-
-            case 'TRIGGER':
-
-                if($id = ake($payload, 'id'))
-                    $this->commandTrigger(null, $this, $id, ake($payload, 'data'));
-
-                break;
-
-            default :
-
-                if($client = ake($job, 'client'))
-                    $this->processCommand(NULL, $this->clients[$client], $type, $payload);
-                else
-                    stdout(W_WARN, "Command '$type_name' received without a client!");
 
         }
 
