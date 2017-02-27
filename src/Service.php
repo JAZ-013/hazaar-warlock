@@ -22,15 +22,17 @@ namespace Hazaar\Warlock;
  */
 abstract class Service extends Process implements ServiceInterface {
 
+    protected $name;
+
     protected $config;
 
-    private   $name;
+    protected $state    = HAZAAR_SERVICE_INIT;
 
-    protected $options       = array();
+    protected $schedule = array(); //callback execution schedule
 
-    private   $subscriptions = array();
+    protected $next     = null;    //Timestamp of next executable schedule item
 
-    private   $schedule      = array(); //callback execution schedule
+    protected $slept    = false;
 
     final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -157,7 +159,7 @@ abstract class Service extends Process implements ServiceInterface {
 
             $payload = null;
 
-            while($type = $this->recv($payload, $tv_sec, $tv_usec))
+            if($type = $this->recv($payload, $tv_sec, $tv_usec))
                 $this->processCommand($type, $payload);
 
             if($this->next > 0 && $this->next <= time())
@@ -195,15 +197,23 @@ abstract class Service extends Process implements ServiceInterface {
         if(! is_array($this->schedule) || ! count($this->schedule) > 0)
             return;
 
+        $this->send('DEBUG', 'Processing schedule');
+
         $this->next = NULL;
 
         foreach($this->schedule as $id => &$exec) {
+
+            $this->send('DEBUG', 'ID: ' . $id);
 
             if(time() >= $exec['when']) {
 
                 $this->state = HAZAAR_SERVICE_RUNNING;
 
-                call_user_func_array(array($this, $exec['callback']), $exec['params']);
+                if(is_string($exec['callback']))
+                    $exec['callback'] = array($this, $exec['callback']);
+
+                if(is_callable($exec['callback']))
+                    call_user_func_array($exec['callback'], $exec['params']);
 
                 switch($exec['type']) {
                     case HAZAAR_SCHEDULE_INTERVAL:
@@ -355,6 +365,12 @@ abstract class Service extends Process implements ServiceInterface {
      */
     protected function delay($seconds, $callback, $params = array()) {
 
+        if(!is_callable($callback) && !method_exists($this, $callback))
+            return false;
+
+        if(!is_array($params))
+            $params = array($params);
+
         $id = uniqid();
 
         $when = time() + $seconds;
@@ -374,6 +390,12 @@ abstract class Service extends Process implements ServiceInterface {
     }
 
     protected function interval($seconds, $callback, $params = array()) {
+
+        if(!is_callable($callback) && !method_exists($this, $callback))
+            return false;
+
+        if(!is_array($params))
+            $params = array($params);
 
         $id = uniqid();
 
@@ -396,6 +418,12 @@ abstract class Service extends Process implements ServiceInterface {
     }
 
     protected function schedule($date, $callback, $params = array()) {
+
+        if(!is_callable($callback) && !method_exists($this, $callback))
+            return false;
+
+        if(!is_array($params))
+            $params = array($params);
 
         if(! $date instanceof \Hazaar\Date)
             $date = new \Hazaar\Date($date);
@@ -422,6 +450,12 @@ abstract class Service extends Process implements ServiceInterface {
     }
 
     protected function cron($format, $callback, $params = array()) {
+
+        if(!is_callable($callback) && !method_exists($this, $callback))
+            return false;
+
+        if(!is_array($params))
+            $params = array($params);
 
         $id = uniqid();
 

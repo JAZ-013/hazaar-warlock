@@ -40,22 +40,16 @@ abstract class Process extends WebSockets {
 
     protected $application;
 
-    protected $state            = HAZAAR_SERVICE_INIT;
-
-    protected $slept            = false;
-
-    protected $options          = array();
-
     protected $protocol;
 
-    protected $next             = null;
+    protected $subscriptions = array();
 
     //WebSocket Buffers
     protected $frameBuffer;
 
     protected $payloadBuffer;
 
-    private $closing            = false;
+    protected $closing            = false;
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -334,7 +328,13 @@ abstract class Process extends WebSockets {
 
                 try {
 
-                    call_user_func_array(array($this, $this->subscriptions[$payload['id']]), array($payload));
+                    $func = $this->subscriptions[$payload['id']];
+
+                    if(is_string($func))
+                        $func = array($this, $func);
+
+                    if(is_callable($func))
+                        call_user_func_array($func, array(ake($payload, 'data'), $payload));
 
                 }
                 catch(\Exception $e) {
