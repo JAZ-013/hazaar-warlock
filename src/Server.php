@@ -2307,7 +2307,7 @@ class Server extends WebSockets {
                         'APPLICATION_ENV' => $job['application']['env'],
                         'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
                         'HAZAAR_SID' => $this->config->sys->id,
-                        'USERNAME' => $_SERVER['USERNAME']
+                        'USERNAME' => ake($_SERVER, 'USERNAME')
                     )), 'is_string');
 
                     $cmd = realpath(LIBRAY_PATH . '/Runner.php');
