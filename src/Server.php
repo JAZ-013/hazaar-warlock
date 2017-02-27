@@ -1076,7 +1076,7 @@ class Server extends WebSockets {
 
             if (array_key_exists('get', $headers) && ($responseCode = $this->acceptHandshake($headers, $responseHeaders, NULL, $results)) == 101) {
 
-                stdout(W_INFO, "Initiating WebSockets handshake");
+                stdout(W_DEBUG, "Initiating WebSockets handshake");
 
                 if (!($cid = $results['url']['CID']))
                     return FALSE;
@@ -1089,7 +1089,7 @@ class Server extends WebSockets {
 
                 socket_write($socket, $response, strlen($response));
 
-                stdout(W_INFO, 'WebSockets handshake successful!');
+                stdout(W_DEBUG, 'WebSockets handshake successful!');
 
                 return TRUE;
 
