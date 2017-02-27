@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Name>Hazaar Warlock</Name>
-    <ProjectGuid>{8e13d470-9f08-4c18-a9a4-a0b92ce1a124}</ProjectGuid>
+    <ProjectGuid>{07342158-3ffd-44ad-9af2-a123b15a77c0}</ProjectGuid>
     <RootNamespace>
     </RootNamespace>
     <OutputType>Library</OutputType>

@@ -1527,7 +1527,7 @@ class Server extends WebSockets {
 
             case 'NOOP':
 
-                stdout(W_DEBUG, 'NOOP: ' . $payload);
+                stdout(W_INFO, 'NOOP: ' . print_r($payload, true));
 
                 return true;
 
