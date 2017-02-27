@@ -275,15 +275,6 @@ abstract class Service extends Process implements ServiceInterface {
 
     public function start() {
 
-        /*
-        $admin_key = getenv('HAZAAR_ADMIN_KEY');
-
-        $this->send('sync', array(
-        'client_id' => $this->id,
-        'user' => base64_encode(get_current_user()),
-        'admin_key' => $admin_key
-        ));*/
-
         $init = $this->init($this->config);
 
         if($this->state === HAZAAR_SERVICE_INIT) {

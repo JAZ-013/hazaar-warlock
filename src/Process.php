@@ -53,9 +53,7 @@ abstract class Process extends WebSockets {
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
-        parent::__construct(array(
-            'warlock'
-        ));
+        parent::__construct(array('warlock'));
 
         $this->start = time();
 
@@ -112,6 +110,26 @@ abstract class Process extends WebSockets {
 
         if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
             throw new \Exception('Warlock server denied our connection attempt!');
+
+        //If we have a job_id and access_key we can register as a control channel
+        if($job_id && $access_key){
+
+            $this->send('sync', array(
+                'client_id' => $this->id,
+                'user' => base64_encode(get_current_user()),
+                'job_id' => $job_id,
+                'access_key' => $access_key
+            ));
+
+            if($this->recv() != 'OK'){
+
+                $this->send('error', 'Service was unable to register control channel');
+
+                return false;
+
+            }
+
+        }
 
         return true;
 
