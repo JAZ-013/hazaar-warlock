@@ -612,7 +612,13 @@ class Server extends WebSockets {
                 stdout(W_NOTICE, "Found service: $name");
 
                 $this->services[$name] = $options->extend(array(
-                    'name' => $name
+                    'enabled' => false,
+                    'name' => $name,
+                    'status' => 'stopped',
+                    'job' => null,
+                    'restarts' => 0,
+                    'last_heartbeat' => null,
+                    'heartbeats' => 0
                 ))->toArray();
 
                 if ($options['enabled'] === TRUE)
@@ -1534,10 +1540,7 @@ class Server extends WebSockets {
 
             case 'SERVICE' :
 
-                if (array_key_exists('name', $payload))
-                    return $this->commandService($resource, $client, $payload);
-
-                break;
+                return $this->commandService($resource, $client, $payload);
 
             case 'SUBSCRIBE' :
 
@@ -1645,16 +1648,27 @@ class Server extends WebSockets {
 
     private function commandStatus($resource, &$client, $payload = null) {
 
-        if(!$payload){
+        if($payload){
 
-            if ($client->type !== 'admin')
-                return FALSE;
+            if($client->type !== 'service'){
 
-            return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
+                stdout(W_WARN, 'Client sent status but client is not a service!', $client->address);
+
+                return false;
+
+            }
+
+            //TODO: This will require the sync to link the client to the job
+            stdout(W_WARN, 'Client sent status but this is not completely implemented yet!', $client->address);
+
+            return true;
 
         }
 
-        return true;
+        if ($client->type !== 'admin')
+            return FALSE;
+
+        return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
 
     }
 
@@ -1848,9 +1862,17 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
-        stdout(W_WARN, 'Request service status not completed yet');
+        if(array_key_exists($name, $this->services)){
 
-        return FALSE;
+            $this->send($resource, 'service', $this->services[$name], $client->isLegacy());
+
+            return true;
+
+        }
+
+        $this->send($resource, 'error', NULL, $client->isLegacy());
+
+        return false;
 
     }
 
@@ -2438,7 +2460,7 @@ class Server extends WebSockets {
                 //Make sure we close all the pipes
                 foreach($proc['pipes'] as $sid => $pipe) {
 
-                    //Skip the STDIN pipe for this process
+                    //Skip the STDIN pipe for this process as it is already closed by now.
                     if($sid == 0)
                         continue;
 
@@ -2504,6 +2526,9 @@ class Server extends WebSockets {
                         } else {
 
                             stdout(W_INFO, "Restarting service '$name'. ({$job['retries']})");
+
+                            if (array_key_exists($job['service'], $this->services))
+                                $this->services[$job['service']]['restarts']++;
 
                         }
 

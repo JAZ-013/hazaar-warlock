@@ -49,8 +49,8 @@ abstract class Service extends Process {
 
         $defaults = array(
             $name => array(
-                'enabled'   => true,
-                'heartbeat' => 60
+                'enabled'   => false,
+                'heartbeat' => 10
             )
         );
 
@@ -69,6 +69,8 @@ abstract class Service extends Process {
 
         $this->processSchedule();
 
+        $this->send('debug', $this->config->heartbeat);
+
         while($this->state == HAZAAR_SERVICE_RUNNING || $this->state == HAZAAR_SERVICE_SLEEP) {
 
             $this->slept = FALSE;
@@ -79,9 +81,6 @@ abstract class Service extends Process {
 
             if($ret === false)
                 $this->state = HAZAAR_SERVICE_STOPPING;
-
-            if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
-                $this->sendHeartbeat();
 
             /*
              * If sleep was not executed in the last call to run(), then execute it now.  This protects bad services
@@ -197,13 +196,9 @@ abstract class Service extends Process {
         if(! is_array($this->schedule) || ! count($this->schedule) > 0)
             return;
 
-        $this->send('DEBUG', 'Processing schedule');
-
         $this->next = NULL;
 
         foreach($this->schedule as $id => &$exec) {
-
-            $this->send('DEBUG', 'ID: ' . $id);
 
             if(time() >= $exec['when']) {
 
