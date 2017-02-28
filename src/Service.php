@@ -20,7 +20,7 @@ namespace Hazaar\Warlock;
  *
  * @module      warlock
  */
-abstract class Service extends Process implements ServiceInterface {
+abstract class Service extends Process {
 
     protected $name;
 
@@ -251,7 +251,7 @@ abstract class Service extends Process implements ServiceInterface {
     /*
      * BUILT-IN PLACEHOLDER METHODS
      */
-    public function init($config = null) {
+    public function init() {
 
         return true;
 
@@ -275,7 +275,7 @@ abstract class Service extends Process implements ServiceInterface {
 
     public function start() {
 
-        $init = $this->init($this->config);
+        $init = $this->init();
 
         if($this->state === HAZAAR_SERVICE_INIT) {
 
