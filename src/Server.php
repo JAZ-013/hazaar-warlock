@@ -378,6 +378,8 @@ class Server extends WebSockets {
 
     function __construct($silent = FALSE) {
 
+        Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
+
         parent::__construct(array(
             'warlock'
         ));
@@ -390,54 +392,9 @@ class Server extends WebSockets {
 
         $this->silent = $silent;
 
-        $defaults = array(
-            'sys' => array(
-                'id' => crc32(APPLICATION_PATH),
-                'autostart' => FALSE,
-                'pid' => 'warlock.pid',
-                'cleanup' => TRUE,
-                'timezone' => 'UTC'
-            ),
-            'server' => array(
-                'listen' => '127.0.0.1',
-                'port' => 8000,
-                'encoded' => TRUE
-            ),
-            'timeouts' => array(
-                'startup' => 1000,
-                'listen' => 60
-            ),
-            'admin' => array(
-                'trigger' => 'warlockadmintrigger',
-                'key' => '0000'
-            ),
-            'log' => array(
-                'level' => W_ERR,
-                'file' => 'warlock.log',
-                'error' => 'warlock-error.log',
-                'rrd' => 'warlock.rrd'
-            ),
-            'job' => array(
-                'retries' => 5,
-                'retry' => 30,
-                'expire' => 10
-            ),
-            'exec' => array(
-                'timeout' => 30,
-                'limit' => 5
-            ),
-            'service' => array(
-                'restarts' => 5,
-                'disable' => 300
-            ),
-            'event' => array(
-                'queue_timeout' => 5
-            )
-        );
-
         $this->application = new \Hazaar\Application(APPLICATION_ENV);
 
-        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
+        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
         date_default_timezone_set($this->config->sys->timezone);
 

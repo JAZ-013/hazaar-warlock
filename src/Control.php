@@ -32,6 +32,8 @@ class Control extends Process {
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
 
+        Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
+
         $app = \Hazaar\Application::getInstance();
 
         $guid_file = $app->runtimePath('warlock.guid');
@@ -45,33 +47,7 @@ class Control extends Process {
 
         }
 
-        $defaults = array(
-            'sys'      => array(
-                'id'        => crc32(APPLICATION_PATH),
-                'autostart' => FALSE,
-                'pid'       => 'warlock.pid'
-            ),
-            'server'   => array(
-                'listen'  => '127.0.0.1',
-                'port'    => 8000,
-                'encoded' => TRUE
-            ),
-            'timeouts' => array(
-                'connect'   => 5,
-                'subscribe' => 60
-            ),
-            'admin'    => array(
-                'trigger' => 'warlockadmintrigger',
-                'key'     => '0000'
-            ),
-            'log'      => array(
-                'file'  => 'warlock.log',
-                'error' => 'warlock-error.log',
-                'rrd'   => 'warlock.rrd'
-            )
-        );
-
-        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
+        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
         $app = \Hazaar\Application::getInstance();
 
@@ -358,40 +334,6 @@ class Control extends Process {
     public function cancel($job_id) {
 
         $this->send('cancel', $job_id);
-
-        return ($this->recv() == 'OK');
-
-    }
-
-    public function subscribe($event, $filter = NULL) {
-
-        $subscribe = array(
-            'id'     => $event,
-            'filter' => $filter
-        );
-
-        if(array_key_exists('REMOTE_ADDR', $_SERVER))
-            $subscribe['client_ip'] = $_SERVER['REMOTE_ADDR'];
-
-        if(array_key_exists('REMOTE_USER', $_SERVER))
-            $subscribe['client_user'] = $_SERVER['REMOTE_USER'];
-
-        $this->send('subscribe', $subscribe);
-
-        return ($this->recv() == 'OK');
-
-    }
-
-    public function trigger($event, $data = NULL) {
-
-        $packet = array(
-            'id' => $event
-        );
-
-        if($data)
-            $packet['data'] = $data;
-
-        $this->send('trigger', $packet);
 
         return ($this->recv() == 'OK');
 
