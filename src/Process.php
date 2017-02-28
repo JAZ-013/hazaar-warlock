@@ -423,9 +423,18 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function trigger($event, $payload) {
+    protected function trigger($event, $data = NULL) {
 
-        return $this->send('trigger', array('id' => $event, 'data' => $payload));
+        $packet = array(
+            'id' => $event
+        );
+
+        if($data)
+            $packet['data'] = $data;
+
+        $this->send('trigger', $packet);
+
+        return ($this->recv() == 'OK');
 
     }
 

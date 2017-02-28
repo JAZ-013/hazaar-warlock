@@ -355,14 +355,12 @@ class Control extends Process {
 
     }
 
-    public function ping() {
+    public function service($name){
 
-        $this->send('ping');
+        $this->send('service', $name);
 
-        $start = microtime(true);
-
-        if($this->recv($payload) == 'PONG')
-            return (microtime(true) - $start);
+        if($this->recv($payload) == 'SERVICE')
+            return $payload;
 
         return false;
 
