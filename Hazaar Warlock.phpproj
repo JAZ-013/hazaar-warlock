@@ -15,6 +15,7 @@
     <IncludeDebugInformation>false</IncludeDebugInformation>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="src\Config.php" />
     <Compile Include="src\Controller\Warlock.php" />
     <Compile Include="src\Container.php" />
     <Compile Include="src\Runner.php" />
@@ -23,7 +24,6 @@
     <Compile Include="src\Control.php" />
     <Compile Include="src\Server.php" />
     <Compile Include="src\Service.php" />
-    <Compile Include="src\ServiceInterface.php" />
     <Compile Include="src\WebSockets.php" />
     <Compile Include="composer.json" />
   </ItemGroup>
