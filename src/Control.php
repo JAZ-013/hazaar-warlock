@@ -139,6 +139,8 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
+        throw new \Exception('Warlock control start is currently disabled!');
+
         $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
         if(! file_exists($php_binary))
@@ -147,15 +149,15 @@ class Control extends Process {
         if(! is_executable($php_binary))
             throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'start.bat';
 
         if(!file_exists($server))
             throw new \Exception('Warlock server script could not be found!');
 
-        if(substr(PHP_OS, 0, 3) == 'WIN')
-            $this->cmd = 'start /B "warlock" "' . $php_binary . '" "' . $server . '"';
-        else
-            $this->cmd = $php_binary . ' "' . $server . '"';
+        // if(substr(PHP_OS, 0, 3) == 'WIN')
+        //   $this->cmd = 'start ' . escapeshellcmd($php_binary);// . '"';//" \"' . $server . '\"';
+        //else
+        $this->cmd = 'start /B "' . $php_binary . '" "' . $server . '"';
 
         $env = array(
             'APPLICATION_PATH' => APPLICATION_PATH,
@@ -168,15 +170,8 @@ class Control extends Process {
             putenv($name . '=' . $value);
 
         //Start the server.  This should work on Linux and Windows
-        pclose(popen($this->cmd, 'r'));
-
-        //The above replaces this:
-
-        /*
-        $this->server_pid = (int)exec(implode(' ', $env) . ' ' . sprintf("%s >> %s 2>&1 & echo $!", $this->cmd, $this->outputfile));
-        if(! $this->server_pid > 0)
-        return FALSE;
-         */
+        //pclose(popen($this->cmd, 'r'));
+        pclose(popen("start /B \"warlock\" \"" . $server . "\"", "r"));
 
         $start_check = time();
 
