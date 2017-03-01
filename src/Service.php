@@ -45,10 +45,10 @@ abstract class Service extends Process {
         else
             throw new \Exception('Invalid service name ' . get_class($this));
 
-        $this->name = $name;
+        $this->name = strtolower($name);
 
         $defaults = array(
-            $name => array(
+            $this->name => array(
                 'enabled'   => false,
                 'heartbeat' => 10
             )
@@ -56,7 +56,7 @@ abstract class Service extends Process {
 
         $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
 
-        $this->config = ake($config, $name);
+        $this->config = ake($config, $this->name);
 
     }
 
