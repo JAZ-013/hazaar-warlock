@@ -141,15 +141,26 @@ class SocketClient {
 
     public $status;
 
-    /*
+    /**
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
+     * @var int
      */
     public $offset = NULL;
 
     public $admin = FALSE;
 
+    /**
+     * This is an array of event_id and socket pairs
+     * @var array
+     */
     public $subscriptions = array();
-    // This is an array of event_id and socket pairs
+
+    /**
+     * If the client has an associated process.  ie: a service
+     * @var array The proccess array
+     */
+    public $proc;
+
     function __construct(&$server, $id, $type = 'client', $resource = NULL, $uid = NULL) {
 
         $allowed_types = array('client', 'service', 'admin');
@@ -618,7 +629,8 @@ class Server extends WebSockets {
                     'job' => null,
                     'restarts' => 0,
                     'last_heartbeat' => null,
-                    'heartbeats' => 0
+                    'heartbeats' => 0,
+                    'info' => null
                 ))->toArray();
 
                 if ($options['enabled'] === TRUE)
@@ -1601,11 +1613,37 @@ class Server extends WebSockets {
             && $payload['client_id'] === $client->id
             && array_key_exists($payload['job_id'], $this->procs)){
 
-            $proc = $this->procs[$payload['job_id']];
+            if(!array_key_exists($payload['job_id'], $this->jobQueue)){
 
-            $proc['client'] = $client;
+                stdout(W_WARN, 'Client tried to sync but job ID does not exist!');
 
-            $client->type = $proc['type'];
+                return false;
+
+            }
+
+            if(!array_key_exists($payload['job_id'], $this->procs)){
+
+                stdout(W_ERR, 'Could not find process for job, but process is requesting sync!!!!!', $payload['job_id']);
+
+                return false;
+
+            }
+
+            $job =& $this->jobQueue[$payload['job_id']];
+
+            if($job['access_key'] !== ake($payload, 'access_key')){
+
+                stdout(W_ERR, 'Service tried to sync with bad access key!', $payload['job_id']);
+
+                return false;
+
+            }
+
+            $this->procs[$payload['job_id']]['client'] = $client;
+
+            $client->type = $this->procs[$payload['job_id']]['type'];
+
+            $client->job_id = $payload['job_id'];
 
             stdout(W_INFO, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
 
@@ -1658,8 +1696,27 @@ class Server extends WebSockets {
 
             }
 
-            //TODO: This will require the sync to link the client to the job
-            stdout(W_WARN, 'Client sent status but this is not completely implemented yet!', $client->address);
+            if(!$client->job_id){
+
+                stdout(W_WARN, 'Service status received for client with no job ID');
+
+                return false;
+
+            }
+
+            $service = ake($this->jobQueue[$client->job_id], 'service');
+
+            if(!array_key_exists($service, $this->services)){
+
+                stdout(W_ERR, 'Could not find job for service client!', $client->job_id);
+
+                return false;
+
+            }
+
+            $this->services[$service]['info'] = $payload;
+
+            $this->services[$service]['last_heartbeat'] = time();
 
             return true;
 
