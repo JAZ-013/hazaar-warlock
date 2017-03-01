@@ -622,7 +622,7 @@ class Server extends WebSockets {
 
                 stdout(W_NOTICE, "Found service: $name");
 
-                $this->services[$name] = $options->extend(array(
+                $options->enhance(array(
                     'enabled' => false,
                     'name' => $name,
                     'status' => 'stopped',
@@ -631,7 +631,9 @@ class Server extends WebSockets {
                     'last_heartbeat' => null,
                     'heartbeats' => 0,
                     'info' => null
-                ))->toArray();
+                ));
+
+                $this->services[$name] = $options->toArray();
 
                 if ($options['enabled'] === TRUE)
                     $this->serviceEnable($name, $options);
