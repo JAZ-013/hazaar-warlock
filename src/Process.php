@@ -408,6 +408,10 @@ abstract class Process extends WebSockets {
 
                 break;
 
+            case 'OK':
+
+                break;
+
             default:
 
                 $this->send('DEBUG', 'Unhandled command: ' . $command);
