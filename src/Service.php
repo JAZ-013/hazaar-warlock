@@ -69,8 +69,6 @@ abstract class Service extends Process {
 
         $this->processSchedule();
 
-        $this->send('debug', $this->config->heartbeat);
-
         while($this->state == HAZAAR_SERVICE_RUNNING || $this->state == HAZAAR_SERVICE_SLEEP) {
 
             $this->slept = FALSE;
