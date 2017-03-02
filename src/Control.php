@@ -80,23 +80,23 @@ class Control extends Process {
             if($this->recv() !== 'OK')
                 throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
-        } elseif($autostart) {
+        } elseif($autostart) {  //We do these separately so we get tailored error messages.
 
-            if($this->start()) {
-
-                if(! $this->connect()) {
-
-                    $this->disconnect(FALSE);
-
-                    throw new \Exception('Warlock was automatically started but we are unable to communicate with it.');
-
-                }
-
-            } else {
-
+            if(!$this->start())
                 throw new \Exception('Autostart of Warlock server has failed!');
 
+            if(! $this->connect(APPLICATION_NAME, $this->config->server['port'])) {
+
+                $this->disconnect(FALSE);
+
+                throw new \Exception('Warlock was automatically started but we are unable to communicate with it.');
+
             }
+
+            $this->send('sync', array('admin_key' => $this->config->admin->key));
+
+            if($this->recv() !== 'OK')
+                throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
         }
 
@@ -153,7 +153,7 @@ class Control extends Process {
             throw new \Exception('Warlock server script could not be found!');
 
         if(substr(PHP_OS, 0, 3) == 'WIN')
-            $this->cmd = 'start ' . ($this->config->server['win_bg']?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "D:\Source\example\vendor\hazaarlabs\hazaar-warlock\src\Server.php"';// . $server;
+            $this->cmd = 'start ' . ($this->config->server['win_bg']?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
         else
             $this->cmd = $php_binary . ' ' . $server;
 
