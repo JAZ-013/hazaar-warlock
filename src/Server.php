@@ -981,7 +981,7 @@ class Server extends WebSockets {
 
                         $this->send($socket, 'error', array(
                             'reason' => 'An error occurred processing the command',
-                            'command' => $this->protocol->getTypeName($type)
+                            'command' => $type
                         ));
 
                     }
