@@ -51,6 +51,8 @@ abstract class Process extends WebSockets {
 
     protected $closing            = false;
 
+    public    $bytes_received = 0;
+
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct(array('warlock'));
@@ -80,8 +82,15 @@ abstract class Process extends WebSockets {
 
         $host = '127.0.0.1';
 
-        if(!socket_connect($this->socket, $host, $port))
-            throw new \Exception('Unable to connect to localhost:' . $port);
+        if(@!socket_connect($this->socket, $host, $port)){
+
+            socket_close($this->socket);
+
+            $this->socket = null;
+
+            return false;
+
+        }
 
         /**
          * Initiate a WebSockets connection
@@ -137,6 +146,8 @@ abstract class Process extends WebSockets {
 
     protected function disconnect() {
 
+        $this->frameBuffer = '';
+
         if($this->socket) {
 
             if($this->closing === false) {
@@ -151,7 +162,8 @@ abstract class Process extends WebSockets {
 
             }
 
-            socket_close($this->socket);
+            if($this->socket)
+                socket_close($this->socket);
 
             $this->socket = null;
 
@@ -218,9 +230,9 @@ abstract class Process extends WebSockets {
 
         } elseif ($opcode === -1) {
 
-            $this->payloadBuffer .= $payload;
+            $this->frameBuffer .= $frameBuffer;
 
-            return (strlen($frameBuffer) > 0);
+            return (strlen($this->frameBuffer) > 0);
 
         }
 
@@ -317,23 +329,36 @@ abstract class Process extends WebSockets {
 
         $write = $except = null;
 
-        if(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
+        $start = 0;//time();
+
+        while(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
 
             // will block to wait server response
-            $bytes_received = socket_recv($this->socket, $buffer, 65536, 0);
+            $this->bytes_received += $bytes_received = socket_recv($this->socket, $buffer, 65536, 0);
 
-            if($bytes_received == -1) {
+            if($bytes_received > 0) {
+
+                if(($frame = $this->processFrame($buffer)) === true)
+                    continue;
+
+                if($frame === false)
+                    break;
+
+                return $this->protocol->decode($frame, $payload);
+
+            }elseif($bytes_received == -1) {
 
                 throw new \Exception('An error occured while receiving from the socket');
 
             } elseif($bytes_received == 0) {
 
-                throw new \Exception('Received response of zero bytes.');
+                return $this->disconnect();
 
             }
 
-            if($frame = $this->processFrame($buffer))
-                return $this->protocol->decode($frame, $payload);
+            //if(time() > ($start + 3))
+            if(($start++) > 5)
+                return false;
 
         }
 

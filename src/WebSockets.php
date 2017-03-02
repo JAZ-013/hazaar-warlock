@@ -4,7 +4,7 @@
  * User: jamie
  * Date: 22/09/14
  * Time: 1:12 PM
- * 
+ *
  * @package     Socket
  */
 
@@ -295,7 +295,8 @@ abstract class WebSockets {
 
     protected function getFrame(&$buffer, &$payload) {
 
-        if(! $buffer) return FALSE;
+        if(! $buffer)
+            return FALSE;
 
         $payload = NULL;
 
@@ -316,7 +317,7 @@ abstract class WebSockets {
             $payload = substr($buffer, $offset, $headers['length']);
 
             if($headers['length'] > strlen($payload))
-                return FALSE;
+                return -1;
 
         }
 
@@ -329,7 +330,7 @@ abstract class WebSockets {
         if($headers['fin'])
             return $headers['opcode'];
 
-        return -1;
+        return false;
 
     }
 
