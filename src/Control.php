@@ -221,32 +221,7 @@ class Control extends Process {
 
         }
 
-        $buf = array(
-            'state'       => 'stopped',
-            'pid'         => 'none',
-            'started'     => 0,
-            'uptime'      => 0,
-            'connections' => 0,
-            'stats'       => array(
-                'processed' => 0,
-                'processes' => 0,
-                'execs'     => 0,
-                'failed'    => 0,
-                'queue'     => 0,
-                'retries'   => 0,
-                'lateExecs' => 0,
-                'limitHits' => 0,
-                'waiting'   => 0,
-                'triggers'  => 0
-            ),
-            'clients'     => array(),
-            'queue'       => array(),
-            'processes'   => array(),
-            'services'    => array(),
-            'triggers'    => array()
-        );
-
-        return $buf;
+        return false;
 
     }
 
