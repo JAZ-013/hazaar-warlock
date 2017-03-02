@@ -1782,7 +1782,7 @@ class Server extends WebSockets {
 
         }
 
-        if ($id = $this->scheduleJob($command['when'], $command['code'], $command['application'], $tag, $tag_overwrite)) {
+        if ($id = $this->scheduleJob($command['when'], $command['function'], $command['application'], $tag, $tag_overwrite)) {
 
             stdout(W_INFO, "Function execution successfully scheduled", $id);
 
@@ -2052,6 +2052,14 @@ class Server extends WebSockets {
     }
 
     private function scheduleJob($when, $function, $application, $tag = NULL, $overwrite = FALSE) {
+
+        if(!array_key_exists('code', $function)){
+
+            stdout(W_ERR, 'Unable to schedule job without function code!');
+
+            return false;
+
+        }
 
         if (!($id = $this->getJobId()))
             return FALSE;
