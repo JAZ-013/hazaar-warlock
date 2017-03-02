@@ -139,8 +139,6 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
-        throw new \Exception('Warlock control start is currently disabled!');
-
         $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
         if(! file_exists($php_binary))
@@ -149,29 +147,30 @@ class Control extends Process {
         if(! is_executable($php_binary))
             throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'start.bat';
+        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
 
         if(!file_exists($server))
             throw new \Exception('Warlock server script could not be found!');
 
-        // if(substr(PHP_OS, 0, 3) == 'WIN')
-        //   $this->cmd = 'start ' . escapeshellcmd($php_binary);// . '"';//" \"' . $server . '\"';
-        //else
-        $this->cmd = 'start /B "' . $php_binary . '" "' . $server . '"';
+        if(substr(PHP_OS, 0, 3) == 'WIN')
+            $this->cmd = 'start ' . ($this->config->server['win_bg']?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "D:\Source\example\vendor\hazaarlabs\hazaar-warlock\src\Server.php"';// . $server;
+        else
+            $this->cmd = $php_binary . ' ' . $server;
 
         $env = array(
             'APPLICATION_PATH' => APPLICATION_PATH,
             'APPLICATION_ENV' => APPLICATION_ENV,
-            'WARLOCK_EXEC' => 1,
-            'WARLOCK_OUTPUT' => 'file'
+            'WARLOCK_EXEC' => 1
         );
+
+        if(substr(PHP_OS, 0, 3) !== 'WIN')
+            $env['WARLOCK_OUTPUT'] = 'file';
 
         foreach($env as $name => $value)
             putenv($name . '=' . $value);
 
         //Start the server.  This should work on Linux and Windows
-        //pclose(popen($this->cmd, 'r'));
-        pclose(popen("start /B \"warlock\" \"" . $server . "\"", "r"));
+        pclose(popen($this->cmd, "r"));
 
         $start_check = time();
 

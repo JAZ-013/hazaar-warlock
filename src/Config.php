@@ -23,7 +23,8 @@ class Config {
          'server' => array(
              'listen' => '127.0.0.1',
              'port' => 8000,
-             'encoded' => TRUE
+             'encoded' => TRUE,
+             'win_bg' => false
          ),
          'timeouts' => array(
              'startup' => 1000,
