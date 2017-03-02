@@ -2530,7 +2530,7 @@ class Server extends WebSockets {
                         continue;
 
                     if ($input = stream_get_contents($pipe))
-                        echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30);
+                        echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30) . "\n";
 
                     fclose($pipe);
 
@@ -2619,23 +2619,7 @@ class Server extends WebSockets {
 
                 } else {
 
-                    if (!array_key_exists('term', $proc) || $proc['term'] == FALSE) {
-
-                        foreach($proc['pipes'] as $sid => $pipe) {
-
-                            if($sid == 0)
-                                continue;
-
-                            if ($output = stream_get_contents($pipe))
-                                stdout(W_DEBUG, (($sid >= 1) ? (($sid == 1) ? '> ' : '>> ') : '<< ') . $output, $id);
-
-                            fclose($pipe);
-
-                        }
-
-                        stdout(W_INFO, "Process exited with return code: " . $status['exitcode'], $id);
-
-                    }
+                    stdout(W_INFO, "Process exited with return code: " . $status['exitcode'], $id);
 
                     if ($status['exitcode'] > 0) {
 
