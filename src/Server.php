@@ -1641,8 +1641,6 @@ class Server extends WebSockets {
 
             }
 
-            $this->procs[$payload['job_id']]['client'] = $client;
-
             $client->type = $this->procs[$payload['job_id']]['type'];
 
             $client->job_id = $payload['job_id'];
