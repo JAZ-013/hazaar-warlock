@@ -27,7 +27,12 @@ class Control extends Process {
 
     private $server_pid;
 
+    static private $instance;
+
     function __construct($autostart = NULL) {
+
+        if(Control::$instance instanceof Control)
+            throw new \Exception('You can only have one instance of Warlock Control.  Please use \Hazaar\Warlock\Control::getInstance().');
 
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
@@ -99,6 +104,17 @@ class Control extends Process {
                 throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
         }
+
+        Control::$instance = $this;
+
+    }
+
+    static public function getInstance(){
+
+        if(!Control::$instance instanceof Control)
+            new Control();
+
+        return Control::$instance;
 
     }
 
