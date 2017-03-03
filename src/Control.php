@@ -173,11 +173,13 @@ class Control extends Process {
         else
             $this->cmd = $php_binary . ' ' . $server;
 
-        $env = array(
-            'APPLICATION_PATH' => APPLICATION_PATH,
-            'APPLICATION_ENV' => APPLICATION_ENV,
-            'WARLOCK_EXEC' => 1
-        );
+        $env = $_SERVER;
+
+        $env['APPLICATION_PATH'] = APPLICATION_PATH;
+
+        $env['APPLICATION_ENV'] = APPLICATION_ENV;
+
+        $env['WARLOCK_EXEC'] = 1;
 
         if(substr(PHP_OS, 0, 3) !== 'WIN')
             $env['WARLOCK_OUTPUT'] = 'file';
