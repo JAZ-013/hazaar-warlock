@@ -1860,7 +1860,8 @@ class Server extends WebSockets {
             'id' => $event_id,
             'trigger' => $trigger_id,
             'when' => time(),
-            'data' => $data
+            'data' => $data,
+            'seen' => ((ake($data, 'echo') !== true)?array($client->id):array())
         );
 
         if ($event_id != $this->config->admin->trigger) {
@@ -1869,6 +1870,7 @@ class Server extends WebSockets {
                 'type' => 'event',
                 'event' => $new
             ));
+
         }
 
         // Check to see if there are any clients waiting for this event and send notifications to them all.
