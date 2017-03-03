@@ -1516,13 +1516,13 @@ class Server extends WebSockets {
 
                 stdout(W_WARN, "Received OK, but I don't know why!");
 
-                break;
+                return true;
 
             case 'ERROR':
 
                 stdout(W_ERR, $payload);
 
-                break;
+                return true;
 
             case 'STATUS' :
 
