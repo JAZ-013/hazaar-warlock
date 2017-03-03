@@ -144,7 +144,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function disconnect() {
+    public function disconnect() {
 
         $this->frameBuffer = '';
 
@@ -424,13 +424,13 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function ping(){
+    public function ping(){
 
         return $this->send('ping', microtime(true));
 
     }
 
-    protected function subscribe($event, $callback, $filter = null) {
+    public function subscribe($event, $callback, $filter = null) {
 
         if(! method_exists($this, $callback))
             return FALSE;
@@ -441,7 +441,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function unsubscribe($event) {
+    public function unsubscribe($event) {
 
         if(! array_key_exists($event, $this->subscriptions))
             return FALSE;
@@ -452,10 +452,11 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function trigger($event, $data = NULL) {
+    public function trigger($event, $data = NULL) {
 
         $packet = array(
-            'id' => $event
+            'id' => $event,
+            'echo' => false
         );
 
         if($data)
