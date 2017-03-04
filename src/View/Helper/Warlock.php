@@ -7,7 +7,7 @@
  *
  * @copyright   Copyright (c) 2012 Jamie Carl (http://www.hazaarlabs.com)
  */
-namespace Hazaar\Core\View\Helper;
+namespace Hazaar\View\Helper;
 
 use Hazaar\Application;
 
@@ -19,7 +19,7 @@ use Hazaar\Application;
  *
  * @since 2.0.0
  */
-class Warlock extends Base {
+class Warlock extends \Hazaar\View\Helper\Base {
 
     private $js_varname = 'warlock';
 

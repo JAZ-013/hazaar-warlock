@@ -25,7 +25,7 @@
     <Compile Include="src\Server.php" />
     <Compile Include="src\Service.php" />
     <Compile Include="src\WebSockets.php" />
-    <Compile Include="composer.json" />
+    <Compile Include="src\composer.json" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="src\Controller" />
