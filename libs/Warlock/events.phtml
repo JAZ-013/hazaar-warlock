@@ -1,0 +1,19 @@
+<div class="section" id="eventlist">
+
+</div>
+
+<script>
+    <?php foreach($this->status['events'] as $name => $events) {
+        foreach($events as $id => $event){
+                $data = array(
+                    'ID'=> $id,
+                    'When'=> $this->datetime($event['when']),
+                    'Data'=> json_encode($event['data'])
+                );
+
+                echo "displayPanel($('#eventlist'), '$id', '$name', " . json_encode($data) . ");";
+
+        }
+    } ?>
+</script>
+

@@ -1,0 +1,247 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+
+<head>
+
+    <title>Warlock - Control Panel</title>
+
+    <?=$this->import();?>
+
+    <?=$this->html->link($this->url('hazaar', 'Warlock/controlpanel.css'));?>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="toolbar">
+
+
+            <div class="label">
+                <div class="logo"></div>
+                Warlock
+            </div>
+
+            <?php foreach($this->tabs as $tab => $label): ?>
+
+            <a class="item<?php if($this->current == $tab) echo ' active'; ?>"
+                href="<?=$this->url('warlock', NULL, array('tab' => $tab));?>">
+                <?=$label;?>
+            </a>
+
+            <?php endforeach; ?>
+
+            <?=$this->html->div()
+                      ->class('control-switch')
+                      ->id('btnService')
+                      ->on(($this->service['running'] ? 'true' : 'false'))
+                      ->width(64)
+                      ->height(22);?>
+
+            <div class="server toppanel">
+
+                <div class="status-label">Status:</div>
+
+                <span class="status" id="status-state">
+                    <?=ucwords((string)$this->status['state']);?>
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class="main">
+
+            <div class="row">
+
+                <div class="col20">
+
+                    <div class="stats">
+
+                        <div class="item wide">
+                            <div class="item-content">
+                                <div class="label">Uptime</div>
+                                <div class="value" id="uptime" data-start="<?=$this->status['started'];?>"></div>
+                            </div>
+                        </div>
+
+                        <div class="item wide">
+                            <div class="item-content">
+                                <div class="label">PID</div>
+                                <div class="value" id="status-pid">
+                                    <?=ucfirst($this->status['pid']);?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Memory (MB)</div>
+                                <div class="value"
+                                    id="status-memory">
+                                    <?=str_bytes($this->status['memory'], NULL, NULL, TRUE);?>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Sockets</div>
+                                <div class="value" id="status-connections">
+                                    <?=$this->status['connections'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Clients</div>
+                                <div class="value" id="status-clients">
+                                    <?=count($this->status['clients']);?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item-header">
+                            Jobs
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Processed</div>
+                                <div class="value" id="status-processed">
+                                    <?=$this->status['stats']['processed'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Completed</div>
+                                <div class="value" id="status-execs">
+                                    <?=$this->status['stats']['execs'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Late</div>
+                                <div class="value" id="status-lateExecs">
+                                    <?=$this->status['stats']['lateExecs'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Failed</div>
+                                <div class="value" id="status-failed">
+                                    <?=$this->status['stats']['failed'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Busy</div>
+                                <div class="value" id="status-processes">
+                                    <?=$this->status['stats']['processes'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Retries</div>
+                                <div class="value" id="status-retries">
+                                    <?=$this->status['stats']['retries'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Queue</div>
+                                <div class="value" id="status-queue">
+                                    <?=$this->status['stats']['queue'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Process Limits</div>
+                                <div class="value" id="status-limitHits">
+                                    <?=$this->status['stats']['limitHits'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item-header">
+                            Signalling
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Subscriptions</div>
+                                <div class="value"
+                                    id="status-subscriptions">
+                                    <?=$this->status['stats']['subscriptions'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item">
+                            <div class="item-content">
+                                <div class="label">Events</div>
+                                <div class="value" id="status-events">
+                                    <?=$this->status['stats']['events'];?>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col80">
+
+                    <?=$this->layout();?>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <?php
+
+    echo $this->post();
+
+    echo $this->html->script()->src($this->url('hazaar', 'Warlock/controlpanel.js'));
+
+    ?>
+
+    <script>
+    var admintrigger = '<?=$this->warlockadmintrigger;?>';
+    warlock.admin_key = '<?=$this->admin_key;?>';
+    function url(action) {
+        var u = '<?=$this->url();?>';
+        if (action) u += '/' + action;
+        return u;
+    }
+    </script>
+
+</body>
+
+</html>
+

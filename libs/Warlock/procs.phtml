@@ -1,0 +1,21 @@
+<div id="processlist" class="section">
+
+</div>
+
+<script>
+
+    <?php foreach($this->status['processes'] as $id => $proc) {
+        $data = array(
+            'State'=> $proc['status']['state'],
+            'PID'=> $proc['status']['pid'],
+            'Started'=> $this->datetime($proc['start']),
+            'Environment'=> $proc['env'],
+            'Memory'=> str_bytes($proc['status']['mem']),
+            'Peak'=> str_bytes($proc['status']['peak'])
+        );
+
+        echo "displayPanel($('#processlist'), '$id', '$proc[tag]', " . json_encode($data) . ");";
+
+    } ?>
+
+</script>

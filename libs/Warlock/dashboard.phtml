@@ -1,0 +1,41 @@
+<?php
+foreach($this->graphs as $name => $graph) {
+
+    $max = 0;
+
+    foreach($graph['ticks'] as $gValue)
+        if($gValue['value'] > $max) $max = $gValue['value'];
+
+    $max = ceil($max / 5) * 5;
+
+    echo $this->widget->chart('chart' . ucfirst($name))
+                      ->attr('class', 'chart')
+                      ->showBorderLine(FALSE)
+                      ->padding(5, 25, 5, 5)
+                      ->backgroundColor('transparent')
+                      ->title($graph['dataSource']['desc'])
+                      ->description($graph['archive']['desc'])
+                      ->colorScheme('scheme07')
+                      ->renderEngine('SVG')
+                      ->seriesGroups(array(array(
+                                               'type'      => 'area',
+                                               'valueAxis' => array(
+                                                   'description'    => $graph['unit'],
+                                                   'minValue'       => 0,
+                                                   'maxValue'       => $max,
+                                                   'gridLinesColor' => '#eeeeee',
+                                                   'tickMarksColor' => '#eeeeee'
+                                               ),
+                                               'series'    => array(array(
+                                                                        'dataField'   => 'value',
+                                                                        'displayText' => 'MAX Clients'
+                                                                    ))
+                                           )))
+                      ->categoryAxis(array(
+                                         'dataField'      => 'tick',
+                                         'unitInterval'   => 5,
+                                         'gridLinesColor' => '#eeeeee'
+                                     ))
+                      ->source($graph['ticks']);
+}
+?>
