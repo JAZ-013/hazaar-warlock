@@ -29,25 +29,24 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="libs\" />
-    <Folder Include="libs\Warlock\" />
     <Folder Include="src\Controller" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="libs\Warlock\client.js" />
-    <Content Include="libs\Warlock\clients.phtml" />
-    <Content Include="libs\Warlock\controlpanel.css" />
-    <Content Include="libs\Warlock\controlpanel.js" />
-    <Content Include="libs\Warlock\controlpanel.phtml" />
-    <Content Include="libs\Warlock\dashboard.phtml" />
-    <Content Include="libs\Warlock\events.phtml" />
-    <Content Include="libs\Warlock\jobs.phtml" />
-    <Content Include="libs\Warlock\log.phtml" />
-    <Content Include="libs\Warlock\procs.phtml" />
-    <Content Include="libs\Warlock\services.phtml" />
-    <Content Include="libs\Warlock\warlock_bg.png" />
-    <Content Include="libs\Warlock\warlock_icon.png" />
+    <Content Include="libs\client.js" />
+    <Content Include="libs\clients.phtml" />
+    <Content Include="libs\controlpanel.css" />
+    <Content Include="libs\controlpanel.js" />
+    <Content Include="libs\controlpanel.phtml" />
+    <Content Include="libs\dashboard.phtml" />
+    <Content Include="libs\events.phtml" />
+    <Content Include="libs\jobs.phtml" />
+    <Content Include="libs\log.phtml" />
+    <Content Include="libs\procs.phtml" />
+    <Content Include="libs\services.phtml" />
+    <Content Include="libs\warlock_bg.png" />
+    <Content Include="libs\warlock_icon.png" />
   </ItemGroup>
 </Project>
