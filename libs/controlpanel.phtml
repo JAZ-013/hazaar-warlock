@@ -11,7 +11,7 @@
 
     <?=$this->import();?>
 
-    <?=$this->html->link($this->url('hazaar', 'Warlock/controlpanel.css'));?>
+    <?=$this->html->link($this->url('file/controlpanel.css'));?>
 
 </head>
 
@@ -30,7 +30,7 @@
             <?php foreach($this->tabs as $tab => $label): ?>
 
             <a class="item<?php if($this->current == $tab) echo ' active'; ?>"
-                href="<?=$this->url('warlock', NULL, array('tab' => $tab));?>">
+                href="<?=$this->url(null, array('tab' => $tab));?>">
                 <?=$label;?>
             </a>
 
@@ -226,8 +226,6 @@
     <?php
 
     echo $this->post();
-
-    echo $this->html->script()->src($this->url('hazaar', 'Warlock/controlpanel.js'));
 
     ?>
 

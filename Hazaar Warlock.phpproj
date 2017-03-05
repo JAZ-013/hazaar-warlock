@@ -16,7 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="src\Config.php" />
-    <Compile Include="src\Controller\Warlock.php" />
+    <Compile Include="src\Controller.php" />
     <Compile Include="src\Container.php" />
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Process.php" />
@@ -29,7 +29,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="libs\" />
-    <Folder Include="src\Controller" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />
