@@ -95,12 +95,16 @@ class Controller extends \Hazaar\Controller\Action {
 
         $this->view->admin_key = $this->control->config->admin->key;
 
-        if ($this->view->current == 'log')
-            $this->view->log = file_get_contents(\Hazaar\Application::getInstance()->runtimePath($this->control->config->log->file));
+        if ($this->view->current == 'log' && $file = $this->control->config->log->file){
+
+            if(file_exists($file))
+                $this->view->log = file_get_contents(\Hazaar\Application::getInstance()->runtimePath($file));
+
+        }
 
     }
 
-    private function start() {
+    public function start() {
 
         $out = new \Hazaar\Controller\Response\Json(array(
             'result' => 'error'
@@ -113,7 +117,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function stop() {
+    public function stop() {
 
         $out = new \Hazaar\Controller\Response\Json(array(
             'result' => 'error'
@@ -126,7 +130,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function subscribe() {
+    public function subscribe() {
 
         $params = $this->request->getParams();
 
@@ -191,7 +195,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function trigger() {
+    public function trigger() {
 
         $params = $this->request->getParams();
 
@@ -260,7 +264,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function status() {
+    public function status() {
 
         $out = new \Hazaar\Controller\Response\Json();
 
@@ -270,7 +274,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function jobs() {
+    public function jobs() {
 
         $out = new \Hazaar\Controller\Response\Json();
 
@@ -287,7 +291,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function processes() {
+    public function processes() {
 
         $out = new Response\Json();
 
@@ -297,7 +301,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function services() {
+    public function services() {
 
         $out = new Response\Json();
 
@@ -307,7 +311,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function ping() {
+    public function ping() {
 
         if (!$this->request->has('id'))
             throw new \Exception('No client ID specified');
@@ -318,7 +322,7 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
-    private function test() {
+    public function test() {
 
         $out = new Response\Json(array(
             'result' => 'err'
