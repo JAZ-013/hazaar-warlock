@@ -34,6 +34,8 @@ abstract class Service extends Process {
 
     protected $slept    = false;
 
+    private   $ob_file;
+
     final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct($application, $protocol);
@@ -47,6 +49,8 @@ abstract class Service extends Process {
 
         $this->name = strtolower($name);
 
+        $this->redirectOutput($this->name);
+
         $defaults = array(
             $this->name => array(
                 'enabled'   => false,
@@ -58,6 +62,10 @@ abstract class Service extends Process {
 
         $this->config = ake($config, $this->name);
 
+        $this->setErrorHandler('__errorHandler');
+
+        $this->setExceptionHandler('__exceptionHandler');
+
     }
 
     public function main() {
@@ -65,9 +73,9 @@ abstract class Service extends Process {
         if(! $this->start())
             return 1;
 
-        $this->sendHeartbeat();
+        $this->__sendHeartbeat();
 
-        $this->processSchedule();
+        $this->__processSchedule();
 
         while($this->state == HAZAAR_SERVICE_RUNNING || $this->state == HAZAAR_SERVICE_SLEEP) {
 
@@ -75,10 +83,20 @@ abstract class Service extends Process {
 
             $this->state = HAZAAR_SERVICE_RUNNING;
 
-            $ret = $this->run();
+            try{
 
-            if($ret === false)
-                $this->state = HAZAAR_SERVICE_STOPPING;
+                $ret = $this->run();
+
+                if($ret === false)
+                    $this->state = HAZAAR_SERVICE_STOPPING;
+
+
+            }
+            catch(\Exception $e){
+
+                $this->__exceptionHandler($e);
+
+            }
 
             /*
              * If sleep was not executed in the last call to run(), then execute it now.  This protects bad services
@@ -100,6 +118,235 @@ abstract class Service extends Process {
         $this->state = HAZAAR_SERVICE_STOPPED;
 
         return 0;
+
+    }
+
+    /**
+     * This method turns off output to STDOUT and STDERR and redirects them to a file.
+     *
+     * @param mixed $name The name to use in the file.
+     */
+    protected function redirectOutput($name){
+
+        $this->ob_file = fopen($this->application->runtimePath($name . '.log'), 'at');
+
+        ob_start(array($this, 'writeOutput'));
+
+    }
+
+    protected function writeOutput($buffer){
+
+        fwrite($this->ob_file, $buffer);
+
+        return '';
+
+    }
+
+    public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
+
+        $msg = "#$errno on line $errline in file $errfile\n" . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40);
+
+        $this->send('ERROR', $msg);
+
+        echo "ERROR $msg\n\n";
+
+        return true;
+
+    }
+
+    public function __exceptionHandler($e){
+
+        $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n" . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40);
+
+        $this->send('ERROR', $msg);
+
+        echo "EXCEPTION $msg\n\n";
+
+        return true;
+
+    }
+
+    protected function __processCommand($command, $payload = NULL) {
+
+        switch($command) {
+
+            case 'STATUS':
+
+                $this->__sendHeartbeat();
+
+                break;
+
+            case 'CANCEL':
+
+                return $this->stop();
+
+        }
+
+        return parent::__processCommand($command, $payload);
+
+    }
+
+    private function __processSchedule() {
+
+        if(! is_array($this->schedule) || ! count($this->schedule) > 0)
+            return;
+
+        $this->next = NULL;
+
+        foreach($this->schedule as $id => &$exec) {
+
+            if(time() >= $exec['when']) {
+
+                $this->state = HAZAAR_SERVICE_RUNNING;
+
+                if(is_string($exec['callback']))
+                    $exec['callback'] = array($this, $exec['callback']);
+
+                try{
+
+                    if(is_callable($exec['callback']))
+                        call_user_func_array($exec['callback'], $exec['params']);
+
+                }
+                catch(\Exception $e){
+
+                    $this->__exceptionHandler($e);
+
+                }
+
+                switch($exec['type']) {
+                    case HAZAAR_SCHEDULE_INTERVAL:
+
+                        $this->next = $exec['when'] = $exec['when'] + $exec['interval'];
+
+                        break;
+
+                    case HAZAAR_SCHEDULE_CRON:
+
+                        $this->next = $exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60);
+
+                        break;
+
+                    case HAZAAR_SCHEDULE_DELAY:
+                    case HAZAAR_SCHEDULE_NORM:
+                    default:
+
+                        unset($this->schedule[$id]);
+
+                        break;
+
+                }
+
+            } elseif($this->next === NULL || $exec['when'] < $this->next) {
+
+                $this->next = $exec['when'];
+
+            }
+
+        }
+
+    }
+
+    protected function __sendHeartbeat() {
+
+        $status = array(
+            'pid'        => getmypid(),
+            'name'       => $this->name,
+            'start'      => $this->start,
+            'state_code' => $this->state,
+            'state'      => $this->__stateString($this->state),
+            'mem'        => memory_get_usage(),
+            'peak'       => memory_get_peak_usage()
+        );
+
+        $this->lastHeartbeat = time();
+
+        $this->send('status', $status);
+
+        return true;
+
+    }
+
+    private function __stateString($state = NULL) {
+
+        if($state === NULL)
+            $state = $this->state;
+
+        $strings = array(
+            HAZAAR_SERVICE_ERROR    => 'Error',
+            HAZAAR_SERVICE_INIT     => 'Initializing',
+            HAZAAR_SERVICE_READY    => 'Ready',
+            HAZAAR_SERVICE_RUNNING  => 'Running',
+            HAZAAR_SERVICE_SLEEP    => 'Sleeping',
+            HAZAAR_SERVICE_STOPPING => 'Stopping',
+            HAZAAR_SERVICE_STOPPED  => 'Stopped'
+        );
+
+        return $strings[$state];
+
+    }
+
+    /*
+     * BUILT-IN PLACEHOLDER METHODS
+     */
+    public function init() {
+
+        return true;
+
+    }
+
+    public function run() {
+
+        $this->sleep(60);
+
+    }
+
+    public function shutdown() {
+
+        return true;
+
+    }
+
+    /*
+     * CONTROL METHODS
+     */
+
+    private function start() {
+
+        $init = $this->init();
+
+        if($this->state === HAZAAR_SERVICE_INIT) {
+
+            $this->state = (($init === FALSE) ? HAZAAR_SERVICE_ERROR : HAZAAR_SERVICE_READY);
+
+            if($this->state != HAZAAR_SERVICE_READY)
+                return FALSE;
+
+            $this->state = HAZAAR_SERVICE_RUNNING;
+
+        }
+
+        return true;
+
+    }
+
+    public function stop() {
+
+        return $this->state = HAZAAR_SERVICE_STOPPING;
+
+    }
+
+    public function restart() {
+
+        $this->stop();
+
+        return $this->start();
+
+    }
+
+    public function state() {
+
+        return $this->state;
 
     }
 
@@ -157,15 +404,17 @@ abstract class Service extends Process {
             $payload = null;
 
             if($type = $this->recv($payload, $tv_sec, $tv_usec))
-                $this->processCommand($type, $payload);
+                $this->__processCommand($type, $payload);
 
             if($this->next > 0 && $this->next <= time())
-                $this->processSchedule();
+                $this->__processSchedule();
 
             if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
-                $this->sendHeartbeat();
+                $this->__sendHeartbeat();
 
             $slept = true;
+
+            ob_flush();
 
         }
 
@@ -175,179 +424,10 @@ abstract class Service extends Process {
 
     }
 
-    protected function processCommand($command, $payload = NULL) {
-
-        switch($command) {
-
-            case 'CANCEL':
-
-                return $this->stop();
-
-        }
-
-        return parent::processCommand($command, $payload);
-
-    }
-
-    private function processSchedule() {
-
-        if(! is_array($this->schedule) || ! count($this->schedule) > 0)
-            return;
-
-        $this->next = NULL;
-
-        foreach($this->schedule as $id => &$exec) {
-
-            if(time() >= $exec['when']) {
-
-                $this->state = HAZAAR_SERVICE_RUNNING;
-
-                if(is_string($exec['callback']))
-                    $exec['callback'] = array($this, $exec['callback']);
-
-                if(is_callable($exec['callback']))
-                    call_user_func_array($exec['callback'], $exec['params']);
-
-                switch($exec['type']) {
-                    case HAZAAR_SCHEDULE_INTERVAL:
-
-                        $this->next = $exec['when'] = $exec['when'] + $exec['interval'];
-
-                        break;
-
-                    case HAZAAR_SCHEDULE_CRON:
-
-                        $this->next = $exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60);
-
-                        break;
-
-                    case HAZAAR_SCHEDULE_DELAY:
-                    case HAZAAR_SCHEDULE_NORM:
-                    default:
-
-                        unset($this->schedule[$id]);
-
-                        break;
-
-                }
-
-            } elseif($this->next === NULL || $exec['when'] < $this->next) {
-
-                $this->next = $exec['when'];
-
-            }
-
-        }
-
-    }
-
-    /*
-     * BUILT-IN PLACEHOLDER METHODS
-     */
-    public function init() {
-
-        return true;
-
-    }
-
-    public function run() {
-
-        $this->sleep(60);
-
-    }
-
-    public function shutdown() {
-
-        return true;
-
-    }
-
-    /*
-     * CONTROL METHODS
-     */
-
-    public function start() {
-
-        $init = $this->init();
-
-        if($this->state === HAZAAR_SERVICE_INIT) {
-
-            $this->state = (($init === FALSE) ? HAZAAR_SERVICE_ERROR : HAZAAR_SERVICE_READY);
-
-            if($this->state != HAZAAR_SERVICE_READY)
-                return FALSE;
-
-            $this->state = HAZAAR_SERVICE_RUNNING;
-
-        }
-
-        return true;
-
-    }
-
-    public function stop() {
-
-        return $this->state = HAZAAR_SERVICE_STOPPING;
-
-    }
-
-    public function restart() {
-
-        $this->stop();
-
-        return $this->start();
-
-    }
-
-    private function sendHeartbeat() {
-
-        $status = array(
-            'pid'        => getmypid(),
-            'name'       => $this->name,
-            'start'      => $this->start,
-            'state_code' => $this->state,
-            'state'      => $this->stateString($this->state),
-            'mem'        => memory_get_usage(),
-            'peak'       => memory_get_peak_usage()
-        );
-
-        $this->lastHeartbeat = time();
-
-        $this->send('status', $status);
-
-        return true;
-
-    }
-
-    public function state() {
-
-        return $this->state;
-
-    }
-
-    public function stateString($state = NULL) {
-
-        if($state === NULL)
-            $state = $this->state;
-
-        $strings = array(
-            HAZAAR_SERVICE_ERROR    => 'Error',
-            HAZAAR_SERVICE_INIT     => 'Initializing',
-            HAZAAR_SERVICE_READY    => 'Ready',
-            HAZAAR_SERVICE_RUNNING  => 'Running',
-            HAZAAR_SERVICE_SLEEP    => 'Sleeping',
-            HAZAAR_SERVICE_STOPPING => 'Stopping',
-            HAZAAR_SERVICE_STOPPED  => 'Stopped'
-        );
-
-        return $strings[$state];
-
-    }
-
     /*
      * Command scheduling
      */
-    protected function delay($seconds, $callback, $params = array()) {
+    public function delay($seconds, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -373,7 +453,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function interval($seconds, $callback, $params = array()) {
+    public function interval($seconds, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -401,7 +481,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function schedule($date, $callback, $params = array()) {
+    public function schedule($date, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -433,7 +513,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function cron($format, $callback, $params = array()) {
+    public function cron($format, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -462,7 +542,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function cancel($id) {
+    public function cancel($id) {
 
         if(! array_key_exists($id, $this->schedule))
             return FALSE;
