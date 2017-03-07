@@ -366,7 +366,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function processCommand($command, $payload = null) {
+    protected function __processCommand($command, $payload = null) {
 
         switch($command) {
 
@@ -391,12 +391,6 @@ abstract class Process extends WebSockets {
                     error_log('ERROR: ' . $e->getMessage());
 
                 }
-
-                break;
-
-            case 'STATUS':
-
-                $this->sendHeartbeat();
 
                 break;
 
