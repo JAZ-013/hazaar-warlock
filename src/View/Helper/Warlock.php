@@ -58,8 +58,11 @@ class Warlock extends \Hazaar\View\Helper {
 
         $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
 
+        if(!$config->client->has('port'))
+            $config->client['port'] = $config->server['port'];
+
         if(trim($config->server->listen) == '0.0.0.0')
-            $host = $_SERVER['HTTP_HOST'] . ':' . $config->server->port . '/' . APPLICATION_NAME;
+            $host = $_SERVER['SERVER_NAME'] . ':' . $config->server->port . '/' . APPLICATION_NAME;
         else
             $host = $config->server->listen . ':' . $config->server->port . '/' . APPLICATION_NAME;
 
