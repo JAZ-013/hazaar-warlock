@@ -228,7 +228,7 @@ class SocketClient {
             $resource = $this->resource;
         }
 
-        stdout(W_NOTICE, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $resource);
+        stdout(W_DEBUG, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $resource);
 
         $this->subscriptions[$event_id] = $resource;
 
@@ -247,7 +247,7 @@ class SocketClient {
         if ($resource && $resource != $this->subscriptions[$event_id])
             return FALSE;
 
-        stdout(W_NOTICE, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $this->subscriptions[$event_id] . ' LEFT=' . count($this->subscriptions));
+        stdout(W_DEBUG, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $this->subscriptions[$event_id] . ' LEFT=' . count($this->subscriptions));
 
         unset($this->subscriptions[$event_id]);
 
@@ -477,29 +477,29 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_NOTICE, 'Application path = ' . APPLICATION_PATH);
+        stdout(W_INFO, 'Application path = ' . APPLICATION_PATH);
 
-        stdout(W_NOTICE, 'Application name = ' . APPLICATION_NAME);
+        stdout(W_INFO, 'Application name = ' . APPLICATION_NAME);
 
-        stdout(W_NOTICE, 'Library path = ' . LIBRAY_PATH);
+        stdout(W_INFO, 'Library path = ' . LIBRAY_PATH);
 
-        stdout(W_NOTICE, 'Application environment = ' . APPLICATION_ENV);
+        stdout(W_INFO, 'Application environment = ' . APPLICATION_ENV);
 
-        stdout(W_NOTICE, 'PID = ' . $this->pid);
+        stdout(W_INFO, 'PID = ' . $this->pid);
 
-        stdout(W_NOTICE, 'PID file = ' . $this->pidfile);
+        stdout(W_INFO, 'PID file = ' . $this->pidfile);
 
-        stdout(W_DEBUG, 'Server ID = ' . $this->config->sys->id);
+        stdout(W_NOTICE, 'Server ID = ' . $this->config->sys->id);
 
-        stdout(W_DEBUG, 'Listen address = ' . $this->config->server->listen);
+        stdout(W_NOTICE, 'Listen address = ' . $this->config->server->listen);
 
-        stdout(W_DEBUG, 'Listen port = ' . $this->config->server->port);
+        stdout(W_NOTICE, 'Listen port = ' . $this->config->server->port);
 
-        stdout(W_DEBUG, 'Job expiry = ' . $this->config->job->expire . ' seconds');
+        stdout(W_NOTICE, 'Job expiry = ' . $this->config->job->expire . ' seconds');
 
-        stdout(W_DEBUG, 'Exec timeout = ' . $this->config->exec->timeout . ' seconds');
+        stdout(W_NOTICE, 'Exec timeout = ' . $this->config->exec->timeout . ' seconds');
 
-        stdout(W_DEBUG, 'Process limit = ' . $this->config->exec->limit . ' processes');
+        stdout(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
 
         $this->protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
 
@@ -507,7 +507,7 @@ class Server extends WebSockets {
 
     public function shutdown($timeout = 0) {
 
-        stdout(W_NOTICE, "SHUTDOWN: TIMEOUT=$timeout");
+        stdout(W_DEBUG, "SHUTDOWN: TIMEOUT=$timeout");
 
         $this->shutdown = time() + $timeout;
 
@@ -734,7 +734,7 @@ class Server extends WebSockets {
 
             foreach($this->procs as $p) {
 
-                stdout(W_NOTICE, "TERMINATE: PID=$p[pid]");
+                stdout(W_DEBUG, "TERMINATE: PID=$p[pid]");
 
                 $this->send($p['pipes'][0], 'cancel');
 
@@ -795,7 +795,7 @@ class Server extends WebSockets {
 
         if ($client = $this->getClient($socket)) {
 
-            stdout(W_NOTICE, 'DISCONNECT: CLIENT=' . $client->id . ' SOCKET=' . $socket . ' COUNT=' . $client->socketCount);
+            stdout(W_DEBUG, 'DISCONNECT: CLIENT=' . $client->id . ' SOCKET=' . $socket . ' COUNT=' . $client->socketCount);
 
             $this->unsubscribe($client, NULL, $socket);
 
@@ -809,7 +809,7 @@ class Server extends WebSockets {
         if (array_key_exists($socket_id, $this->sockets))
             unset($this->sockets[$socket_id]);
 
-        stdout(W_NOTICE, "SOCKET_CLOSE: SOCKET=" . $socket);
+        stdout(W_DEBUG, "SOCKET_CLOSE: SOCKET=" . $socket);
 
         socket_close($socket);
 
@@ -893,11 +893,11 @@ class Server extends WebSockets {
 
         $client->socketCount--;
 
-        stdout(W_NOTICE, "LOOKUP_UNSET: CLIENT=$client->id SOCKETS=" . $client->socketCount);
+        stdout(W_DEBUG, "LOOKUP_UNSET: CLIENT=$client->id SOCKETS=" . $client->socketCount);
 
         if (count($client->subscriptions) <= 0 && $client->socketCount <= 0) {
 
-            stdout(W_NOTICE, "REMOVE: CLIENT=$id");
+            stdout(W_DEBUG, "REMOVE: CLIENT=$id");
 
             unset($this->clients[$id]);
 
@@ -910,7 +910,7 @@ class Server extends WebSockets {
 
         } else {
 
-            stdout(W_NOTICE, "NOTREMOVE: SUBS=" . count($client->subscriptions) . ' SOCKETS=' . $client->socketCount);
+            stdout(W_DEBUG, "NOTREMOVE: SUBS=" . count($client->subscriptions) . ' SOCKETS=' . $client->socketCount);
 
         }
 
@@ -1053,7 +1053,7 @@ class Server extends WebSockets {
 
             if (array_key_exists('get', $headers) && ($responseCode = $this->acceptHandshake($headers, $responseHeaders, NULL, $results)) == 101) {
 
-                stdout(W_DEBUG, "Initiating WebSockets handshake");
+                stdout(W_NOTICE, "Initiating WebSockets handshake");
 
                 if (!($cid = $results['url']['CID']))
                     return FALSE;
@@ -1066,7 +1066,7 @@ class Server extends WebSockets {
 
                 socket_write($socket, $response, strlen($response));
 
-                stdout(W_DEBUG, 'WebSockets handshake successful!');
+                stdout(W_NOTICE, 'WebSockets handshake successful!');
 
                 return TRUE;
 
@@ -1135,7 +1135,7 @@ class Server extends WebSockets {
 
                 $this->clients[$query['CID']] = $client;
 
-                stdout(W_NOTICE, "ADD: CLIENT=$client->id MODE=legacy SOCKET=$socket COUNT=$client->socketCount");
+                stdout(W_DEBUG, "ADD: CLIENT=$client->id MODE=legacy SOCKET=$socket COUNT=$client->socketCount");
 
                 $this->sendAdminEvent('add', array(
                     'type' => 'client',
@@ -1498,7 +1498,7 @@ class Server extends WebSockets {
 
         $type = $client->isLegacy() ? 'Legacy' : 'WebSocket';
 
-        stdout(W_NOTICE, "COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL) . " TYPE=$type");
+        stdout(W_DEBUG, "COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL) . " TYPE=$type");
 
         switch ($command) {
 
@@ -1598,7 +1598,7 @@ class Server extends WebSockets {
 
     private function commandSync($resource, &$client, $payload){
 
-        stdout(W_NOTICE, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
+        stdout(W_DEBUG, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
 
         if (is_array($payload)
             && array_key_exists('admin_key', $payload)
@@ -1876,11 +1876,11 @@ class Server extends WebSockets {
         // Check to see if there are any clients waiting for this event and send notifications to them all.
         $this->processSubscriptionQueue($event_id, $trigger_id);
 
-        stdout(W_NOTICE, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
+        stdout(W_DEBUG, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
 
         if($client instanceof SocketClient){
 
-            stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
+            stdout(W_DEBUG, "TRIGGER: NAME=$event_id CLIENT=$client->id");
 
             $this->send($resource, 'ok', NULL, $client->isLegacy());
 
@@ -1952,7 +1952,7 @@ class Server extends WebSockets {
 
         if ($event_id == $this->config->admin->trigger) {
 
-            stdout(W_NOTICE, "ADMIN_SUBSCRIBE: CLIENT=$client->id");
+            stdout(W_DEBUG, "ADMIN_SUBSCRIBE: CLIENT=$client->id");
 
         } else {
 
@@ -1992,13 +1992,13 @@ class Server extends WebSockets {
 
                         if ($item['client'] == $client->id) {
 
-                            stdout(W_NOTICE, "DEQUEUE: NAME=$event_id CLIENT=$client->id");
+                            stdout(W_DEBUG, "DEQUEUE: NAME=$event_id CLIENT=$client->id");
 
                             unset($this->waitQueue[$event_id][$id]);
 
                             if ($event_id == $this->config->admin->trigger) {
 
-                                stdout(W_NOTICE, "ADMIN_UNSUBSCRIBE: CLIENT=$client->id");
+                                stdout(W_DEBUG, "ADMIN_UNSUBSCRIBE: CLIENT=$client->id");
 
                             } else {
 
@@ -2076,13 +2076,13 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_DEBUG, 'NOW:  ' . date('c'), $id);
+        stdout(W_NOTICE, 'NOW:  ' . date('c'), $id);
 
-        stdout(W_DEBUG, 'WHEN: ' . date('c', $when), $id);
+        stdout(W_NOTICE, 'WHEN: ' . date('c', $when), $id);
 
-        stdout(W_DEBUG, 'APPLICATION_PATH: ' . $application['path'], $id);
+        stdout(W_NOTICE, 'APPLICATION_PATH: ' . $application['path'], $id);
 
-        stdout(W_DEBUG, 'APPLICATION_ENV:  ' . $application['env'], $id);
+        stdout(W_NOTICE, 'APPLICATION_ENV:  ' . $application['env'], $id);
 
         if (!$when || $when < time()) {
 
@@ -2092,25 +2092,25 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_DEBUG, 'Scheduling job for execution at ' . date('c', $when), $id);
+        stdout(W_NOTICE, 'Scheduling job for execution at ' . date('c', $when), $id);
 
         if ($tag) {
 
-            stdout(W_DEBUG, 'TAG: ' . $tag, $id);
+            stdout(W_NOTICE, 'TAG: ' . $tag, $id);
 
             if (array_key_exists($tag, $this->tags)) {
 
-                stdout(W_DEBUG, "Job already scheduled with tag $tag", $id);
+                stdout(W_NOTICE, "Job already scheduled with tag $tag", $id);
 
                 if ($overwrite == 'true') {
 
                     $id = $this->tags[$tag];
 
-                    stdout(W_DEBUG, 'Overwriting', $id);
+                    stdout(W_NOTICE, 'Overwriting', $id);
 
                 } else {
 
-                    stdout(W_DEBUG, 'Skipping', $id);
+                    stdout(W_NOTICE, 'Skipping', $id);
 
                     return FALSE;
 
@@ -2148,7 +2148,7 @@ class Server extends WebSockets {
             'expire' => 0
         );
 
-        stdout(W_DEBUG, 'Job added to queue', $id);
+        stdout(W_NOTICE, 'Job added to queue', $id);
 
         $this->stats['queue']++;
 
@@ -2186,7 +2186,7 @@ class Server extends WebSockets {
 
             if (array_key_exists($job_id, $this->procs)) {
 
-                stdout(W_DEBUG, 'Stopping running ' . $type);
+                stdout(W_NOTICE, 'Stopping running ' . $type);
 
                 proc_close($this->procs[$job_id]['process']);
 
@@ -2216,7 +2216,7 @@ class Server extends WebSockets {
 
         $this->jobQueue[$job_id]['status_text'] = $this->getJobStatus($job_id);
 
-        stdout(W_NOTICE, $job_id . ' - ' . strtoupper($this->jobQueue[$job_id]['status_text']));
+        stdout(W_NOTICE, strtoupper($this->jobQueue[$job_id]['status_text']), $job_id);
 
         $this->sendAdminEvent('update', array(
             'type' => 'job',
@@ -2552,7 +2552,7 @@ class Server extends WebSockets {
                         'service' => $this->services[$name]
                     ));
 
-                    stdout(W_NOTICE, "SERVICE=$name EXIT=$status[exitcode]");
+                    stdout(W_DEBUG, "SERVICE=$name EXIT=$status[exitcode]");
 
                     if ($status['exitcode'] > 0 && $job['status'] !== STATUS_CANCELLED) {
 
@@ -2637,7 +2637,7 @@ class Server extends WebSockets {
 
                         } else {
 
-                            stdout(W_DEBUG, 'Re-queuing job for execution.', $id);
+                            stdout(W_NOTICE, 'Re-queuing job for execution.', $id);
 
                             $this->setJobStatus($id, STATUS_QUEUED_RETRY);
 
@@ -2719,7 +2719,7 @@ class Server extends WebSockets {
 
                         if ($event_id != $this->config->admin->trigger) {
 
-                            stdout(W_NOTICE, "EXPIRE: NAME=$event_id TRIGGER=$id");
+                            stdout(W_DEBUG, "EXPIRE: NAME=$event_id TRIGGER=$id");
 
                             $this->sendAdminEvent('remove', array(
                                 'type' => 'event',
@@ -2883,7 +2883,7 @@ class Server extends WebSockets {
      */
     private function processEventQueue(&$client, $event_id, $filter = NULL) {
 
-        stdout(W_DEBUG, "QUEUE: NAME=$event_id");
+        stdout(W_NOTICE, "QUEUE: NAME=$event_id");
 
         if (array_key_exists($event_id, $this->eventQueue)) {
 
