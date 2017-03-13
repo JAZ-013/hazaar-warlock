@@ -213,6 +213,11 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
             'filter': filter
         }, false);
     };
+    this._unsubscribe = function (event_id) {
+        this._send(p.unsubscribe, {
+            'id': event_id
+        }, false);
+    };
     this._send = function (type, payload, queue) {
         var packet = {
             'TYP': type,
@@ -268,6 +273,14 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         } else {
             this._longpoll(event_id, callback, filter);
         }
+        return this;
+    };
+    this.unsubscribe = function (event_id) {
+        this._connect();
+        if (!(this._isWebSocket() && this.subscribeQueue[event_id]))
+            return false;
+        delete this.subscribeQueue[event_id];
+        this._unsubscribe(event_id);
         return this;
     };
     this.trigger = function (event_id, data, echo_self) {
