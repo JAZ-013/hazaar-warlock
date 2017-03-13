@@ -28,6 +28,8 @@ class Controller extends \Hazaar\Controller\Action {
 
         $this->view->requires('controlpanel.js');
 
+        $this->view->link('controlpanel.css');
+
         $this->view->tabs = array(
             'dashboard' => 'Dashboard',
             'procs' => 'Processes',

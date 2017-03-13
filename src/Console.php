@@ -6,11 +6,17 @@ class Console extends \Hazaar\Console\Module {
 
     public function init(){
 
-        $this->addMenuGroup('dbi', 'Warlock');
+        $this->addMenuGroup('warlock', 'Warlock');
 
-        $this->addMenuItem('dbi', 'Overview', 'index');
+        $this->addMenuItem('warlock', 'Overview', 'index');
 
-        $this->addMenuItem('dbi', 'Services', 'services');
+        $this->addMenuItem('warlock', 'Services', 'services');
+
+        $this->addMenuItem('warlock', 'Connections', 'connections');
+
+        $this->addMenuItem('warlock', 'Processes', 'processes');
+
+        $this->addMenuItem('warlock', 'Log File', 'log');
 
     }
 
@@ -19,6 +25,18 @@ class Console extends \Hazaar\Console\Module {
     }
 
     public function services(){
+
+    }
+
+    public function connections(){
+
+    }
+
+    public function processes(){
+
+    }
+
+    public function log(){
 
     }
 
