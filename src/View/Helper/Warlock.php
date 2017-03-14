@@ -38,7 +38,7 @@ class Warlock extends \Hazaar\View\Helper {
         if(count($args) > 0)
             $this->js_varname = $args[0];
 
-        $view->requires($this->application->url('hazaar/warlock', 'script/client.js'));
+        $view->requires($this->application->url('hazaar/warlock', 'file/client.js'));
 
         $defaults = array(
             'sys'        => array(
