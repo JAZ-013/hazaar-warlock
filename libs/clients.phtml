@@ -1,0 +1,25 @@
+<div id="clientlist" class="section">
+
+</div>
+
+<script>
+    <?php foreach($this->status['clients'] as $client) {
+
+        $host = $client['ip'] ? $client['ip'] . ':' . $client['port'] : 'Internal';
+
+        $label = ($client['username'] ? $client['username'] : $host);
+
+        $data = array(
+            'ID'=> $client['id'],
+            'Host' => $host,
+            'User'=> ($client['username'] ? $client['username'] : 'None'),
+            'Since'=> $this->datetime($client['since'])
+        );
+
+        echo "displayPanel($('#clientlist'), '$client[id]', '$label', " . json_encode($data) . ")
+            .toggleClass('client-admin', " . ($client['admin'] ? 'true' : 'false') ." )
+            .toggleClass('client-system', " . ($client['system'] ? 'true' : 'false') ." );\n";
+
+        } ?>
+
+</script>
