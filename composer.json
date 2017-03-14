@@ -31,8 +31,7 @@
       "Hazaar\\Warlock\\": "src/"
     },
     "classmap": [
-      "src/View/Helper/Warlock.php",
-      "src/Controller/Warlock.php"
+      "src/View/Helper/Warlock.php"
     ]
   },
   "require": {
