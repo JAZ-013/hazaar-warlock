@@ -186,7 +186,18 @@ abstract class Service extends Process {
 
         }
 
-        return parent::__processCommand($command, $payload);
+        try {
+
+            return parent::__processCommand($command, $payload);
+
+        }
+        catch(\Exception $e){
+
+            $this->__exceptionHandler($e);
+
+        }
+
+        return false;
 
     }
 
