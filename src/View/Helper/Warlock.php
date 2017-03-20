@@ -38,7 +38,7 @@ class Warlock extends \Hazaar\View\Helper {
         if(count($args) > 0)
             $this->js_varname = $args[0];
 
-        $view->requires($this->application->url('hazaar/warlock', 'script/client.js'));
+        $view->requires($this->application->url('hazaar/warlock', 'file/client.js'));
 
         $defaults = array(
             'sys'        => array(
@@ -62,9 +62,9 @@ class Warlock extends \Hazaar\View\Helper {
             $config->client['port'] = $config->server['port'];
 
         if(trim($config->server->listen) == '0.0.0.0')
-            $host = $_SERVER['SERVER_NAME'] . ':' . $config->server->port . '/' . APPLICATION_NAME;
+            $host = $_SERVER['SERVER_NAME'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
         else
-            $host = $config->server->listen . ':' . $config->server->port . '/' . APPLICATION_NAME;
+            $host = $config->server->listen . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
 
         $wsEnabled = strbool($config->websockets->enabled === true);
 

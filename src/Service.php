@@ -49,7 +49,15 @@ abstract class Service extends Process {
 
         $this->name = strtolower($name);
 
-        $this->redirectOutput($this->name);
+        if(!$application->request instanceof \Hazaar\Application\Request\Http){
+
+            $this->redirectOutput($this->name);
+
+            $this->setErrorHandler('__errorHandler');
+
+            $this->setExceptionHandler('__exceptionHandler');
+
+        }
 
         $defaults = array(
             $this->name => array(
@@ -61,10 +69,6 @@ abstract class Service extends Process {
         $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
 
         $this->config = ake($config, $this->name);
-
-        $this->setErrorHandler('__errorHandler');
-
-        $this->setExceptionHandler('__exceptionHandler');
 
     }
 
@@ -182,7 +186,18 @@ abstract class Service extends Process {
 
         }
 
-        return parent::__processCommand($command, $payload);
+        try {
+
+            return parent::__processCommand($command, $payload);
+
+        }
+        catch(\Exception $e){
+
+            $this->__exceptionHandler($e);
+
+        }
+
+        return false;
 
     }
 

@@ -558,7 +558,7 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_INFO, 'Creating TCP socket');
+        stdout(W_NOTICE, 'Creating TCP socket');
 
         $this->master = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
 
@@ -570,7 +570,7 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_INFO, 'Configuring TCP socket');
+        stdout(W_NOTICE, 'Configuring TCP socket');
 
         if (!socket_set_option($this->master, SOL_SOCKET, SO_REUSEADDR, 1)) {
 
@@ -580,7 +580,7 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_INFO, 'Binding to socket on ' . $this->config->server->listen . ':' . $this->config->server->port);
+        stdout(W_NOTICE, 'Binding to socket on ' . $this->config->server->listen . ':' . $this->config->server->port);
 
         if (!socket_bind($this->master, $this->config->server->listen, $this->config->server->port)) {
 
@@ -682,7 +682,7 @@ class Server extends WebSockets {
 
                             socket_getpeername($client_socket, $address, $port);
 
-                            stdout(W_INFO, "Connection from " . $address . ':' . $port);
+                            stdout(W_NOTICE, "Connection from " . $address . ':' . $port);
 
                         }
 
@@ -730,7 +730,7 @@ class Server extends WebSockets {
 
         if (count($this->procs) > 0) {
 
-            stdout(W_INFO, 'Terminating running processes');
+            stdout(W_NOTICE, 'Terminating running processes');
 
             foreach($this->procs as $p) {
 
@@ -740,7 +740,7 @@ class Server extends WebSockets {
 
             }
 
-            stdout(W_INFO, 'Waiting for processes to exit');
+            stdout(W_NOTICE, 'Waiting for processes to exit');
 
             $start = time();
 
@@ -764,14 +764,14 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_INFO, 'Closing all connections');
+        stdout(W_NOTICE, 'Closing all connections');
 
         foreach($this->sockets as $socket)
             socket_close($socket);
 
         $this->sockets = array();
 
-        stdout(W_INFO, 'Cleaning up');
+        stdout(W_NOTICE, 'Cleaning up');
 
         $this->procs = array();
 
@@ -1092,7 +1092,7 @@ class Server extends WebSockets {
              * Legacy long polling handshake
              */
 
-            stdout(W_INFO, "Processing legacy request");
+            stdout(W_NOTICE, "Processing legacy request");
 
             if (array_key_exists('get', $headers))
                 $url = parse_url($headers['get']);
@@ -1514,7 +1514,8 @@ class Server extends WebSockets {
 
             case 'OK':
 
-                stdout(W_WARN, "Received OK, but I don't know why!");
+                if($payload)
+                    stdout(W_INFO, $payload);
 
                 return true;
 
@@ -1604,7 +1605,7 @@ class Server extends WebSockets {
             && array_key_exists('admin_key', $payload)
             && $payload['admin_key'] === $this->config->admin->key) {
 
-            stdout(W_INFO, 'Warlock control authorised to ' . $client->id);
+            stdout(W_NOTICE, 'Warlock control authorised to ' . $client->id);
 
             $client->type = 'admin';
 
@@ -1645,7 +1646,7 @@ class Server extends WebSockets {
 
             $client->job_id = $payload['job_id'];
 
-            stdout(W_INFO, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
+            stdout(W_NOTICE, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
 
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
@@ -1676,7 +1677,7 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
-        stdout(W_INFO, "Shutdown requested");
+        stdout(W_NOTICE, "Shutdown requested");
 
         $this->send($resource, 'ok', NULL, $client->isLegacy());
 
@@ -1753,7 +1754,7 @@ class Server extends WebSockets {
 
         if ($id = $this->scheduleJob($when, $command['function'], $command['application'], $tag, $tag_overwrite)) {
 
-            stdout(W_INFO, "Successfully scheduled delayed function.  Executing in $command[value] seconds . ", $id);
+            stdout(W_NOTICE, "Successfully scheduled delayed function.  Executing in $command[value] seconds . ", $id);
 
             return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
 
@@ -1784,7 +1785,7 @@ class Server extends WebSockets {
 
         if ($id = $this->scheduleJob($command['when'], $command['function'], $command['application'], $tag, $tag_overwrite)) {
 
-            stdout(W_INFO, "Function execution successfully scheduled", $id);
+            stdout(W_NOTICE, "Function execution successfully scheduled", $id);
 
             return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
 
@@ -2582,7 +2583,7 @@ class Server extends WebSockets {
 
                         if ($job['retries'] > $this->config->service->restarts) {
 
-                            stdout(W_INFO, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
+                            stdout(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
 
                             $job['start'] = time() + $this->config->service->disable;
 
@@ -2592,7 +2593,7 @@ class Server extends WebSockets {
 
                         } else {
 
-                            stdout(W_INFO, "Restarting service '$name'. ({$job['retries']})");
+                            stdout(W_NOTICE, "Restarting service '$name'. ({$job['retries']})");
 
                             if (array_key_exists($job['service'], $this->services))
                                 $this->services[$job['service']]['restarts']++;
@@ -2601,7 +2602,7 @@ class Server extends WebSockets {
 
                     } elseif ($job['respawn'] == TRUE && $job['status'] == STATUS_RUNNING) {
 
-                        stdout(W_INFO, "Respawning service '$name' in " . $job['respawn_delay'] . " seconds.");
+                        stdout(W_NOTICE, "Respawning service '$name' in " . $job['respawn_delay'] . " seconds.");
 
                         $job['start'] = time() + $job['respawn_delay'];
 
@@ -2621,7 +2622,7 @@ class Server extends WebSockets {
 
                 } else {
 
-                    stdout(W_INFO, "Process exited with return code: " . $status['exitcode'], $id);
+                    stdout(W_NOTICE, "Process exited with return code: " . $status['exitcode'], $id);
 
                     if ($status['exitcode'] > 0) {
 
@@ -2666,7 +2667,7 @@ class Server extends WebSockets {
 
             } elseif ($job['status'] == STATUS_CANCELLED) {
 
-                stdout(W_INFO, 'Killing cancelled process', $id);
+                stdout(W_NOTICE, 'Killing cancelled process', $id);
 
                 if(substr(PHP_OS, 0, 3) == 'WIN')
                     exec('taskkill /F /T /PID ' . $proc['pid']);

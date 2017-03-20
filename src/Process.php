@@ -375,22 +375,13 @@ abstract class Process extends WebSockets {
                 if(! (array_key_exists('id', $payload) && array_key_exists($payload['id'], $this->subscriptions)))
                     return FALSE;
 
-                try {
+                $func = $this->subscriptions[$payload['id']];
 
-                    $func = $this->subscriptions[$payload['id']];
+                if(is_string($func))
+                    $func = array($this, $func);
 
-                    if(is_string($func))
-                        $func = array($this, $func);
-
-                    if(is_callable($func))
-                        call_user_func_array($func, array(ake($payload, 'data'), $payload));
-
-                }
-                catch(\Exception $e) {
-
-                    error_log('ERROR: ' . $e->getMessage());
-
-                }
+                if(is_callable($func))
+                    call_user_func_array($func, array(ake($payload, 'data'), $payload));
 
                 break;
 
@@ -446,11 +437,11 @@ abstract class Process extends WebSockets {
 
     }
 
-    public function trigger($event, $data = NULL) {
+    public function trigger($event, $data = NULL, $echo_self = false) {
 
         $packet = array(
             'id' => $event,
-            'echo' => false
+            'echo' => $echo_self
         );
 
         if($data)
