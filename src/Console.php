@@ -6,7 +6,7 @@ class Console extends \Hazaar\Console\Module {
 
     public function init(){
 
-        $this->addMenuGroup('warlock', 'Warlock');
+        $this->addMenuGroup('warlock', 'Warlock', 'magic');
 
         $this->addMenuItem('warlock', 'Overview', 'index');
 
