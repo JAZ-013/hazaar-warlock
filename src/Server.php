@@ -1938,8 +1938,13 @@ class Server extends WebSockets {
 
     public function subscribe($resource, &$client, $event_id, $filter) {
 
-        if ($client->isSubscribed($event_id))
-            return FALSE;
+        if ($client->isSubscribed($event_id)){
+        
+            stdout(W_WARN, 'Client is already subscribed to event: ' . $event_id);
+
+            return true;
+
+        }
 
         $new = array(
             'client' => $client->id,
@@ -2884,7 +2889,7 @@ class Server extends WebSockets {
      */
     private function processEventQueue(&$client, $event_id, $filter = NULL) {
 
-        stdout(W_NOTICE, "QUEUE: NAME=$event_id");
+        stdout(W_NOTICE, "PROCESSING EVENT QUEUE: $event_id");
 
         if (array_key_exists($event_id, $this->eventQueue)) {
 
