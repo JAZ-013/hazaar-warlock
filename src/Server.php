@@ -477,6 +477,10 @@ class Server extends WebSockets {
 
         }
 
+        stdout(W_INFO, 'PHP Version = ' . PHP_VERSION);
+
+        stdout(W_INFO, 'PHP Binary = ' . PHP_BINARY);
+
         stdout(W_INFO, 'Application path = ' . APPLICATION_PATH);
 
         stdout(W_INFO, 'Application name = ' . APPLICATION_NAME);
@@ -1939,7 +1943,7 @@ class Server extends WebSockets {
     public function subscribe($resource, &$client, $event_id, $filter) {
 
         if ($client->isSubscribed($event_id)){
-        
+
             stdout(W_WARN, 'Client is already subscribed to event: ' . $event_id);
 
             return true;
