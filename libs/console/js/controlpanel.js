@@ -63,12 +63,7 @@ function updateStatus(stats) {
     for (prop in stats.stats) {
         $('#status-' + prop).html(stats.stats[prop]);
     }
-}
-
-function refreshStatus() {
-    $.get(url('status'), function (data) {
-        updateStatus(data);
-    });
+    uptime();
 }
 
 function displayPanel(parent, id, label, data, suffix) {
@@ -123,7 +118,7 @@ function handleTrigger(data, event) {
                 removePanel(parent, data.args.id);
             }
             break;
-        case  'process':
+        case 'process':
             var parent = $('#processlist');
             var proc = data.args.process;
             if (data.command == 'add') {
@@ -291,7 +286,7 @@ $.fn.dialog = function (params) {
 })(jQuery);
 
 $(document).ready(function () {
-    $('#btnService').click(function (event) {
+    /*$('#btnService').click(function (event) {
         var url = 'warlock/';
         waitState = $(this).attr('on') == 'false';
         if (waitState) {
@@ -305,22 +300,30 @@ $(document).ready(function () {
                 $(event.target).jqxSwitchButton('toggle');
             }
         });
-    });
+    });*/
 
-    warlock.subscribe(admintrigger, handleTrigger)
+    warlock.sync(hazaar.get('admin_key'));
+
+    warlock.subscribe(hazaar.get('admintrigger'), handleTrigger)
         .onconnect(function () {
-            refreshStatus();
+            warlock.status();
         })
         .onerror(function () {
             $('table tbody tr').remove();
-            refreshStatus();
         }).onclose(function () {
             $('table tbody tr').remove();
-            refreshStatus();
+        }).onstatus(function (data) {
+            console.log('got status');
+            updateStatus(data);
         });
 
-    uptime();
     setInterval(function () {
         uptime();
     }, 1000);
+
+    setInterval(function () {
+        if (warlock.connected())
+            warlock.status();
+    }, 30000);
+
 });

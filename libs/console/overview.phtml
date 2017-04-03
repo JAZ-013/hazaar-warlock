@@ -1,0 +1,87 @@
+<?php
+
+function show_graph($view, $name){
+
+    if(!($graph = ake($view->graphs, $name)))
+        return;
+
+    $max = 0;
+
+    foreach($graph['ticks'] as $gValue)
+        if($gValue['value'] > $max) $max = $gValue['value'];
+
+    $max = ceil($max / 5) * 5;
+
+    return $view->widget->chart('chart' . ucfirst($name))
+        ->attr('class', 'chart')
+        ->showBorderLine(FALSE)
+        ->padding(5, 25, 5, 5)
+        ->backgroundColor('transparent')
+        ->title($graph['dataSource']['desc'])
+        ->description($graph['archive']['desc'])
+        ->colorScheme('scheme07')
+        ->renderEngine('SVG')
+        ->seriesGroups(array(array(
+            'type'      => 'area',
+            'valueAxis' => array(
+                'description'    => $graph['unit'],
+                'minValue'       => 0,
+                'maxValue'       => $max,
+                'gridLinesColor' => '#eeeeee',
+                'tickMarksColor' => '#eeeeee'
+            ),
+            'series'    => array(array(
+                'dataField'   => 'value',
+                'displayText' => 'MAX ' . ucfirst($name)
+            ))
+        )))->categoryAxis(array(
+            'dataField'      => 'tick',
+            'unitInterval'   => 5,
+            'gridLinesColor' => '#eeeeee'
+        ))->source($graph['ticks']);
+
+}
+?>
+
+<div class="row">
+    <div class="col col-8">
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'sockets');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'clients');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'memory');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'jobs');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'processes');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'services');?>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-content">
+                <?=show_graph($this, 'events');?>
+            </div>
+        </div>
+    </div>
+    <div class="col col-4">
+        <?=$this->partial('stats');?>
+    </div>
+</div>

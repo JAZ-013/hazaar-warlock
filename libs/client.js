@@ -14,7 +14,11 @@ var p = {
     subscribe: 0x0C,     //Subscribe to an event
     unsubscribe: 0x0D,   //Unsubscribe from an event
     trigger: 0x0E,       //Trigger an event
-    event: 0x0F          //An event
+    event: 0x0F,         //An event
+    exec: 0x10,          //Execute some code in the Warlock Runner.
+    ping: 0x11,          //Typical PING
+    pong: 0x12,          //Typical PONG
+    debug: 0x99
 };
 
 var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect) {
@@ -59,9 +63,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
                 this.socket.onopen = function (event) {
                     o.reconnectDelay = 0;
                     o.reconnectRetries = 0;
-                    if (o.admin_key) {
-                        o._send(p.sync, { 'admin_key': o.admin_key }, true);
-                    }
                     if (Object.keys(o.subscribeQueue).length > 0) {
                         for (event_id in o.subscribeQueue) {
                             o._subscribe(event_id, o.subscribeQueue[event_id].filter);
@@ -168,9 +169,19 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
                 if (this.subscribeQueue[event.id]) this.subscribeQueue[event.id].callback(event.data, event);
                 break;
             case p.error:
-                alert('ERROR\n\nCommand:\t' + packet.PLD.command + '\n\nReason:\t\t' + packet.PLD.reason);
+                if (this.callbacks.error) this.callbacks.error(packet.PLD);
+                else alert('ERROR\n\nCommand:\t' + packet.PLD.command + '\n\nReason:\t\t' + packet.PLD.reason);
                 return false;
                 break;
+            case p.status:
+                if (this.callbacks.status) this.callbacks.status(packet.PLD);
+                return true;
+            case p.ping:
+                this._send(p.pong);
+                return true;
+            case p.pong:
+                if (this.callbacks.pong) this.callbacks.pong(packet.PLD);
+                return true;
             case p.ok:
                 return true;
             default:
@@ -226,11 +237,10 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         };
         if (typeof payload != 'undefined') packet.PLD = payload;
         if (this._isWebSocket()) {
-            if (o.socket && o.socket.readyState == 1) {
+            if (o.socket && o.socket.readyState == 1)
                 this.socket.send(this._encode(packet));
-            } else if (queue) {
+            else if (queue)
                 this.messageQueue.push([type, payload]);
-            }
         } else {
             packet.CID = this.guid;
             $.post(this.longPollingUrl, { CID: this.guid, P: this._encode(packet) }).done(function (data) {
@@ -246,7 +256,15 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     };
     this._log = function (msg) {
         console.log('Warlock: ' + msg);
-    }
+    };
+    this.connected = function () {
+        return (this.socket && this.socket.readyState == 1);
+    };
+    this.sync = function (admin_key) {
+        this.admin_key = admin_key;
+        this._send(p.sync, { 'admin_key': this.admin_key }, true);
+        return this;
+    };
     this.onconnect = function (callback) {
         this.callbacks.connect = callback;
         return this;
@@ -257,6 +275,14 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     };
     this.onerror = function (callback) {
         this.callbacks.error = callback;
+        return this;
+    };
+    this.onstatus = function (callback) {
+        this.callbacks.status = callback;
+        return this;
+    };
+    this.onpong = function (callback) {
+        this.callbacks.pong = callback;
         return this;
     };
     this.close = function () {
@@ -306,6 +332,10 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     this.setUser = function (username) {
         this.username = username;
     };
+    this.status = function () {
+        this._connect();
+        this._send(p.status);
+    }
     this.guid = this._getGUID();
     this._log('GUID=' + this.guid);
     this._log('Server ID=' + this.sid);

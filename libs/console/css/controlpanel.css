@@ -1,0 +1,150 @@
+.main {
+    position: absolute;
+    top: 48px;
+    right: 0px;
+    bottom: 0px;
+    left: 0px;
+    background: url(../images/warlock_bg.png) no-repeat center;
+    background-size: contain;
+}
+
+
+.control .label {
+    line-height: 30;
+    margin-right: 10px;
+    float: left;
+}
+
+.label {
+    color: rgb(122, 39, 54);
+}
+
+.toppanel {
+    height: 25px;
+}
+
+.server {
+    float: right;
+    color: #fff;
+    line-height: 48px;
+    margin-right: 15px;
+}
+
+    .server .status-label {
+        display: inline;
+        color: #554D7C;
+    }
+
+.control-switch {
+    float: right;
+    width: 50px;
+    line-height: 46px;
+    text-align: center;
+    font-size: 18px;
+    border: 1px solid #FF5C5C;
+    background: #FF9999;
+    color: #FF5C5C;
+    cursor: pointer;
+}
+
+    .control-switch::after {
+        content: 'Off';
+    }
+
+    .control-switch[on="true"] {
+        border: 1px solid #339933;
+        background: #8CD98C;
+        color: #339933;
+    }
+
+        .control-switch[on="true"]::after {
+            content: 'On';
+        }
+
+    .control-switch:hover {
+    }
+
+.stats {
+}
+
+    .stats .item-header {
+        float: left;
+        width: 100%;
+        margin: 15px 0 5px;
+    }
+
+    .stats .item {
+        float: left;
+        width: 33.333333%;
+    }
+
+        .stats .item.wide {
+            width: 50%;
+        }
+
+        .stats .item .item-content {
+            margin-right: 7px;
+            margin-bottom: 7px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid #4A346A;
+            color: #fff;
+            height: 65px;
+        }
+
+            .stats .item .item-content:hover {
+                background-color: #9276BC;
+                border-color: #8465B3;
+            }
+
+.item-content .item-label {
+    font-size: 11px;
+    color: #fff;
+    text-align: right;
+    padding: 1px 2px;
+}
+
+.item-content .item-value {
+    font-size: 28px;
+    font-weight: bold;
+    text-align: center;
+    padding: 5px;
+    margin: 0 10px;
+}
+
+.item-content .item-sub {
+    color: #999;
+    font-size: 9px;
+    text-align: right;
+    display: block;
+}
+
+.chart {
+    width: 100%;
+    height: 300px;
+    float: left;
+    border: 1px solid #B3ADCC;
+    margin-top: 7px;
+    margin-right: 1%;
+}
+
+.jqx-chart-title-text, .jqx-chart-title-description {
+    font-family: Verdana, Geneva, sans-serif;
+}
+
+.jqx-chart-title-text {
+    font-size: 18px;
+}
+
+.jqx-chart-title-description {
+    font-size: 11px;
+}
+
+.client-legacy {
+    width: 32px;
+    height: 32px;
+    float: right;
+}
+
+    .client-legacy.active {
+        background: transparent url(legacy.png) center/16px no-repeat;
+    }

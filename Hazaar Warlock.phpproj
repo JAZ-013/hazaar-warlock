@@ -30,23 +30,27 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="libs\" />
+    <Folder Include="libs\console\" />
+    <Folder Include="libs\console\css\" />
+    <Folder Include="libs\console\images\" />
+    <Folder Include="libs\console\js\" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="libs\client.js" />
-    <Content Include="libs\clients.phtml" />
-    <Content Include="libs\controlpanel.css" />
-    <Content Include="libs\controlpanel.js" />
-    <Content Include="libs\controlpanel.phtml" />
-    <Content Include="libs\dashboard.phtml" />
-    <Content Include="libs\events.phtml" />
-    <Content Include="libs\jobs.phtml" />
-    <Content Include="libs\log.phtml" />
-    <Content Include="libs\procs.phtml" />
-    <Content Include="libs\services.phtml" />
-    <Content Include="libs\warlock_bg.png" />
-    <Content Include="libs\warlock_icon.png" />
+    <Content Include="libs\console\connections.phtml" />
+    <Content Include="libs\console\controlpanel.phtml" />
+    <Content Include="libs\console\css\controlpanel.css" />
+    <Content Include="libs\console\events.phtml" />
+    <Content Include="libs\console\images\warlock_bg.png" />
+    <Content Include="libs\console\images\warlock_icon.png" />
+    <Content Include="libs\console\jobs.phtml" />
+    <Content Include="libs\console\js\controlpanel.js" />
+    <Content Include="libs\console\log.phtml" />
+    <Content Include="libs\console\overview.phtml" />
+    <Content Include="libs\console\procs.phtml" />
+    <Content Include="libs\console\services.phtml" />
   </ItemGroup>
 </Project>
