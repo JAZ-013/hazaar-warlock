@@ -230,6 +230,7 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         }, false);
     };
     this._send = function (type, payload, queue) {
+        this._connect();
         var packet = {
             'TYP': type,
             'SID': this.sid,
@@ -290,7 +291,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {
-        this._connect();
         this.subscribeQueue[event_id] = {
             'callback': callback, 'filter': filter
         };
@@ -302,7 +302,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         return this;
     };
     this.unsubscribe = function (event_id) {
-        this._connect();
         if (!(this._isWebSocket() && this.subscribeQueue[event_id]))
             return false;
         delete this.subscribeQueue[event_id];
@@ -333,7 +332,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         this.username = username;
     };
     this.status = function () {
-        this._connect();
         this._send(p.status);
     }
     this.guid = this._getGUID();
