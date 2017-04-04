@@ -228,9 +228,9 @@ class SocketClient {
             $resource = $this->resource;
         }
 
-        stdout(W_DEBUG, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $resource);
-
         $this->subscriptions[$event_id] = $resource;
+
+        stdout(W_INFO, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
 
         return TRUE;
 
@@ -247,9 +247,9 @@ class SocketClient {
         if ($resource && $resource != $this->subscriptions[$event_id])
             return FALSE;
 
-        stdout(W_DEBUG, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id RESOURCE=" . $this->subscriptions[$event_id] . ' LEFT=' . count($this->subscriptions));
-
         unset($this->subscriptions[$event_id]);
+
+        stdout(W_INFO, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
 
         return TRUE;
 
