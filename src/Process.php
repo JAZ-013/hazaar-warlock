@@ -84,9 +84,11 @@ abstract class Process extends WebSockets {
 
             socket_close($this->socket);
 
+            $error = socket_last_error($this->socket);
+
             $this->socket = null;
 
-            return false;
+            throw new \Exception(socket_strerror($error));
 
         }
 
