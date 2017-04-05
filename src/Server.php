@@ -493,7 +493,7 @@ class Server extends WebSockets {
 
         stdout(W_INFO, 'PID file = ' . $this->pidfile);
 
-        stdout(W_NOTICE, 'Server ID = ' . $this->config->sys->id);
+        stdout(W_INFO, 'Server ID = ' . $this->config->sys->id);
 
         stdout(W_NOTICE, 'Listen address = ' . $this->config->server->listen);
 
