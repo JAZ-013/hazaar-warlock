@@ -40,28 +40,16 @@ class Warlock extends \Hazaar\View\Helper {
 
         $view->requires($this->application->url('hazaar/warlock', 'file/client.js'));
 
-        $defaults = array(
-            'sys'        => array(
-                'id'  => crc32(APPLICATION_PATH),
-                'pid' => 'warlock.pid'
-            ),
-            'server'     => array(
-                'listen'  => $_SERVER['SERVER_NAME'],
-                'port'    => 8000,
-                'encoded' => TRUE
-            ),
-            'websockets' => array(
-                'enabled'       => true,
-                'autoReconnect' => true
-            )
-        );
+        \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
-        $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
+        $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
         if(!$config->client->has('port'))
             $config->client['port'] = $config->server['port'];
 
-        if(trim($config->server->listen) == '0.0.0.0')
+        if($config->client->has('server'))
+            $host = $config->client->server . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
+        elseif(trim($config->server->listen) == '0.0.0.0')
             $host = $_SERVER['SERVER_NAME'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
         else
             $host = $config->server->listen . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
