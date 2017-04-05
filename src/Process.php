@@ -409,9 +409,14 @@ abstract class Process extends WebSockets {
 
     }
 
-    public function ping(){
+    public function ping($wait_pong = false){
 
-        return $this->send('ping', microtime(true));
+        $ret = $this->send('ping', microtime(true));
+
+        if(!$wait_pong)
+            return $ret;
+
+        return $this->recv();
 
     }
 
