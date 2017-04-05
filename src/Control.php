@@ -70,40 +70,40 @@ class Control extends Process {
         if($autostart === NULL)
             $autostart = (boolean)$this->config->sys->autostart;
 
-        if($this->isRunning()) {
-
-            if(! $this->connect(APPLICATION_NAME, $this->config->server['port'])) {
-
-                $this->disconnect(FALSE);
-
-                throw new \Exception('Warlock is already running but we were unable to communicate with it.');
-
-            }
-
-            $this->send('sync', array('admin_key' => $this->config->admin->key));
-
-            if($this->recv() !== 'OK')
-                throw new \Exception('Connected to Warlock, but server refused our admin key!');
-
-        } elseif($autostart) {  //We do these separately so we get tailored error messages.
+        if(!$this->isRunning() && $autostart){
 
             if(!$this->start())
                 throw new \Exception('Autostart of Warlock server has failed!');
 
-            if(! $this->connect(APPLICATION_NAME, $this->config->server['port'])) {
+        }
 
-                $this->disconnect(FALSE);
+        if(!$this->config->client->has('port'))
+            $this->config->client['port'] = $this->config->server['port'];
 
-                throw new \Exception('Warlock was automatically started but we are unable to communicate with it.');
+        if(!$this->config->client->has('server')){
 
-            }
-
-            $this->send('sync', array('admin_key' => $this->config->admin->key));
-
-            if($this->recv() !== 'OK')
-                throw new \Exception('Connected to Warlock, but server refused our admin key!');
+            if(trim($this->config->server['listen']) == '0.0.0.0')
+                $this->config->client['server'] = $_SERVER['SERVER_NAME'];
+            else
+                $this->config->client['server'] = $this->config->server['listen'];
 
         }
+
+        if(! $this->connect(APPLICATION_NAME, $this->config->client['server'], $this->config->client['port'])) {
+
+            $this->disconnect(FALSE);
+
+            if($autostart)
+                throw new \Exception('Warlock was started, but we were unable to communicate with it.');
+            else
+                throw new \Exception('Unable to communicate with Warlock.  Is it running?');
+
+        }
+
+        $this->send('sync', array('admin_key' => $this->config->admin->key));
+
+        if($this->recv() !== 'OK')
+            throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
         Control::$instance = $this;
 
@@ -230,14 +230,10 @@ class Control extends Process {
 
     public function status() {
 
-        if($this->isRunning()) {
+        $this->send('status');
 
-            $this->send('status');
-
-            if($this->recv($packet) == 'STATUS')
-                return $packet;
-
-        }
+        if($this->recv($packet) == 'STATUS')
+            return $packet;
 
         return false;
 

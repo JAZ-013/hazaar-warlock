@@ -75,12 +75,10 @@ abstract class Process extends WebSockets {
 
     }
 
-    public function connect($application_name, $port, $job_id = null, $access_key = null){
+    public function connect($application_name, $host, $port, $job_id = null, $access_key = null){
 
         if(!($this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)))
             throw new \Exception('Unable to create TCP socket!');
-
-        $host = '127.0.0.1';
 
         if(@!socket_connect($this->socket, $host, $port)){
 
