@@ -296,7 +296,8 @@ abstract class Process extends WebSockets {
         if(! $this->socket)
             return FALSE;
 
-        $packet = $this->protocol->encode($command, $payload);
+        if(!($packet = $this->protocol->encode($command, $payload)))
+            return false;
 
         $frame = $this->frame($packet, 'text');
 
