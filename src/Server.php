@@ -1959,7 +1959,7 @@ class Server extends WebSockets {
 
         if($client instanceof SocketClient){
 
-            stdout(W_DEBUG, "TRIGGER: NAME=$event_id CLIENT=$client->id");
+            stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
 
             $this->send($resource, 'ok', NULL, $client->isLegacy());
 
