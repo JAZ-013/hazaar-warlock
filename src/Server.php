@@ -44,23 +44,30 @@ if (!APPLICATION_PATH)
     die("Warlock can not start without an application path.  Make sure APPLICATION_PATH environment variable is set.\n");
 
 if (!(is_dir(APPLICATION_PATH)
-    && file_exists(APPLICATION_PATH . '/configs')
-    && file_exists(APPLICATION_PATH . '/controllers')))
+    && file_exists(APPLICATION_PATH . DIRECTORY_SEPARATOR . 'configs')
+    && file_exists(APPLICATION_PATH . DIRECTORY_SEPARATOR . 'controllers')))
     die("Application path '" . APPLICATION_PATH . "' is not a valid application directory!\n");
 
 define('APPLICATION_ENV', (getenv('APPLICATION_ENV') ? getenv('APPLICATION_ENV') : 'development'));
 
-define('LIBRAY_PATH', realpath(dirname(__FILE__) . '/../src'));
-
-set_include_path(implode(PATH_SEPARATOR, array(
-    realpath(LIBRAY_PATH . '/..'),
-    get_include_path()
-)));
+define('LIBRAY_PATH', realpath(dirname(__FILE__) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'src'));
 
 include APPLICATION_PATH . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
 
-if(!class_exists('Hazaar\Application'))
-    throw new \Exception('A Hazaar application could not be loaded!');
+if(!class_exists('Hazaar\Loader'))
+    throw new \Exception('A Hazaar loader could not be loaded!');
+
+$reflector = new \ReflectionClass('Hazaar\Loader');
+
+set_include_path(implode(PATH_SEPARATOR, array(
+    realpath(dirname($reflector->getFileName())),
+    realpath(LIBRAY_PATH . DIRECTORY_SEPARATOR . '..'),
+    get_include_path()
+)));
+
+$reflector = null;
+
+require_once('HelperFunctions.php');
 
 $log_level = W_INFO;
 
@@ -403,8 +410,6 @@ class Server extends WebSockets {
 
         $this->silent = $silent;
 
-        $this->application = new \Hazaar\Application(APPLICATION_ENV);
-
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
         date_default_timezone_set($this->config->sys->timezone);
@@ -428,14 +433,14 @@ class Server extends WebSockets {
 
                 fclose(STDOUT);
 
-                $STDOUT = fopen($this->application->runtimePath($this->config->log->file), 'a');
+                $STDOUT = fopen($this->runtimePath($this->config->log->file), 'a');
             }
 
             if ($this->config->log->error) {
 
                 fclose(STDERR);
 
-                $STDERR = fopen($this->application->runtimePath($this->config->log->error), 'a');
+                $STDERR = fopen($this->runtimePath($this->config->log->error), 'a');
             }
         }
 
@@ -443,9 +448,9 @@ class Server extends WebSockets {
 
         $this->pid = getmypid();
 
-        $this->pidfile = $this->application->runtimePath($this->config->sys->pid);
+        $this->pidfile = $this->runtimePath($this->config->sys->pid);
 
-        if ($this->rrdfile = $this->application->runtimePath($this->config->log->rrd)) {
+        if ($this->rrdfile = $this->runtimePath($this->config->log->rrd)) {
 
             $this->rrd = new \Hazaar\File\RRD($this->rrdfile, 60);
 
@@ -527,6 +532,69 @@ class Server extends WebSockets {
             unlink($this->pidfile);
 
         stdout(W_INFO, 'Exiting...');
+
+    }
+
+    /**
+     * @brief Returns the application runtime directory
+     *
+     * @detail The runtime directory is a place where HazaarMVC will keep files that it needs to create during
+     * normal operation. For example, socket files for background scheduler communication, cached views,
+     * and backend applications.
+     *
+     * @var string $suffix An optional suffix to tack on the end of the path
+     *
+     * @since 1.0.0
+     *
+     * @return string The path to the runtime directory
+     */
+    public function runtimePath($suffix = NULL, $create_dir = FALSE) {
+
+        $path = APPLICATION_PATH . DIRECTORY_SEPARATOR . ($this->config->app->has('runtimepath') ? $this->config->app->runtimepath : '.runtime');
+
+        if(!file_exists($path)) {
+
+            $parent = dirname($path);
+
+            if(!is_writable($parent))
+                throw new \Exception('Not writable! Can not create runtime path: ' . $path);
+
+            // Try and create the directory automatically
+            try {
+
+                mkdir($path, 0775);
+
+            }
+            catch(\Exception $e) {
+
+                throw new \Exception('Error creating runtime path: ' . $path);
+
+            }
+
+        }
+
+        if(!is_writable($path))
+            throw new \Exception('Runtime path not writable: ' . $path);
+
+        $path = realpath($path);
+
+        if($suffix = trim($suffix)) {
+
+            if($suffix && substr($suffix, 0, 1) != DIRECTORY_SEPARATOR)
+                $suffix = DIRECTORY_SEPARATOR . $suffix;
+
+            $full_path = $path . $suffix;
+
+            if(!file_exists($full_path) && $create_dir)
+                mkdir($full_path, 0775, TRUE);
+
+        } else {
+
+            $full_path = $path;
+
+        }
+
+        return $full_path;
 
     }
 
@@ -975,7 +1043,13 @@ class Server extends WebSockets {
 
                 stdout(W_DECODE, "RECV_PACKET: " . $frame);
 
-                if ($type = $this->protocol->decode($frame, $payload, $time)) {
+                $payload = null;
+
+                $time = null;
+
+                $type = $this->protocol->decode($frame, $payload, $time);
+
+                if ($type) {
 
                     $client->offset = (time() - $time);
 
