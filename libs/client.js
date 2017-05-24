@@ -230,7 +230,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         }, false);
     };
     this._send = function (type, payload, queue) {
-        this._connect();
         var packet = {
             'TYP': type,
             'SID': this.sid,
@@ -337,5 +336,6 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     this.guid = this._getGUID();
     this._log('GUID=' + this.guid);
     this._log('Server ID=' + this.sid);
+    this._connect();
     return this;
 };
