@@ -83,7 +83,7 @@ class Control extends Process {
         if(!$this->config->client->has('server')){
 
             if(trim($this->config->server['listen']) == '0.0.0.0')
-                $this->config->client['server'] = ake($_SERVER, 'SERVER_NAME', '127.0.0.1');
+                $this->config->client['server'] = '127.0.0.1';
             else
                 $this->config->client['server'] = $this->config->server['listen'];
 
