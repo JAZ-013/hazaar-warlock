@@ -44,15 +44,15 @@ class Warlock extends \Hazaar\View\Helper {
 
         $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
-        if(!$config->client->has('port'))
+        if($config->client['port'] === null)
             $config->client['port'] = $config->server['port'];
 
-        if($config->client->has('server'))
-            $host = $config->client->server . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
-        elseif(trim($config->server->listen) == '0.0.0.0')
+        if($config->client['server'] !== null)
+            $host = $config->client['server'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
+        elseif(trim($config->server['listen']) == '0.0.0.0')
             $host = $_SERVER['SERVER_NAME'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
         else
-            $host = $config->server->listen . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
+            $host = $config->server['listen'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
 
         $wsEnabled = strbool($config->websockets->enabled === true);
 

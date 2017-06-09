@@ -26,6 +26,10 @@ class Config {
              'encoded' => TRUE,
              'win_bg' => false
          ),
+         'client' => array(
+             'port' => null,
+             'server' => null
+         ),
          'timeouts' => array(
              'startup' => 1000,
              'listen' => 60,

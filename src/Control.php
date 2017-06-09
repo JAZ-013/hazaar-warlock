@@ -77,10 +77,10 @@ class Control extends Process {
 
         }
 
-        if(!$this->config->client->has('port'))
+        if($this->config->client['port'] === null)
             $this->config->client['port'] = $this->config->server['port'];
 
-        if(!$this->config->client->has('server')){
+        if($this->config->client['server'] === null){
 
             if(trim($this->config->server['listen']) == '0.0.0.0')
                 $this->config->client['server'] = '127.0.0.1';
