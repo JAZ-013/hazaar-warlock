@@ -199,7 +199,7 @@ abstract class Process extends WebSockets {
 
     }
 
-    protected function processFrame(&$frameBuffer) {
+    protected function processFrame(&$frameBuffer = null) {
 
         if ($this->frameBuffer) {
 
@@ -323,6 +323,16 @@ abstract class Process extends WebSockets {
 
         if(! $this->socket)
             return FALSE;
+
+        //Process any frames sitting in the local frame buffer first.
+        while($frame = $this->processFrame()){
+
+            if($frame === true)
+                break;
+
+            return $this->protocol->decode($frame, $payload);
+
+        }
 
         $read = array(
             $this->socket
