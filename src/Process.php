@@ -463,9 +463,7 @@ abstract class Process extends WebSockets {
         if($data)
             $packet['data'] = $data;
 
-        $this->send('trigger', $packet);
-
-        return ($this->recv() == 'OK');
+        return $this->send('trigger', $packet);
 
     }
 
