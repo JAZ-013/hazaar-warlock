@@ -37,6 +37,8 @@ define('W_DEBUG', 4);
 
 define('W_DECODE', 5);
 
+define('W_DECODE2', 6);
+
 if (!defined('APPLICATION_PATH'))
     define('APPLICATION_PATH', realpath(getenv('APPLICATION_PATH')));
 
@@ -281,7 +283,7 @@ class SocketClient {
             'data' => $data
         );
 
-        $result = $this->server->send($resource, 'event', $packet, $this->isLegacy());
+        $result = $this->server->send($resource, 'EVENT', $packet, $this->isLegacy());
 
         // Disconnect if we are a socket but not a websocket (legacy connection) and the result was negative.
         if (get_resource_type($resource) == 'Socket' && $this->isLegacy() && $result)
@@ -1315,7 +1317,7 @@ class Server extends WebSockets {
         if (!$frameBuffer)
             return FALSE;
 
-        stdout(W_DECODE, "RECV_FRAME: " . implode(' ', $this->hexString($frameBuffer)));
+        stdout(W_DECODE2, "RECV_FRAME: " . implode(' ', $this->hexString($frameBuffer)));
 
         $opcode = $this->getFrame($frameBuffer, $payload);
 
@@ -1341,7 +1343,7 @@ class Server extends WebSockets {
 
         }
 
-        stdout(W_DECODE, "OPCODE: $opcode");
+        stdout(W_DECODE2, "OPCODE: $opcode");
 
         switch ($opcode) {
 
@@ -1433,7 +1435,7 @@ class Server extends WebSockets {
 
             $frame = $this->frame($packet, 'text', FALSE);
 
-            stdout(W_DECODE, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
+            stdout(W_DECODE2, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
 
         }
 
