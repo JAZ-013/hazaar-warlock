@@ -109,10 +109,10 @@ class Control extends Process {
 
     }
 
-    static public function getInstance(){
+    static public function getInstance($autostart = null){
 
         if(!Control::$instance instanceof Control)
-            new Control();
+            new Control($autostart);
 
         return Control::$instance;
 
