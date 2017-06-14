@@ -1899,6 +1899,10 @@ class Server extends WebSockets {
         if (!$this->subscribe($resource, $client, $event_id, $filter))
             return FALSE;
 
+        //If this is not a legacy client, send the OK immediately
+        if (!$client->isLegacy())
+            $this->send($resource, 'OK', NULL, $client->isLegacy());
+
         /*
          * Check to see if this subscribe request has any active and unseen events waiting for it.
          *
@@ -1908,11 +1912,8 @@ class Server extends WebSockets {
             return $client->isLegacy();
 
         // If we are long polling, return false so we don't disconnect
-
         if ($client->isLegacy())
             return FALSE;
-
-        $this->send($resource, 'ok', NULL, $client->isLegacy());
 
         return TRUE;
 
@@ -1952,18 +1953,16 @@ class Server extends WebSockets {
 
         }
 
-        // Check to see if there are any clients waiting for this event and send notifications to them all.
-        $this->processSubscriptionQueue($event_id, $trigger_id);
-
-        stdout(W_DEBUG, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
-
         if($client instanceof SocketClient){
 
             stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
 
-            $this->send($resource, 'ok', NULL, $client->isLegacy());
+            $this->send($resource, 'OK', NULL, $client->isLegacy());
 
         }
+
+        // Check to see if there are any clients waiting for this event and send notifications to them all.
+        $this->processSubscriptionQueue($event_id, $trigger_id);
 
         return TRUE;
 
