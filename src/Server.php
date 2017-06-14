@@ -1757,7 +1757,7 @@ class Server extends WebSockets {
 
         stdout(W_NOTICE, "Shutdown requested");
 
-        $this->send($resource, 'ok', NULL, $client->isLegacy());
+        $this->send($resource, 'OK', NULL, $client->isLegacy());
 
         return $this->shutdown(1);
 
@@ -1804,7 +1804,7 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
-        return $this->send($resource, 'status', $this->getStatus(), $client->isLegacy());
+        return $this->send($resource, 'STATUS', $this->getStatus(), $client->isLegacy());
 
     }
 
@@ -1834,13 +1834,13 @@ class Server extends WebSockets {
 
             stdout(W_NOTICE, "Successfully scheduled delayed function.  Executing in $command[value] seconds . ", $id);
 
-            return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
+            return $this->send($resource, 'OK', array('job_id' => $id), $client->isLegacy());
 
         }
 
         stdout(W_ERR, "Could not schedule delayed function");
 
-        return $this->send($resource, 'error', NULL, $client->isLegacy());
+        return $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
     }
 
@@ -1865,13 +1865,13 @@ class Server extends WebSockets {
 
             stdout(W_NOTICE, "Function execution successfully scheduled", $id);
 
-            return $this->send($resource, 'ok', array('job_id' => $id), $client->isLegacy());
+            return $this->send($resource, 'OK', array('job_id' => $id), $client->isLegacy());
 
         }
 
         stdout(W_ERR, "Could not schedule function");
 
-        return $this->send($resource, 'error', NULL, $client->isLegacy());
+        return $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
     }
 
@@ -1890,7 +1890,7 @@ class Server extends WebSockets {
 
         stdout(W_ERR, 'Error trying to cancel job');
 
-        return $this->send($resource, 'error', NULL, $client->isLegacy());
+        return $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
     }
 
@@ -1921,9 +1921,9 @@ class Server extends WebSockets {
     private function commandUnsubscribe($resource, &$client, $event_id) {
 
         if ($this->unSubscribe($client, $event_id))
-            return $this->send($resource, 'ok', NULL, $client->isLegacy());
+            return $this->send($resource, 'OK', NULL, $client->isLegacy());
 
-        return $this->send($resource, 'error', NULL, $client->isLegacy());
+        return $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
     }
 
@@ -1974,9 +1974,11 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
+        stdout(W_NOTICE, "ENABLE: NAME=$name CLIENT=$client->id");
+
         $result = $this->serviceEnable($name);
 
-        $this->send($resource, ($result ? 'ok' : 'error'), NULL, $client->isLegacy());
+        $this->send($resource, ($result ? 'OK' : 'ERROR'), NULL, $client->isLegacy());
 
         return TRUE;
 
@@ -1987,9 +1989,11 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
+        stdout(W_NOTICE, "DISABLE: NAME=$name CLIENT=$client->id");
+
         $result = $this->serviceDisable($name);
 
-        $this->send($resource, ($result ? 'ok' : 'error'), NULL, $client->isLegacy());
+        $this->send($resource, ($result ? 'OK' : 'ERROR'), NULL, $client->isLegacy());
 
         return TRUE;
 
@@ -2000,15 +2004,17 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
+        stdout(W_NOTICE, "SERVICE: NAME=$name CLIENT=$client->id");
+
         if(array_key_exists($name, $this->services)){
 
-            $this->send($resource, 'service', $this->services[$name], $client->isLegacy());
+            $this->send($resource, 'SERVICE', $this->services[$name], $client->isLegacy());
 
             return true;
 
         }
 
-        $this->send($resource, 'error', NULL, $client->isLegacy());
+        $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
         return false;
 
@@ -2987,7 +2993,7 @@ class Server extends WebSockets {
                     $event['seen'][] = $client->id;
 
                     if ($event_id != $this->config->admin->trigger)
-                        stdout(W_NOTICE, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=$client->id");
+                        stdout(W_NOTICE, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
 
                     if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
                         return FALSE;
@@ -3017,6 +3023,8 @@ class Server extends WebSockets {
 
         if (!array_key_exists($event_id, $this->eventQueue))
             return FALSE;
+
+        stdout(W_DEBUG, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
 
         // Get a list of triggers to process
         $triggers = (empty($trigger_id) ? array_keys($this->eventQueue[$event_id]) : array(
