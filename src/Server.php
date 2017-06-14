@@ -1649,7 +1649,9 @@ class Server extends WebSockets {
 
                 $data = (array_key_exists('data', $payload) ? $payload['data'] : NULL);
 
-                return $this->commandTrigger($resource, $client, $payload['id'], $data);
+                $echo = (array_key_exists('echo', $payload) ? $payload['echo'] : FALSE);
+
+                return $this->commandTrigger($resource, $client, $payload['id'], $data, $echo);
 
             case 'PING' :
 
@@ -1928,7 +1930,9 @@ class Server extends WebSockets {
 
     }
 
-    private function commandTrigger($resource, &$client, $event_id, $data) {
+    private function commandTrigger($resource, &$client, $event_id, $data, $echo_client = true) {
+
+        stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id ECHO_SELF=" . strbool($echo_client));
 
         $this->stats['events']++;
 
@@ -1941,7 +1945,7 @@ class Server extends WebSockets {
             'trigger' => $trigger_id,
             'when' => time(),
             'data' => $data,
-            'seen' => ((ake($data, 'echo') !== true)?array($client->id):array())
+            'seen' => ($echo_client ? array() : array($client->id))
         );
 
         if ($event_id != $this->config->admin->trigger) {
@@ -1953,13 +1957,8 @@ class Server extends WebSockets {
 
         }
 
-        if($client instanceof SocketClient){
-
-            stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id");
-
+        if($client instanceof SocketClient)
             $this->send($resource, 'OK', NULL, $client->isLegacy());
-
-        }
 
         // Check to see if there are any clients waiting for this event and send notifications to them all.
         $this->processSubscriptionQueue($event_id, $trigger_id);
