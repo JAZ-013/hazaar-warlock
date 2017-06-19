@@ -1994,7 +1994,25 @@ class Server extends WebSockets {
 
     private function commandLog($resource, &$client, $payload){
 
-        stdout(ake($payload, 'level', W_INFO), ake($payload, 'msg', '--'));
+        if(!array_key_exists('msg', $payload))
+            return false;
+
+        $level = ake($payload, 'level', W_INFO);
+
+        if(is_array($payload['msg'])){
+
+            foreach($payload['msg'] as $msg){
+
+                if(!$this->commandLog($resource, $cliemt, array('level' => $level, 'msg' => $msg)))
+                    return false;
+
+            }
+
+        }else{
+
+            stdout($level, ake($payload, 'msg', '--'));
+
+        }
 
         return true;
 
