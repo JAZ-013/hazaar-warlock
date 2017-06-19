@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="src\Config.php" />
     <Compile Include="src\Console.php" />
+    <Compile Include="src\Constants.php" />
     <Compile Include="src\Controller.php" />
     <Compile Include="src\Container.php" />
     <Compile Include="src\Runner.php" />

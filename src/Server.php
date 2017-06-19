@@ -226,7 +226,7 @@ class SocketClient {
 
         unset($this->subscriptions[$event_id]);
 
-        stdout(W_INFO, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
+        stdout(W_NOTICE, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
 
         return TRUE;
 
