@@ -206,6 +206,9 @@ abstract class Service extends Process {
         if(! is_array($this->schedule) || ! count($this->schedule) > 0)
             return;
 
+        if(($count = count($this->schedule))> 0)
+            $this->log(W_DEBUG, "Processing $count scheduled actions");
+
         $this->next = NULL;
 
         foreach($this->schedule as $id => &$exec) {
@@ -232,13 +235,17 @@ abstract class Service extends Process {
                 switch($exec['type']) {
                     case HAZAAR_SCHEDULE_INTERVAL:
 
-                        $this->next = $exec['when'] = $exec['when'] + $exec['interval'];
+                        $exec['when'] = $exec['when'] + $exec['interval'];
+
+                        $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
                     case HAZAAR_SCHEDULE_CRON:
 
-                        $this->next = $exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60);
+                        $exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60);
+
+                        $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
@@ -252,13 +259,15 @@ abstract class Service extends Process {
 
                 }
 
-            } elseif($this->next === NULL || $exec['when'] < $this->next) {
-
-                $this->next = $exec['when'];
-
             }
 
+            if($this->next === NULL || $exec['when'] < $this->next)
+                $this->next = $exec['when'];
+
         }
+
+        if($this->next !== NULL)
+            $this->log(W_INFO, 'Next scheduled action is at ' . date('Y-m-d H:i:s', $this->next));
 
     }
 
@@ -496,10 +505,13 @@ abstract class Service extends Process {
 
         $id = uniqid();
 
+        $label = (is_string($callback) ? $callback : '<func>');
+
         $when = time() + $seconds;
 
         $this->schedule[$id] = array(
             'type'     => HAZAAR_SCHEDULE_DELAY,
+            'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
             'params'   => $params
@@ -507,6 +519,8 @@ abstract class Service extends Process {
 
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
+
+        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label DELAY=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -525,11 +539,14 @@ abstract class Service extends Process {
 
         $id = uniqid();
 
+        $label = (is_string($callback) ? $callback : '<func>');
+
         //First execution in $seconds
         $when = time() + $seconds;
 
         $this->schedule[$id] = array(
             'type'     => HAZAAR_SCHEDULE_INTERVAL,
+            'label'    => $label,
             'when'     => $when,
             'interval' => $seconds,
             'callback' => $callback,
@@ -538,6 +555,8 @@ abstract class Service extends Process {
 
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
+
+        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label INTERVAL=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -559,10 +578,13 @@ abstract class Service extends Process {
 
         $id = uniqid();
 
+        $label = (is_string($callback) ? $callback : '<func>');
+
         $when = $date->getTimestamp();
 
         $this->schedule[$id] = array(
             'type'     => HAZAAR_SCHEDULE_NORM,
+            'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
             'params'   => $params
@@ -570,6 +592,8 @@ abstract class Service extends Process {
 
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
+
+        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label SCHEDULE=$date NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -585,12 +609,15 @@ abstract class Service extends Process {
 
         $id = uniqid();
 
+        $label = (is_string($callback) ? $callback : '<func>');
+
         $cron = new \Hazaar\Cron($format);
 
         $when = $cron->getNextOccurrence();
 
         $this->schedule[$id] = array(
             'type'     => HAZAAR_SCHEDULE_CRON,
+            'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
             'params'   => $params,
@@ -599,6 +626,8 @@ abstract class Service extends Process {
 
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
+
+        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label CRON=\"$format\" NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
