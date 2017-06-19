@@ -5,39 +5,7 @@ namespace Hazaar\Warlock;
 if (!extension_loaded('sockets'))
     die('The sockets extension is not loaded.');
 
-/**
- * STATUS CONSTANTS
- */
-define('STATUS_QUEUED', 0);
-
-define('STATUS_QUEUED_RETRY', 1);
-
-define('STATUS_STARTING', 2);
-
-define('STATUS_RUNNING', 3);
-
-define('STATUS_COMPLETE', 4);
-
-define('STATUS_CANCELLED', 5);
-
-define('STATUS_ERROR', 6);
-
-/**
- * LOGGING CONSTANTS
- */
-define('W_INFO', 0);
-
-define('W_ERR', 1);
-
-define('W_WARN', 2);
-
-define('W_NOTICE', 3);
-
-define('W_DEBUG', 4);
-
-define('W_DECODE', 5);
-
-define('W_DECODE2', 6);
+require_once('Constants.php');
 
 if (!defined('APPLICATION_PATH'))
     define('APPLICATION_PATH', realpath(getenv('APPLICATION_PATH')));
@@ -1667,6 +1635,10 @@ class Server extends WebSockets {
 
                 break;
 
+            case 'LOG':
+
+                return $this->commandLog($resource, $client, $payload);
+
             case 'DEBUG':
 
                 stdout(W_DEBUG, $payload);
@@ -2017,6 +1989,14 @@ class Server extends WebSockets {
         $this->send($resource, 'ERROR', NULL, $client->isLegacy());
 
         return false;
+
+    }
+
+    private function commandLog($resource, &$client, $payload){
+
+        stdout(ake($payload, 'level', W_INFO), ake($payload, 'msg', '--'));
+
+        return true;
 
     }
 

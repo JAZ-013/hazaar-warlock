@@ -5,30 +5,7 @@
  */
 namespace Hazaar\Warlock;
 
-/*
- * Service Status Codes
- */
-define('HAZAAR_SERVICE_ERROR', -1);
-
-define('HAZAAR_SERVICE_INIT', 0);
-
-define('HAZAAR_SERVICE_READY', 1);
-
-define('HAZAAR_SERVICE_RUNNING', 2);
-
-define('HAZAAR_SERVICE_SLEEP', 3);
-
-define('HAZAAR_SERVICE_STOPPING', 4);
-
-define('HAZAAR_SERVICE_STOPPED', 5);
-
-define('HAZAAR_SCHEDULE_DELAY', 0);
-
-define('HAZAAR_SCHEDULE_INTERVAL', 1);
-
-define('HAZAAR_SCHEDULE_NORM', 2);
-
-define('HAZAAR_SCHEDULE_CRON', 3);
+require_once('Constants.php');
 
 abstract class Process extends WebSockets {
 
@@ -123,7 +100,7 @@ abstract class Process extends WebSockets {
         //If we have a job_id and access_key we can register as a control channel
         if($job_id && $access_key){
 
-            $this->send('sync', array(
+            $this->send('SYNC', array(
                 'client_id' => $this->id,
                 'user' => base64_encode(get_current_user()),
                 'job_id' => $job_id,
@@ -132,7 +109,7 @@ abstract class Process extends WebSockets {
 
             if($this->recv() != 'OK'){
 
-                $this->send('error', 'Service was unable to register control channel');
+                $this->send('ERROR', 'Service was unable to register control channel');
 
                 return false;
 
@@ -422,7 +399,7 @@ abstract class Process extends WebSockets {
 
     public function ping($wait_pong = false){
 
-        $ret = $this->send('ping', microtime(true));
+        $ret = $this->send('PING', microtime(true));
 
         if(!$wait_pong)
             return $ret;
@@ -438,7 +415,7 @@ abstract class Process extends WebSockets {
 
         $this->subscriptions[$event] = $callback;
 
-        return $this->send('subscribe', array('id' => $event, 'filter' => $filter));
+        return $this->send('SUBSCRIBE', array('id' => $event, 'filter' => $filter));
 
     }
 
@@ -449,7 +426,7 @@ abstract class Process extends WebSockets {
 
         unset($this->subscriptions[$event]);
 
-        return $this->send('unsubscribe', array('id' => $event));
+        return $this->send('UNSUBSCRIBE', array('id' => $event));
 
     }
 
@@ -463,7 +440,16 @@ abstract class Process extends WebSockets {
         if($data)
             $packet['data'] = $data;
 
-        return $this->send('trigger', $packet);
+        return $this->send('TRIGGER', $packet);
+
+    }
+
+    public function log($level, $message){
+
+        if(!is_int($level))
+            return false;
+
+        return $this->send('LOG', array('level' => $level, 'msg' => $message));
 
     }
 
