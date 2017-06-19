@@ -341,6 +341,47 @@ abstract class Service extends Process {
 
         }
 
+        if(\Hazaar\Map::is_array($events = $this->config->get('subscribe'))){
+
+            foreach($events as $event_name => $event){
+
+                if(\Hazaar\Map::is_array($event)){
+
+                    if(!($action = ake($event, 'action')))
+                        continue;
+
+                    $this->subscribe($event_name, $action, ake($event, 'filter'));
+
+                }else{
+
+                    $this->subscribe($event_name, $event);
+
+                }
+
+            }
+
+        }
+
+        if(\Hazaar\Map::is_array($schedule = $this->config->get('schedule'))){
+
+            foreach($schedule as $item){
+
+                if(!(\Hazaar\Map::is_array($item) && $item->has('action')))
+                    continue;
+
+                if($item->has('interval'))
+                    $this->interval(ake($item, 'interval'), ake($item, 'action'), ake($item, 'params'));
+
+                if($item->has('delay'))
+                    $this->delay(ake($item, 'delay'), ake($item, 'action'), ake($item, 'params'));
+
+                if($item->has('when'))
+                    $this->cron(ake($item, 'when'), ake($item, 'action'), ake($item, 'params'));
+
+            }
+
+        }
+
         return true;
 
     }
@@ -444,6 +485,9 @@ abstract class Service extends Process {
      */
     public function delay($seconds, $callback, $params = array()) {
 
+        if(!is_int($seconds))
+            return false;
+
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
 
@@ -469,6 +513,9 @@ abstract class Service extends Process {
     }
 
     public function interval($seconds, $callback, $params = array()) {
+
+        if(!is_int($seconds))
+            return false;
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
