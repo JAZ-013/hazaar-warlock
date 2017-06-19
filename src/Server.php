@@ -207,7 +207,7 @@ class SocketClient {
 
         $this->subscriptions[$event_id] = $resource;
 
-        stdout(W_INFO, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
+        stdout(W_NOTICE, "SUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
 
         return TRUE;
 
