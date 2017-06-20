@@ -368,8 +368,26 @@ abstract class Process extends WebSockets {
                 if(is_string($func))
                     $func = array($this, $func);
 
-                if(is_callable($func))
-                    call_user_func_array($func, array(ake($payload, 'data'), $payload));
+                if(is_callable($func)){
+
+                    $process = true;
+
+                    if(is_object(($obj = ake($func, 0)))
+                        && method_exists($obj, 'beforeEvent'))
+                        $process = $this->beforeEvent($payload);
+
+                    if($process !== false){
+
+                        $result = call_user_func_array($func, array(ake($payload, 'data'), $payload));
+
+                        if($result !== false
+                            && is_object(($obj = ake($func, 0)))
+                            && method_exists($obj, 'afterEvent'))
+                            $this->afterEvent($payload);
+
+                    }
+
+                }
 
                 break;
 

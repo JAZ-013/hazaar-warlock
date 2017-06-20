@@ -1906,7 +1906,7 @@ class Server extends WebSockets {
 
     private function commandTrigger($resource, &$client, $event_id, $data, $echo_client = true) {
 
-        stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id ECHO_SELF=" . strbool($echo_client));
+        stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id ECHO=" . strbool($echo_client));
 
         $this->stats['events']++;
 
