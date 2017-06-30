@@ -382,6 +382,9 @@ class Server extends WebSockets {
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
+        if(!$this->config->sys['php_binary'])
+            $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+
         date_default_timezone_set($this->config->sys->timezone);
 
         set_log_level($this->config->log->level);
@@ -454,7 +457,7 @@ class Server extends WebSockets {
 
         stdout(W_INFO, 'PHP Version = ' . PHP_VERSION);
 
-        stdout(W_INFO, 'PHP Binary = ' . PHP_BINARY);
+        stdout(W_INFO, 'PHP Binary = ' . $this->config->sys['php_binary']);
 
         stdout(W_INFO, 'Application path = ' . APPLICATION_PATH);
 
@@ -2446,7 +2449,7 @@ class Server extends WebSockets {
                     if (!$cmd || !file_exists($cmd))
                         throw new \Exception('Application command runner could not be found!');
 
-                    $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+                    $php_binary = $this->config->sys['php_binary'];
 
                     if (!file_exists($php_binary))
                         throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);

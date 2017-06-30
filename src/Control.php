@@ -54,7 +54,8 @@ class Control extends Process {
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
-        $app = \Hazaar\Application::getInstance();
+        if(!$this->config->sys['php_binary'])
+            $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
         $this->outputfile = $app->runtimePath($this->config->log->file);
 
@@ -155,7 +156,7 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
-        $php_binary = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+        $php_binary = $this->config->sys['php_binary'];
 
         if(! file_exists($php_binary))
             throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);

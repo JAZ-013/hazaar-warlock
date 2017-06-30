@@ -18,7 +18,8 @@ class Config {
              'autostart' => FALSE,
              'pid' => 'warlock.pid',
              'cleanup' => TRUE,
-             'timezone' => 'UTC'
+             'timezone' => 'UTC',
+             'php_binary' => null
          ),
          'server' => array(
              'listen' => '127.0.0.1',
