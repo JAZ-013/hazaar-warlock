@@ -311,6 +311,7 @@ class Server extends WebSockets {
     private $tv = 1;
 
     private $stats = array(
+        'clients' => 0,         // Total number of connected clients
         'processed' => 0,       // Total number of processed jobs & events
         'execs' => 0,           // The number of successful job executions
         'lateExecs' => 0,       // The number of delayed executions
@@ -884,6 +885,8 @@ class Server extends WebSockets {
             // Add it to the client array
             $this->clients[$id] = $client;
 
+            $this->stats['clients']++;
+
             $this->sendAdminEvent('add', array(
                 'type' => 'client',
                 'client' => array(
@@ -945,6 +948,8 @@ class Server extends WebSockets {
             stdout(W_DEBUG, "REMOVE: CLIENT=$id");
 
             unset($this->clients[$id]);
+
+            $this->stats['clients']--;
 
             $this->sendAdminEvent('remove', array(
                 'type' => 'client',
