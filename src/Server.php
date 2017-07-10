@@ -2500,6 +2500,9 @@ class Server extends WebSockets {
 
                             $payload['name'] = $job['service'];
 
+                            if($config = ake($job, 'config'))
+                                $payload['config'] = $config;
+
                             $output = $this->protocol->encode('service', $payload);
 
                         } elseif ($job['type'] == 'job') {
