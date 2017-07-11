@@ -2484,7 +2484,8 @@ class Server extends WebSockets {
                             'application_name' => APPLICATION_NAME,
                             'server_port' => $this->config->server['port'] ,
                             'job_id' => $id,
-                            'access_key' => $job['access_key'] = uniqid()
+                            'access_key' => $job['access_key'] = uniqid(),
+                            'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
                         );
 
                         if ($job['type'] == 'service') {
@@ -2501,7 +2502,7 @@ class Server extends WebSockets {
                             $payload['name'] = $job['service'];
 
                             if($config = ake($job, 'config'))
-                                $payload['config'] = $config;
+                                $payload['config'] = array_merge($payload['config'], $config);
 
                             $output = $this->protocol->encode('service', $payload);
 
