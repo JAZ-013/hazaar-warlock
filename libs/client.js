@@ -1,24 +1,28 @@
 var p = {
-    noop: 0x00,          //Null Opperation
-    sync: 0x01,          //Sync with server
-    ok: 0x02,            //OK response
-    error: 0x03,         //Error response
-    status: 0x04,        //Status request/response
-    shutdown: 0x05,      //Shutdown request
-    delay: 0x06,         //Execute code after a period
-    schedule: 0x07,      //Execute code at a set time
-    cancel: 0x08,        //Cancel a pending code execution
-    enable: 0x09,        //Start a service
-    disable: 0x0A,       //Stop a service
-    service: 0X0B,       //Service status
-    subscribe: 0x0C,     //Subscribe to an event
-    unsubscribe: 0x0D,   //Unsubscribe from an event
-    trigger: 0x0E,       //Trigger an event
-    event: 0x0F,         //An event
-    exec: 0x10,          //Execute some code in the Warlock Runner.
-    ping: 0x11,          //Typical PING
-    pong: 0x12,          //Typical PONG
-    debug: 0x99
+    noop: 0x00,         //Null Opperation
+    sync: 0x01,         //Sync with server
+    ok: 0x02,           //OK response
+    error: 0x03,        //Error response
+    status: 0x04,       //Status request/response
+    shutdown: 0x05,     //Shutdown request
+    delay: 0x06,        //Execute code after a period
+    schedule: 0x07,     //Execute code at a set time
+    cancel: 0x08,       //Cancel a pending code execution
+    enable: 0x09,       //Start a service
+    disable: 0x0A,      //Stop a service
+    service: 0X0B,      //Service status
+    subscribe: 0x0C,    //Subscribe to an event
+    unsubscribe: 0x0D,  //Unsubscribe from an event
+    trigger: 0x0E,      //Trigger an event
+    event: 0x0F,        //An event
+    exec: 0x10,         //Execute some code in the Warlock Runner.
+    ping: 0x11,         //Typical PING
+    pong: 0x12,         //Typical PONG
+    log: 0x13,          //Send a log message to the server
+    spawn: 0x14,        //Spawn a new dynamic service on this connection
+    kill: 0x15,         //Kill a dynamic service
+    signal: 0x16,       //Send a signal to a dynamic service
+    debug: 0xFF
 };
 
 var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect) {
@@ -333,6 +337,19 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     this.status = function () {
         this._send(p.status);
     }
+    this.spawn = function (service, args) {
+        this._send(p.spawn, { name: service, args: args });
+    };
+    this.kill = function (service) {
+        this._send(p.kill, { name: service });
+    };
+    this.signal = function (service, event_id, data) {
+        this._send(p.signal, {
+            'service': service,
+            'id': event_id,
+            'data': data
+        }, true);
+    };
     this.guid = this._getGUID();
     this._log('GUID=' + this.guid);
     this._log('Server ID=' + this.sid);
