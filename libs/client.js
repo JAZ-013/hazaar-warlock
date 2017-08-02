@@ -54,7 +54,7 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
         }
         return guid;
     };
-    this._connect = function () {
+    this.connect = function () {
         if (!this._isWebSocket()) {
             this.longPollingUrl = 'http://' + this.host + '/warlock';
             return true;
@@ -205,7 +205,7 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
             if (this._isWebSocket()) {
                 if (this.websocketsAutoReconnect) {
                     setTimeout(function () {
-                        o._connect();
+                        o.connect();
                     }, this.reconnectDelay);
                 }
             } else {
@@ -337,8 +337,8 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     this.status = function () {
         this._send(p.status);
     }
-    this.spawn = function (service, args) {
-        this._send(p.spawn, { name: service, args: args });
+    this.spawn = function (service, params) {
+        this._send(p.spawn, { 'name': service, 'params': params });
     };
     this.kill = function (service) {
         this._send(p.kill, { name: service });
@@ -353,6 +353,5 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
     this.guid = this._getGUID();
     this._log('GUID=' + this.guid);
     this._log('Server ID=' + this.sid);
-    this._connect();
     return this;
 };

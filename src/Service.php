@@ -72,9 +72,9 @@ abstract class Service extends Process {
 
     }
 
-    public function main() {
+    public function main($params = array()) {
 
-        if(! $this->start())
+        if(! $this->start($params))
             return 1;
 
         $this->__sendHeartbeat();
@@ -313,12 +313,6 @@ abstract class Service extends Process {
     /*
      * BUILT-IN PLACEHOLDER METHODS
      */
-    public function init() {
-
-        return true;
-
-    }
-
     public function run() {
 
         $this->sleep(60);
@@ -335,9 +329,28 @@ abstract class Service extends Process {
      * CONTROL METHODS
      */
 
-    private function start() {
+    private function start($params = array()) {
 
-        $init = $this->init();
+        $init = true;
+
+        if(method_exists($this, 'init')){
+
+            $args = array();
+
+            $initMethod = new \ReflectionMethod($this, 'init');
+
+            foreach($initMethod->getParameters() as $parameter){
+
+                if(!($value = ake($params, $parameter->getName())))
+                    $value = $parameter->getDefaultValue();
+
+                $args[$parameter->getPosition()] = $value;
+
+            }
+
+            $init = $initMethod->invokeArgs($this, $args);
+
+        }
 
         if($this->state === HAZAAR_SERVICE_INIT) {
 
@@ -641,6 +654,12 @@ abstract class Service extends Process {
         unset($this->schedule[$id]);
 
         return true;
+
+    }
+
+    public function signal($event_id, $data){
+
+        return $this->send('SIGNAL', array('service' => $this->name, 'id' => $event_id, 'data' => $data));
 
     }
 
