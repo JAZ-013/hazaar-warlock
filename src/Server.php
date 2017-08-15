@@ -118,6 +118,15 @@ class SocketClient {
 
     public $status;
 
+    public $lastContact = 0;
+
+    public $ping = array(
+        'attempts' => 0,
+        'last' => 0,
+        'retry' => 5,
+        'retries' => 3
+    );
+
     /**
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
      * @var int
@@ -138,7 +147,7 @@ class SocketClient {
      */
     public $proc;
 
-    function __construct(&$server, $id, $type = 'client', $resource = NULL, $uid = NULL) {
+    function __construct(&$server, $id, $type = 'client', $resource = NULL, $uid = NULL, $options = array()) {
 
         $allowed_types = array('client', 'service', 'admin');
 
@@ -167,9 +176,15 @@ class SocketClient {
 
             stdout(W_NOTICE, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->resource");
 
+            $this->lastContact = time();
+
         }
 
         $this->server = $server;
+
+        $this->ping['wait'] = ake($options, 'wait', 15);
+
+        $this->ping['pings'] = ake($options, 'pings', 5);
 
     }
 
@@ -261,6 +276,39 @@ class SocketClient {
 
     }
 
+    public function ping(){
+
+        if((time() - $this->ping['wait']) < $this->ping['last'])
+            return false;
+
+        $this->ping['attempts']++;
+
+        if($this->ping['attempts'] > $this->ping['pings']){
+
+            stdout(W_WARN, 'Disconnecting client due to lack of PONG!');
+
+            $this->server->disconnect($this->resource);
+
+            return false;
+
+        }
+
+        $this->ping['last'] = time();
+
+        stdout(W_DEBUG, 'CLIENT_PING: ATTEMPTS=' . $this->ping['attempts'] . ' LAST=' . date('c', $this->ping['last']));
+
+        return $this->server->ping($this->resource);
+
+    }
+
+    public function pong(){
+
+        $this->ping['attempts'] = 0;
+
+        $this->ping['last'] = 0;
+
+    }
+
 }
 
 class Server extends WebSockets {
@@ -290,6 +338,12 @@ class Server extends WebSockets {
      * @var mixed
      */
     private $start = 0;
+
+    /**
+     * Epoch of the last time stuff was processed
+     * @var mixed
+     */
+    private $time = 0;
 
     /**
      * Current process id
@@ -399,6 +453,7 @@ class Server extends WebSockets {
             stdout(W_WARN, $msg);
 
             stdout(W_WARN, str_repeat('*', strlen($msg)));
+
         }
 
         if ($this->silent) {
@@ -408,6 +463,7 @@ class Server extends WebSockets {
                 fclose(STDOUT);
 
                 $STDOUT = fopen($this->runtimePath($this->config->log->file), 'a');
+
             }
 
             if ($this->config->log->error) {
@@ -415,7 +471,9 @@ class Server extends WebSockets {
                 fclose(STDERR);
 
                 $STDERR = fopen($this->runtimePath($this->config->log->error), 'a');
+
             }
+
         }
 
         stdout(W_INFO, 'Warlock starting up...');
@@ -746,31 +804,41 @@ class Server extends WebSockets {
 
             }
 
-            $this->processJobs();
+            $now = time();
 
-            $this->queueCleanup();
+            if($this->time < $now){
 
-            $this->rrd->setValue('sockets', count($this->sockets));
+                $this->processJobs();
 
-            $this->rrd->setValue('clients', count($this->clients));
+                $this->queueCleanup();
 
-            $this->rrd->setValue('memory', memory_get_usage());
+                $this->checkClients();
 
-            $count = 0;
+                $this->rrd->setValue('sockets', count($this->sockets));
 
-            foreach($this->services as $service) {
+                $this->rrd->setValue('clients', count($this->clients));
 
-                if ($service['enabled'])
-                    $count++;
+                $this->rrd->setValue('memory', memory_get_usage());
+
+                $count = 0;
+
+                foreach($this->services as $service) {
+
+                    if ($service['enabled'])
+                        $count++;
+
+                }
+
+                $this->rrd->setValue('services', $count);
+
+                $this->rrd->setValue('processes', count($this->procs));
+
+                if ($this->rrd->update())
+                    gc_collect_cycles();
+
+                $this->time = $now;
 
             }
-
-            $this->rrd->setValue('services', $count);
-
-            $this->rrd->setValue('processes', count($this->procs));
-
-            if ($this->rrd->update())
-                gc_collect_cycles();
 
         }
 
@@ -880,7 +948,7 @@ class Server extends WebSockets {
 
         } else {
 
-            $client = new SocketClient($this, $id, 'client', $socket, $uid);
+            $client = new SocketClient($this, $id, 'client', $socket, $uid, $this->config->client);
 
             // Add it to the client array
             $this->clients[$id] = $client;
@@ -1013,6 +1081,9 @@ class Server extends WebSockets {
 
         } else {
 
+            //Record this time as the last time we received data from the client
+            $client->lastContact = time();
+
             /**
              * Sometimes we can get multiple frames in a single buffer so we cycle through them until they are all processed.
              * This will even allow partial frames to be added to the client frame buffer.
@@ -1052,8 +1123,6 @@ class Server extends WebSockets {
                         'reason' => $reason
                     )));
 
-                    continue;
-
                 }
 
             }
@@ -1061,6 +1130,25 @@ class Server extends WebSockets {
         }
 
         return TRUE;
+
+    }
+
+    private function checkClients(){
+
+        if(!(is_array($this->clients) && count($this->clients) > 0))
+            return;
+
+        //Only ping if we havn't received data from the client for the configured number of seconds (default to 60).
+        $when = time() - $this->config->client->check;
+
+        foreach($this->clients as $client){
+
+            if($client->lastContact <= $when)
+                $client->ping();
+
+        }
+
+        return;
 
     }
 
@@ -1278,7 +1366,7 @@ class Server extends WebSockets {
 
     }
 
-    private function processFrame(&$frameBuffer, &$client) {
+    private function processFrame(&$frameBuffer, SocketClient &$client) {
 
         if ($client->frameBuffer) {
 
@@ -1321,6 +1409,25 @@ class Server extends WebSockets {
 
         stdout(W_DECODE2, "OPCODE: $opcode");
 
+        //Save any leftover frame data in the client framebuffer
+        if (strlen($frameBuffer) > 0) {
+
+            $client->frameBuffer = $frameBuffer;
+
+            $frameBuffer = '';
+
+        }
+
+        //If we have data in the payload buffer (because we previously received OPCODE -1) then retrieve it here.
+        if ($client->payloadBuffer) {
+
+            $payload = $client->payloadBuffer . $payload;
+
+            $client->payloadBuffer = '';
+
+        }
+
+        //Check the WebSocket OPCODE and see if we need to do any internal processing like PING/PONG, CLOSE, etc.
         switch ($opcode) {
 
             case 0 :
@@ -1361,6 +1468,8 @@ class Server extends WebSockets {
 
                 stdout(W_DEBUG, "WEBSOCKET_PONG: HOST=$client->address:$client->port");
 
+                $client->pong($payload);
+
                 return FALSE;
 
             default :
@@ -1371,27 +1480,11 @@ class Server extends WebSockets {
 
         }
 
-        if (strlen($frameBuffer) > 0) {
-
-            $client->frameBuffer = $frameBuffer;
-
-            $frameBuffer = '';
-
-        }
-
-        if ($client->payloadBuffer) {
-
-            $payload = $client->payloadBuffer . $payload;
-
-            $client->payloadBuffer = '';
-
-        }
-
         return $payload;
 
     }
 
-    public function send($resource, $command, $payload = NULL, $is_legacy = false, $time = null) {
+    public function send($resource, $command, $payload = NULL, $is_legacy = false) {
 
         if (!is_resource($resource))
             return FALSE;
@@ -1399,7 +1492,7 @@ class Server extends WebSockets {
         if (!is_string($command))
             return FALSE;
 
-        $packet = $this->protocol->encode($command, $payload, $time); //Override the timestamp.  Only used for PING/PONG really.
+        $packet = $this->protocol->encode($command, $payload); //Override the timestamp.
 
         stdout(W_DECODE, "SEND_PACKET: $packet");
 
@@ -1414,6 +1507,12 @@ class Server extends WebSockets {
             stdout(W_DECODE2, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
 
         }
+
+        return $this->write($resource, $frame, $is_legacy);
+
+    }
+
+    private function write($resource, $frame, $is_legacy = false){
 
         $len = strlen($frame);
 
@@ -1435,8 +1534,19 @@ class Server extends WebSockets {
 
         }
 
-
         return TRUE;
+
+    }
+
+    public function ping($resource) {
+
+        stdout(W_DEBUG, 'PING: RESOURCE=' . $resource);
+
+        $frame = $this->frame('', 'ping', FALSE);
+
+        stdout(W_DEBUG, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
+        
+        return $this->write($resource, $frame, false);
 
     }
 
@@ -2809,6 +2919,9 @@ class Server extends WebSockets {
         if (!is_array($this->eventQueue))
             $this->eventQueue = array();
 
+        if($this->config->sys['cleanup'] === false)
+            return;
+
         if (count($this->eventQueue) > 0) {
 
             foreach($this->eventQueue as $event_id => $events) {
@@ -2836,6 +2949,7 @@ class Server extends WebSockets {
 
                 if (count($this->eventQueue[$event_id]) == 0)
                     unset($this->eventQueue[$event_id]);
+
             }
 
         }
@@ -3078,38 +3192,6 @@ class Server extends WebSockets {
                 }
 
             }
-
-        }
-
-        return TRUE;
-
-    }
-
-    private function ping($client_id) {
-
-        $clients = array();
-
-        if ($client_id == 'all') {
-
-            $clients = $this->clients;
-
-        } else {
-
-            if (!array_key_exists($client_id, $this->clients))
-                return FALSE;
-
-            $clients[] = array(
-                $this->clients[$client_id]
-            );
-
-        }
-
-        foreach($clients as $client) {
-
-            $frame = $this->frame('', 'ping', FALSE);
-
-            if (!socket_write($client->resource, $frame, strlen($frame)))
-                return FALSE;
 
         }
 
