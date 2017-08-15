@@ -282,11 +282,11 @@ abstract class Process extends WebSockets {
 
         $bytes_sent = socket_write($this->socket, $frame, $len);
 
-        if($bytes_sent == -1) {
+        if($bytes_sent === -1 || $bytes_sent === FALSE) {
 
             throw new \Exception('An error occured while sending to the socket');
 
-        } elseif($bytes_sent != $len) {
+        } elseif($bytes_sent !== $len) {
 
             throw new \Exception($bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
 
