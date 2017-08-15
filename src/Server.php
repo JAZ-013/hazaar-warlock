@@ -2784,6 +2784,10 @@ class Server extends WebSockets {
 
                             continue;
 
+                        } elseif ($status['exitcode'] == 4) {
+
+                            stdout(W_ERR, 'Service exited because it lost the control channel.  Restarting.');
+
                         }
 
                         $job['retries']++;

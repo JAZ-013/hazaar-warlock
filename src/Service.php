@@ -644,6 +644,22 @@ abstract class Service extends Process {
 
     }
 
+    protected function send($command, $payload = null) {
+
+        try{
+
+            return parent::send($command, $payload);
+
+        }
+        catch(\Exception $e){
+
+            //We have lost the control channel so we must die!
+            exit(4);
+
+        }
+
+    }
+
 }
 
 
