@@ -58,7 +58,9 @@ class Warlock extends \Hazaar\View\Helper {
 
         $wsAutoReconnect = strbool($config->websockets->autoReconnect === true);
 
-        $view->script("{$this->js_varname} = new HazaarWarlock('{$config->sys->id}', '$host', $wsEnabled, $wsAutoReconnect);");
+        $wsSSL = strbool($config->websockets->ssl === true || $config->client->ssl === true);
+
+        $view->script("{$this->js_varname} = new HazaarWarlock('{$config->sys->id}', '$host', $wsEnabled, $wsAutoReconnect, $wsSSL);");
 
         if($config->server->encoded === true)
             $view->script("{$this->js_varname}.enableEncoding();");

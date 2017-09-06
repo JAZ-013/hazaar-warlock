@@ -32,7 +32,8 @@ class Config {
              'server' => null,                      //Server address override.  By default the client will automatically figure out the addresss based on the application config.  This can set it explicitly.
              'check' => 60,                         //Send a PING if no data is received from the client for this many seconds
              'wait' => 5,                           //Wait this many seconds for a PONG before sending another PING
-             'pings' => 3                           //Disconnect after this many unanswered PING attempts
+             'pings' => 3,                          //Disconnect after this many unanswered PING attempts
+             'ssl' => false                         //Use SSL to connect.  (wss://)
          ),
          'timeouts' => array(
              'startup' => 1000,                     //Timeout for Warlock\Control to wait for the server to start

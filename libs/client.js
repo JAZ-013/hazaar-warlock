@@ -21,13 +21,14 @@ var p = {
     debug: 0x99
 };
 
-var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect) {
+var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect, useSSL) {
     var o = this;
     this.encoded = false;
     this.sid = sid;
     this.host = host;
     this.useWebSockets = useWebSockets || true;
     this.websocketsAutoReconnect = websocketsAutoReconnect || true;
+    this.ssl = useSSL || false;
     this.messageQueue = [];
     this.subscribeQueue = {};
     this.callbacks = {};
@@ -56,7 +57,7 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect)
             return true;
         }
         if (!this.socket) {
-            var url = 'ws://' + this.host + '/warlock?CID=' + this.guid;
+            var url = 'ws' + (this.ssl ? 's' : '') + '://' + this.host + '/warlock?CID=' + this.guid;
             if (this.username) url += '&UID=' + btoa(this.username);
             this.socket = new WebSocket(url, 'warlock');
             try {
