@@ -29,7 +29,7 @@ class Control extends Process {
 
     static private $instance;
 
-    function __construct($autostart = NULL, $config = array()) {
+    function __construct($autostart = NULL, $config = null) {
 
         if(Control::$instance instanceof Control)
             throw new \Exception('You can only have one instance of Warlock Control.  Please use \Hazaar\Warlock\Control::getInstance().');
@@ -113,10 +113,10 @@ class Control extends Process {
 
     }
 
-    static public function getInstance($autostart = null){
+    static public function getInstance($autostart = null, $config = null){
 
         if(!Control::$instance instanceof Control)
-            new Control($autostart);
+            new Control($autostart, $config);
 
         return Control::$instance;
 
