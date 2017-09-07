@@ -1474,6 +1474,8 @@ class Server extends WebSockets {
 
             default :
 
+                stdout(W_DEBUG, "DISCONNECT: REASON=unknown opcode HOST=$client->address:$client->port");
+
                 $this->disconnect($client->resource);
 
                 return FALSE;
@@ -1545,7 +1547,7 @@ class Server extends WebSockets {
         $frame = $this->frame('', 'ping', FALSE);
 
         stdout(W_DEBUG, "SEND_FRAME: " . implode(' ', $this->hexString($frame)));
-        
+
         return $this->write($resource, $frame, false);
 
     }
