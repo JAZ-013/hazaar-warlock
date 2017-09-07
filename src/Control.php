@@ -29,7 +29,7 @@ class Control extends Process {
 
     static private $instance;
 
-    function __construct($autostart = NULL) {
+    function __construct($autostart = NULL, $config = array()) {
 
         if(Control::$instance instanceof Control)
             throw new \Exception('You can only have one instance of Warlock Control.  Please use \Hazaar\Warlock\Control::getInstance().');
@@ -89,6 +89,9 @@ class Control extends Process {
                 $this->config->client['server'] = $this->config->server['listen'];
 
         }
+
+        if($config)
+            $this->config->extend($config);
 
         if(! $this->connect(APPLICATION_NAME, $this->config->client['server'], $this->config->client['port'])) {
 
