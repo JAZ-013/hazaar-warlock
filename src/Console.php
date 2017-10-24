@@ -28,8 +28,6 @@ class Console extends \Hazaar\Console\Module {
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
-        $this->view->addHelper('widget');
-
         $this->view->addHelper('warlock');
 
         $this->view->link('css/controlpanel.css');

@@ -53,5 +53,6 @@
     <Content Include="libs\console\overview.phtml" />
     <Content Include="libs\console\procs.phtml" />
     <Content Include="libs\console\services.phtml" />
+    <Content Include="libs\console\stats.phtml" />
   </ItemGroup>
 </Project>

@@ -41,45 +41,11 @@ function show_graph($view, $name){
         ))->source($graph['ticks']);
 
 }
+
 ?>
 
 <div class="row">
     <div class="col col-8">
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'sockets');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'clients');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'memory');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'jobs');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'processes');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'services');?>
-            </div>
-        </div>
-        <div class="panel">
-            <div class="panel-content">
-                <?=show_graph($this, 'events');?>
-            </div>
-        </div>
     </div>
     <div class="col col-4">
         <?=$this->partial('stats');?>
