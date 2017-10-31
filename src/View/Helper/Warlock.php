@@ -33,7 +33,7 @@ class Warlock extends \Hazaar\View\Helper {
      * @detail      Initialise the view helper and include the buttons.css file.  Adds a requirement for the HTML view
      * helper.
      */
-    public function init($view, $args = array()) {
+    public function init(\Hazaar\View\Layout $view, $args = array()) {
 
         if(count($args) > 0)
             $this->js_varname = $args[0];
