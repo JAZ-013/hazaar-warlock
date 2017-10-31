@@ -145,7 +145,13 @@ class SocketClient {
      * If the client has an associated process.  ie: a service
      * @var array The proccess array
      */
-    public $proc;
+    public $process;
+
+    /**
+     * If the client has any child jobs
+     * @var mixed
+     */
+    public $jobs = array();
 
     function __construct(&$server, $id, $type = 'client', $resource = NULL, $uid = NULL, $options = array()) {
 
@@ -241,7 +247,7 @@ class SocketClient {
 
         unset($this->subscriptions[$event_id]);
 
-        stdout(W_NOTICE, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
+        stdout(W_DEBUG, "UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id COUNT=" . count($this->subscriptions));
 
         return TRUE;
 
@@ -739,8 +745,19 @@ class Server extends WebSockets {
 
                 $this->services[$name] = $options->toArray();
 
-                if ($options['enabled'] === TRUE)
-                    $this->serviceEnable($name, $options);
+                if ($options['enabled'] === TRUE){
+
+                    if($options['dynamic'] === TRUE){
+
+                        stdout(W_NOTICE, "Dynamic service ready: $name");
+
+                    }else{
+
+                        $this->serviceEnable($name, $options);
+
+                    }
+
+                }
 
             }
 
@@ -1448,6 +1465,15 @@ class Server extends WebSockets {
 
                     socket_write($client->resource, $frame, strlen($frame));
 
+                    if(($count = count($client->jobs)) > 0){
+
+                        stdout(W_NOTICE, 'Cancelling ' . $count . ' running/pending child jobs');
+
+                        foreach($client->jobs as $id => $job)
+                            $this->setJobStatus($id, STATUS_CANCELLED);
+
+                    }
+
                     $this->disconnect($client->resource);
 
                 }
@@ -1593,6 +1619,8 @@ class Server extends WebSockets {
             );
         }
 
+        return $status;
+
         $arrays = array(
             // Main job queue
             'queue' => array(
@@ -1659,7 +1687,7 @@ class Server extends WebSockets {
 
     }
 
-    private function processCommand($resource, &$client, $command, &$payload, $time) {
+    private function processCommand($resource, $client, $command, &$payload, $time) {
 
         if (!$command)
             return FALSE;
@@ -1759,6 +1787,18 @@ class Server extends WebSockets {
 
                 return $this->commandLog($resource, $client, $payload);
 
+            case 'SPAWN':
+
+                return $this->commandSpawn($resource, $client, $payload);
+
+            case 'KILL':
+
+                return $this->commandKill($resource, $client, $payload);
+
+            case 'SIGNAL':
+
+                return $this->commandSignal($resource, $client, $payload);
+
             case 'DEBUG':
 
                 stdout(W_DEBUG, $payload);
@@ -1771,7 +1811,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandSync($resource, &$client, $payload){
+    private function commandSync($resource, $client, $payload){
 
         stdout(W_DEBUG, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
 
@@ -1816,9 +1856,11 @@ class Server extends WebSockets {
 
             }
 
+            $this->jobQueue[$payload['job_id']]['client'] = $client;
+
             $client->type = $this->procs[$payload['job_id']]['type'];
 
-            $client->job_id = $payload['job_id'];
+            $client->process = $this->procs[$payload['job_id']];
 
             stdout(W_NOTICE, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
 
@@ -1846,7 +1888,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandStop($resource, &$client) {
+    private function commandStop($resource, $client) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -1859,7 +1901,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandStatus($resource, &$client, $payload = null) {
+    private function commandStatus($resource, $client, $payload = null) {
 
         if($payload){
 
@@ -1871,7 +1913,7 @@ class Server extends WebSockets {
 
             }
 
-            if(!$client->job_id){
+            if(!$client->process){
 
                 stdout(W_WARN, 'Service status received for client with no job ID');
 
@@ -1879,11 +1921,11 @@ class Server extends WebSockets {
 
             }
 
-            $service = ake($this->jobQueue[$client->job_id], 'service');
+            $service = ake($this->jobQueue[$client->process['id']], 'service');
 
             if(!array_key_exists($service, $this->services)){
 
-                stdout(W_ERR, 'Could not find job for service client!', $client->job_id);
+                stdout(W_ERR, 'Could not find job for service client!', $client->process['id']);
 
                 return false;
 
@@ -1904,7 +1946,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandDelay($resource, &$client, $command) {
+    private function commandDelay($resource, $client, $command) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -1940,7 +1982,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandSchedule($resource, &$client, $command) {
+    private function commandSchedule($resource, $client, $command) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -1971,7 +2013,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandCancel($resource, &$client, $job_id) {
+    private function commandCancel($resource, $client, $job_id) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -1990,7 +2032,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandSubscribe($resource, &$client, $event_id, $filter = NULL) {
+    private function commandSubscribe($resource, $client, $event_id, $filter = NULL) {
 
         if (!$this->subscribe($resource, $client, $event_id, $filter))
             return FALSE;
@@ -2015,7 +2057,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandUnsubscribe($resource, &$client, $event_id) {
+    private function commandUnsubscribe($resource, $client, $event_id) {
 
         if ($this->unSubscribe($client, $event_id))
             return $this->send($resource, 'OK', NULL, $client->isLegacy());
@@ -2024,7 +2066,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandTrigger($resource, &$client, $event_id, $data, $echo_client = true) {
+    private function commandTrigger($resource, $client, $event_id, $data, $echo_client = true) {
 
         stdout(W_NOTICE, "TRIGGER: NAME=$event_id CLIENT=$client->id ECHO=" . strbool($echo_client));
 
@@ -2051,7 +2093,7 @@ class Server extends WebSockets {
 
         }
 
-        if($client instanceof SocketClient)
+        if($client instanceof Server\Client)
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
         // Check to see if there are any clients waiting for this event and send notifications to them all.
@@ -2061,7 +2103,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandEnable($resource, &$client, $name) {
+    private function commandEnable($resource, $client, $name) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -2076,7 +2118,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandDisable($resource, &$client, $name) {
+    private function commandDisable($resource, $client, $name) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -2091,7 +2133,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandService($resource, &$client, $name) {
+    private function commandService($resource, $client, $name) {
 
         if ($client->type !== 'admin')
             return FALSE;
@@ -2112,7 +2154,7 @@ class Server extends WebSockets {
 
     }
 
-    private function commandLog($resource, &$client, $payload){
+    private function commandLog($resource, $client, $payload){
 
         if(!array_key_exists('msg', $payload))
             return false;
@@ -2123,7 +2165,7 @@ class Server extends WebSockets {
 
             foreach($payload['msg'] as $msg){
 
-                if(!$this->commandLog($resource, $cliemt, array('level' => $level, 'msg' => $msg)))
+                if(!$this->commandLog($resource, $client, array('level' => $level, 'msg' => $msg)))
                     return false;
 
             }
@@ -2138,7 +2180,128 @@ class Server extends WebSockets {
 
     }
 
-    public function subscribe($resource, &$client, $event_id, $filter) {
+    private function commandSpawn($resource, $client, $payload){
+
+        if(!($name = ake($payload, 'name')))
+            return false;
+
+        if (!array_key_exists($name, $this->services))
+            return FALSE;
+
+        stdout(W_NOTICE, 'Spawning dynamic service: ' . $name);
+
+        $service = & $this->services[$name];
+
+        $job_id = $this->getJobId();
+
+        $job = new \Hazaar\Map(array(
+            'id' => $job_id,
+            'start' => time(),
+            'type' => 'service',
+            'application' => array(
+                'path' => APPLICATION_PATH,
+                'env' => APPLICATION_ENV
+            ),
+            'service' => $name,
+            'status' => STATUS_QUEUED,
+            'status_text' => 'queued',
+            'tag' => $name,
+            'enabled' => TRUE,
+            'dynamic' => TRUE,
+            'retries' => 0,
+            'respawn' => FALSE,
+            'respawn_delay' => 5,
+            'parent' => $client,
+            'params' => ake($payload, 'params')
+        ), $service);
+
+        $this->jobQueue[$job_id] = $job->toArray();
+
+        $client->jobs[$job_id] =& $this->jobQueue[$job_id];
+
+        $this->stats['queue']++;
+
+        return TRUE;
+
+    }
+
+    private function commandKill($resource, $client, $payload){
+
+        if(!($name = ake($payload, 'name')))
+            return false;
+
+        if (!array_key_exists($name, $this->services))
+            return FALSE;
+
+        foreach($client->jobs as $id => $job){
+
+            stdout(W_NOTICE, "KILL: SERVICE=$name JOB_ID=$id CLIENT={$client->id}");
+
+            $this->setJobStatus($id, STATUS_CANCELLED);
+
+            unset($client->jobs[$id]);
+
+        }
+
+        return true;
+
+    }
+
+    private function commandSignal($resource, $client, $payload){
+
+        if(!($event_id = ake($payload, 'id')))
+            return false;
+
+        //Otherwise, send this signal to any child services for the requested type
+        if(!($service = ake($payload, 'service')))
+            return false;
+
+        $trigger_id = uniqid();
+
+        $data = ake($payload, 'data');
+
+        $packet = array(
+            'id' => $event_id,
+            'trigger' => $trigger_id,
+            'time' => microtime(TRUE),
+            'data' => $data
+        );
+
+        //If this is a message coming from the service, send it back to it's parent client connection
+        if($client->type == 'service'){
+
+            stdout(W_NOTICE, "SIGNAL: SERVICE=$service JOB_ID={$client->process['id']} CLIENT={$client->id}");
+
+            $resource = $client->process['parent']->resource;
+
+            $result = $this->send($resource, 'EVENT', $packet, $client->process['parent']->isLegacy());
+
+        }else{
+
+            foreach($client->jobs as $id => $job){
+
+                if(!array_key_exists($id, $this->jobQueue))
+                    continue;
+
+                stdout(W_NOTICE, "SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$client->id}");
+
+                $resource = $job['client']->resource;
+
+                $result = $this->send($resource, 'EVENT', $packet, $job['client']->isLegacy());
+
+                // Disconnect if we are a socket but not a websocket (legacy connection) and the result was negative.
+                if (get_resource_type($resource) == 'Socket' && $job['client']->isLegacy() && $result)
+                    $this->disconnect($resource);
+
+            }
+
+        }
+
+        return true;
+
+    }
+
+    public function subscribe($resource, $client, $event_id, $filter) {
 
         if ($client->isSubscribed($event_id)){
 
@@ -2177,7 +2340,7 @@ class Server extends WebSockets {
 
     }
 
-    public function unsubscribe(&$client, $event_id = NULL, $resource = NULL) {
+    public function unsubscribe($client, $event_id = NULL, $resource = NULL) {
 
         if ($event_id === NULL) {
 
@@ -2586,7 +2749,18 @@ class Server extends WebSockets {
 
                         stdout(W_NOTICE, 'PID: ' . $status['pid'], $id);
 
-                        $this->stats['processed']++;
+                        $this->procs[$id] = array(
+                           'id' => $id,
+                           'type' => $job['type'],
+                           'start' => time(),
+                           'pid' => $status['pid'],
+                           'tag' => $job['tag'],
+                           'env' => $job['application']['env'],
+                           'process' => $process,
+                           'pipes' => $pipes
+                        );
+
+                        $this->stats['processes']++;
 
                         $this->setJobStatus($id, STATUS_RUNNING);
 
@@ -2604,17 +2778,30 @@ class Server extends WebSockets {
 
                             $name = $job['service'];
 
-                            $this->services[$name]['status'] = 'running';
-
-                            $this->sendAdminEvent('update', array(
-                                'type' => 'service',
-                                'service' => $this->services[$name]
-                            ));
-
                             $payload['name'] = $job['service'];
 
                             if($config = ake($job, 'config'))
                                 $payload['config'] = array_merge($payload['config'], $config);
+
+                            //If the service is a dynamic service send parameters and cross link the client and process
+                            if(ake($job, 'dynamic') === true && array_key_exists('parent', $job)){
+
+                                //Add any dynamic parameters to the payload object
+                                $payload['params'] = $job['params'];
+
+                                //Link the Server\Client object to the process as a 'parent'
+                                $this->procs[$id]['parent'] = $job['parent'];
+
+                            }else{
+
+                                $this->services[$name]['status'] = 'running';
+
+                                $this->sendAdminEvent('update', array(
+                                    'type' => 'service',
+                                    'service' => $this->services[$name]
+                                ));
+
+                            }
 
                             $output = $this->protocol->encode('service', $payload);
 
@@ -2632,19 +2819,6 @@ class Server extends WebSockets {
                         fwrite($pipes[0], $output);
 
                         fclose($pipes[0]); //Close the pipe to signal the end of the input
-
-                        $this->procs[$id] = array(
-                            'id' => $id,
-                            'type' => $job['type'],
-                            'start' => time(),
-                            'pid' => $status['pid'],
-                            'tag' => $job['tag'],
-                            'env' => $job['application']['env'],
-                            'process' => $process,
-                            'pipes' => $pipes
-                        );
-
-                        $this->stats['processes']++;
 
                         $bad_keys = array(
                             'process',
@@ -2670,6 +2844,8 @@ class Server extends WebSockets {
 
                     if (array_key_exists('tag', $job) && $job['tag'])
                         unset($this->tags[$job['tag']]);
+
+                    $this->stats['processed']++;
 
                 } elseif ($job['status'] == STATUS_ERROR || ($job['status'] == STATUS_COMPLETE && $job['expire'] > 0)) {
 
@@ -3101,7 +3277,7 @@ class Server extends WebSockets {
      *
      * @return boolean
      */
-    private function processEventQueue(&$client, $event_id, $filter = NULL) {
+    private function processEventQueue($client, $event_id, $filter = NULL) {
 
         stdout(W_NOTICE, "PROCESSING EVENT QUEUE: $event_id");
 
@@ -3207,6 +3383,9 @@ class Server extends WebSockets {
 
     private function sendAdminEvent($command, $data = array(), $force_queue = FALSE) {
 
+        stdout(W_WARN, 'Admin events have been temporarily disabled!');
+
+        return;
         $event = $this->config->admin->trigger;
 
         if ($force_queue === FALSE && !array_key_exists($event, $this->waitQueue))
@@ -3233,7 +3412,7 @@ class Server extends WebSockets {
 
     }
 
-    private function serviceEnable($name) {
+    private function serviceEnable($name, $options = null) {
 
         if (!array_key_exists($name, $this->services))
             return FALSE;
