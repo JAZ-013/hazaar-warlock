@@ -25,29 +25,38 @@ var p = {
     debug: 0xFF
 };
 
-var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect, useSSL) {
+//var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect, useSSL) {
+var HazaarWarlock = function (options) {
     var o = this;
-    this.encoded = false;
-    this.sid = sid;
-    this.host = host;
-    this.useWebSockets = useWebSockets || true;
-    this.websocketsAutoReconnect = websocketsAutoReconnect || true;
-    this.ssl = useSSL || false;
-    this.messageQueue = [];
-    this.subscribeQueue = {};
-    this.callbacks = {};
-    this.connect = true;
-    this.reconnectDelay = 0;
-    this.reconnectRetries = 0;
-    this.longPollingUrl = null;
-    this.socket = null;
-    this.sockets = [];
-    this.username = null;
-    this.admin_key = null;
-    this._getGUID = function () {
+    this.__options = hazaar.extend(options, {
+        "sid": null,
+        "connect": true,
+        "server": "localhost",
+        "port": 8000,
+        "ssl": false,
+        "websockets": true,
+        "url": null,
+        "check": true,
+        "pingWait": 5000,
+        "pingCount": 3,
+        "reconnect": true,
+        "reconnectDelay": 0,
+        "reconnectRetries": 0,
+        "username": null,
+        "encoded": false
+    });
+    this.__longPollingUrl = null;
+    this.__messageQueue = [];
+    this.__subscribeQueue = {};
+    this.__callbacks = {};
+    this.__socket = null;
+    this.__sockets = [];
+    this.__admin_key = null;
+    this.__connect = false;
+    this.__getGUID = function () {
         var guid = window.name;
         if (!guid) {
-            this._log('Generating new GUID');
+            this.__log('Generating new GUID');
             guid = window.name = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
                 var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
@@ -56,46 +65,54 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect,
         return guid;
     };
     this.connect = function () {
-        if (!this._isWebSocket()) {
-            this.longPollingUrl = 'http://' + this.host + '/warlock';
+        this.__connect = true;
+        if (!this.__isWebSocket()) {
+            this.__longPollingUrl = 'http://' + this.__options.server
+                + ':' + this.__options.port
+                + '/' + this.__options.applicationName
+                + '/warlock';
             return true;
         }
-        if (!this.socket) {
-            var url = 'ws' + (this.ssl ? 's' : '') + '://' + this.host + '/warlock?CID=' + this.guid;
-            if (this.username) url += '&UID=' + btoa(this.username);
-            this.socket = new WebSocket(url, 'warlock');
+        if (!this.__socket) {
+            var url = 'ws' + (this.__options.ssl ? 's' : '') + '://'
+                + this.__options.server + ':'
+                + this.__options.port + '/'
+                + this.__options.applicationName
+                + '/warlock?CID=' + this.guid;
+            if (this.__options.username) url += '&UID=' + btoa(this.__options.username);
+            this.__socket = new WebSocket(url, 'warlock');
             try {
-                this.socket.onopen = function (event) {
-                    o.reconnectDelay = 0;
-                    o.reconnectRetries = 0;
-                    if (Object.keys(o.subscribeQueue).length > 0) {
-                        for (event_id in o.subscribeQueue) {
-                            o._subscribe(event_id, o.subscribeQueue[event_id].filter);
+                this.__socket.onopen = function (event) {
+                    o.__options.reconnectDelay = 0;
+                    o.__options.reconnectRetries = 0;
+                    if (Object.keys(o.__subscribeQueue).length > 0) {
+                        for (event_id in o.__subscribeQueue) {
+                            o.__subscribe(event_id, o.__subscribeQueue[event_id].filter);
                         }
                     }
-                    o._connectHandler(event);
+                    o.__connectHandler(event);
                 };
-                this.socket.onmessage = function (event) {
-                    return o._messageHandler(o._decode(event.data));
+                this.__socket.onmessage = function (event) {
+                    return o.__messageHandler(o.__decode(event.data));
                 };
-                this.socket.onclose = function (event) {
-                    delete o.socket;
-                    return o._closeHandler(event);
+                this.__socket.onclose = function (event) {
+                    delete o.__socket;
+                    return o.__closeHandler(event);
                 };
-                this.socket.onerror = function (event) {
-                    delete o.socket;
-                    return o._errorHandler(event);
+                this.__socket.onerror = function (event) {
+                    delete o.__socket;
+                    return o.__errorHandler(event);
                 }
             } catch (ex) {
                 console.log(ex);
             }
         }
     };
-    this._longpoll = function (event_id, callback, filter) {
-        this._connectHandler();
+    this.__longpoll = function (event_id, callback, filter) {
+        this.__connectHandler();
         var packet = {
             'TYP': p.subscribe,
-            'SID': this.sid,
+            'SID': this.__options.sid,
             'PLD': {
                 'id': event_id,
                 'filter': filter
@@ -103,256 +120,267 @@ var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect,
         };
         var data = {
             CID: this.guid,
-            P: this._encode(packet)
+            P: this.__encode(packet)
         };
         if (this.username) data['UID'] = btoa(this.username);
-        var socket = $.get(this.longPollingUrl, data).done(function (data) {
+        var socket = $.get(this.__longPollingUrl, data).done(function (data) {
             var result = true;
-            o.reconnectRetries = 0;
+            o.__options.reconnectRetries = 0;
             if (data.length > 0) {
-                result = o._messageHandler(o._decode(data));
+                result = o.__messageHandler(o.__decode(data));
             }
             if (result) {
                 setTimeout(function () {
-                    o._longpoll(event_id, callback, filter);
+                    o.__longpoll(event_id, callback, filter);
                 }, 0);
                 return result;
             }
         }).fail(function (jqXHR) {
-            o._closeHandler({ data: { 'id': event_id, 'callback': callback, 'filter': filter } });
+            o.__closeHandler({ data: { 'id': event_id, 'callback': callback, 'filter': filter } });
         }).always(function () {
-            o._unlongpoll();
+            o.__unlongpoll();
         });
-        this.sockets.push(socket);
-        if (this.admin_key && this.sockets.length == 1) {
-            this._send(p.sync, { 'admin_key': this.admin_key });
+        this.__sockets.push(socket);
+        if (this.admin_key && this.__sockets.length == 1) {
+            this.__send(p.sync, { 'admin_key': this.admin_key });
         }
     };
-    this._unlongpoll = function (xhr) {
-        for (x in o.sockets) {
-            if (o.sockets[x].readyState == 4) {
-                delete o.sockets[x];
-            }
+    this.__unlongpoll = function (xhr) {
+        for (x in o.__sockets) {
+            if (o.__sockets[x].readyState == 4)
+                delete o.__sockets[x];
         }
     };
-    this._isWebSocket = function () {
-        return (this.useWebSockets && (("WebSocket" in window && window.WebSocket != undefined) || ("MozWebSocket" in window)))
+    this.__isWebSocket = function () {
+        return (this.__options.websockets && (("WebSocket" in window && window.WebSocket != undefined) || ("MozWebSocket" in window)))
     };
-    this._disconnect = function () {
-        this.connect = false;
-        if (this._isWebSocket()) {
-            this.socket.close();
+    this.__disconnect = function () {
+        this.__connect = false;
+        if (this.__isWebSocket()) {
+            this.__socket.close();
+            this.__socket = null;
         } else {
-            for (i in this.sockets)
-                this.sockets[i].abort();
-            this.sockets = [];
+            for (i in this.__sockets)
+                this.__sockets[i].abort();
+            this.__sockets = [];
         }
     };
-    this._encode = function (packet) {
+    this.__encode = function (packet) {
         packet = JSON.stringify(packet);
-        return (this.encoded ? btoa(packet) : packet);
+        return (this.__options.encoded ? btoa(packet) : packet);
     };
-    this._decode = function (packet) {
+    this.__decode = function (packet) {
         if (packet.length == 0)
             return false;
-        return JSON.parse((this.encoded ? atob(packet) : packet));
+        return JSON.parse((this.__options.encoded ? atob(packet) : packet));
     };
-    this._connectHandler = function (event) {
-        if (this.messageQueue.length > 0) {
-            for (i in this.messageQueue) {
-                var msg = this.messageQueue[i];
-                this._send(msg[0], msg[1]);
+    this.__connectHandler = function (event) {
+        if (this.__messageQueue.length > 0) {
+            for (i in this.__messageQueue) {
+                var msg = this.__messageQueue[i];
+                this.__send(msg[0], msg[1]);
             }
-            this.messageQueue = [];
+            this.__messageQueue = [];
         }
-        if (this.callbacks.connect) this.callbacks.connect(event);
+        if (this.__callbacks.connect) this.__callbacks.connect(event);
     };
-    this._messageHandler = function (packet) {
+    this.__messageHandler = function (packet) {
         switch (packet.TYP) {
             case p.event:
                 var event = packet.PLD;
-                if (this.subscribeQueue[event.id]) this.subscribeQueue[event.id].callback(event.data, event);
+                if (this.__subscribeQueue[event.id]) this.__subscribeQueue[event.id].callback(event.data, event);
                 break;
             case p.error:
-                if (this.callbacks.error) this.callbacks.error(packet.PLD);
+                if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
                 else alert('ERROR\n\nCommand:\t' + packet.PLD.command + '\n\nReason:\t\t' + packet.PLD.reason);
                 return false;
                 break;
             case p.status:
-                if (this.callbacks.status) this.callbacks.status(packet.PLD);
+                if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
                 return true;
             case p.ping:
-                this._send(p.pong);
+                this.__send(p.pong);
                 return true;
             case p.pong:
-                if (this.callbacks.pong) this.callbacks.pong(packet.PLD);
+                if (this.__callbacks.pong) this.__callbacks.pong(packet.PLD);
                 return true;
             case p.ok:
                 return true;
             default:
-                this._log('Protocol Error!');
+                this.__log('Protocol Error!');
                 console.log(packet);
-                this._disconnect();
+                this.__disconnect();
                 return false;
                 break;
         }
         return true;
     };
-    this._closeHandler = function (event) {
-        if (this.connect) {
-            this.reconnectRetries++;
-            if (this.reconnectDelay < 30000)
-                this.reconnectDelay = this.reconnectRetries * 1000;
-            if (this._isWebSocket()) {
-                if (this.websocketsAutoReconnect) {
+    this.__closeHandler = function (event) {
+        if (this.__connect) {
+            this.__options.reconnectRetries++;
+            if (this.__options.reconnectDelay < 30000)
+                this.__options.reconnectDelay = this.__options.reconnectRetries * 1000;
+            if (this.__isWebSocket()) {
+                if (this.__options.reconnect) {
                     setTimeout(function () {
                         o.connect();
-                    }, this.reconnectDelay);
+                    }, this.__options.reconnectDelay);
                 }
             } else {
                 setTimeout(function () {
-                    o._longpoll(event.data.id, event.data.callback, event.data.filter);
-                }, this.reconnectDelay);
+                    o.__longpoll(event.data.id, event.data.callback, event.data.filter);
+                }, this.__options.reconnectDelay);
             }
         } else {
-            if (this.callbacks.close) o.callbacks.close(event);
-            this.messageQueue = [];
-            this.subscribeQueue = {};
+            if (this.__callbacks.close) o.__callbacks.close(event);
+            this.__messageQueue = [];
+            this.__subscribeQueue = {};
         }
     };
-    this._errorHandler = function (event) {
-        if (o.callbacks.error) o.callbacks.error(event);
+    this.__errorHandler = function (event) {
+        if (o.__callbacks.error) o.__callbacks.error(event);
     };
-    this._subscribe = function (event_id, filter) {
-        this._send(p.subscribe, {
+    this.__subscribe = function (event_id, filter) {
+        this.__send(p.subscribe, {
             'id': event_id,
             'filter': filter
         }, false);
     };
-    this._unsubscribe = function (event_id) {
-        this._send(p.unsubscribe, {
+    this.__unsubscribe = function (event_id) {
+        this.__send(p.unsubscribe, {
             'id': event_id
         }, false);
     };
-    this._send = function (type, payload, queue) {
+    this.__send = function (type, payload, queue) {
         var packet = {
             'TYP': type,
-            'SID': this.sid,
+            'SID': this.__options.sid,
             'TME': Math.round((new Date).getTime() / 1000)
         };
         if (typeof payload != 'undefined') packet.PLD = payload;
-        if (this._isWebSocket()) {
-            if (o.socket && o.socket.readyState == 1)
-                this.socket.send(this._encode(packet));
+        if (this.__isWebSocket()) {
+            if (o.__socket && o.__socket.readyState == 1)
+                this.__socket.send(this.__encode(packet));
             else if (queue)
-                this.messageQueue.push([type, payload]);
+                this.__messageQueue.push([type, payload]);
         } else {
             packet.CID = this.guid;
-            $.post(this.longPollingUrl, { CID: this.guid, P: this._encode(packet) }).done(function (data) {
-                var packet = o._decode(data);
+            $.post(this.__longPollingUrl, { CID: this.guid, P: this.__encode(packet) }).done(function (data) {
+                var packet = o.__decode(data);
                 if (packet.TYP == p.ok) {
                 } else {
                     alert('An error occured sending the trigger event!');
                 }
             }).fail(function (xhr) {
-                o.messageQueue.push([type, payload]);
+                o.__messageQueue.push([type, payload]);
             });
         }
     };
-    this._log = function (msg) {
+    this.__log = function (msg) {
         console.log('Warlock: ' + msg);
     };
     this.connected = function () {
-        return (this.socket && this.socket.readyState == 1);
+        return (this.__socket && this.__socket.readyState == 1);
     };
     this.sync = function (admin_key) {
         this.admin_key = admin_key;
-        this._send(p.sync, { 'admin_key': this.admin_key }, true);
+        this.__send(p.sync, { 'admin_key': this.admin_key }, true);
         return this;
     };
     this.onconnect = function (callback) {
-        this.callbacks.connect = callback;
+        this.__callbacks.connect = callback;
         return this;
     };
     this.onclose = function (callback) {
-        this.callbacks.close = callback;
+        this.__callbacks.close = callback;
         return this;
     };
     this.onerror = function (callback) {
-        this.callbacks.error = callback;
+        this.__callbacks.error = callback;
         return this;
     };
     this.onstatus = function (callback) {
-        this.callbacks.status = callback;
+        this.__callbacks.status = callback;
         return this;
     };
     this.onpong = function (callback) {
-        this.callbacks.pong = callback;
+        this.__callbacks.pong = callback;
         return this;
     };
     this.close = function () {
-        this._disconnect();
+        this.__disconnect();
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {
-        this.subscribeQueue[event_id] = {
+        this.__subscribeQueue[event_id] = {
             'callback': callback, 'filter': filter
         };
-        if (this._isWebSocket()) {
-            this._subscribe(event_id, filter);
+        if (this.__isWebSocket()) {
+            this.__subscribe(event_id, filter);
         } else {
-            this._longpoll(event_id, callback, filter);
+            this.__longpoll(event_id, callback, filter);
         }
         return this;
     };
     this.unsubscribe = function (event_id) {
-        if (!(this._isWebSocket() && this.subscribeQueue[event_id]))
+        if (!(this.__isWebSocket() && this.__subscribeQueue[event_id]))
             return false;
-        delete this.subscribeQueue[event_id];
-        this._unsubscribe(event_id);
+        delete this.__subscribeQueue[event_id];
+        this.__unsubscribe(event_id);
         return this;
     };
     this.trigger = function (event_id, data, echo_self) {
-        this._send(p.trigger, {
+        this.__send(p.trigger, {
             'id': event_id,
             'data': data,
             'echo': (echo_self === true)
         }, true);
+        return this;
     };
     this.enable = function (service) {
-        this._send(p.enable, service);
+        this.__send(p.enable, service);
+        return this;
     };
     this.disable = function (service) {
-        this._send(p.disable, service);
+        this.__send(p.disable, service);
+        return this;
     };
     this.enableEncoding = function () {
-        this.encoded = true;
+        this.__options.encoded = true;
+        return this;
     };
     this.enableWebsockets = function (autoReconnect) {
-        this.useWebSockets = true;
-        this.websocketsAutoReconnect = (typeof autoReconnect == 'undefined') ? true : autoReconnect;
+        this.__options.websockets = true;
+        this.__options.reconnect = (typeof autoReconnect == 'undefined') ? true : autoReconnect;
+        return this;
     };
     this.setUser = function (username) {
         this.username = username;
+        return this;
     };
     this.status = function () {
-        this._send(p.status);
+        this.__send(p.status);
+        return this;
     }
     this.spawn = function (service, params) {
-        this._send(p.spawn, { 'name': service, 'params': params });
+        this.__send(p.spawn, { 'name': service, 'params': params });
+        return this;
     };
     this.kill = function (service) {
-        this._send(p.kill, { name: service });
+        this.__send(p.kill, { name: service });
+        return this;
     };
     this.signal = function (service, event_id, data) {
-        this._send(p.signal, {
+        this.__send(p.signal, {
             'service': service,
             'id': event_id,
             'data': data
         }, true);
+        return this;
     };
-    this.guid = this._getGUID();
-    this._log('GUID=' + this.guid);
-    this._log('Server ID=' + this.sid);
+    this.guid = this.__getGUID();
+    this.__log('GUID=' + this.guid);
+    this.__log('Server ID=' + this.__options.sid);
+    if (this.__options.connect === true) this.connect();
     return this;
 };

@@ -1333,7 +1333,7 @@ class Server extends WebSockets {
 
                 $client->handshake = TRUE;
 
-                $result = $this->processCommand($socket, $client, $type, $payload);
+                $result = $this->processCommand($socket, $client, $type, $payload, time());
 
                 return !$result; // If $result is TRUE then we disconnect. If it is FALSE we do NOT disconnect.
 
