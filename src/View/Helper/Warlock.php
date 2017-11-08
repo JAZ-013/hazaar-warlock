@@ -44,29 +44,29 @@ class Warlock extends \Hazaar\View\Helper {
 
         $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
+        $config->client['sid'] = $config->sys->id;
+
         if($config->client['port'] === null)
             $config->client['port'] = $config->server['port'];
 
-        if($config->client['server'] !== null)
-            $host = $config->client['server'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
-        elseif(trim($config->server['listen']) == '0.0.0.0')
-            $host = $_SERVER['SERVER_NAME'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
-        else
-            $host = $config->server['listen'] . ':' . $config->client['port'] . '/' . APPLICATION_NAME;
+        if($config->client['server'] === null){
 
-        $wsEnabled = strbool($config->websockets->enabled === true);
+            if(trim($config->server['listen']) == '0.0.0.0')
+                $config->client['server'] = $_SERVER['SERVER_NAME'];
+            else
+                $config->client['server'] = $config->server['listen'];
 
-        $wsAutoReconnect = strbool($config->websockets->autoReconnect === true);
+        }
 
-        $wsSSL = strbool($config->websockets->ssl === true || $config->client->ssl === true);
+        if($config->client['applicationName'] === null)
+            $config->client['applicationName'] = APPLICATION_NAME;
 
-        $view->script("{$this->js_varname} = new HazaarWarlock('{$config->sys->id}', '$host', $wsEnabled, $wsAutoReconnect, $wsSSL);");
-
-        if($config->server->encoded === true)
-            $view->script("{$this->js_varname}.enableEncoding();");
+        $config->client['encoded'] = $config->server->encoded;
 
         if(($user = ake($_SERVER, 'REMOTE_USER')))
-            $view->script("{$this->js_varname}.setUser('$user');");
+            $config->client['username'] = $user;
+
+        $view->script("{$this->js_varname} = new HazaarWarlock(" . $config->client->toJSON() . ');');
 
     }
 

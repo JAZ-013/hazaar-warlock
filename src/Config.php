@@ -28,12 +28,22 @@ class Config {
              'win_bg' => false
          ),
          'client' => array(
-             'port' => null,                        //Server port override.  By default the client will connect to the port in server->port.  Useful for reverse proxies or firewalls with port forward, etc.
-             'server' => null,                      //Server address override.  By default the client will automatically figure out the addresss based on the application config.  This can set it explicitly.
+             'connect' => true,                     //Connect automatically on startup.  If false, connect() must be called manually.
+             'server' => null,                      //Server address override.  By default the client will automatically figure out the addresss
+                                                    //based on the application config.  This can set it explicitly.
+             'port' => null,                        //Server port override.  By default the client will connect to the port in server->port.
+                                                    //Useful for reverse proxies or firewalls with port forward, etc.  Allows only the port to
+                                                    //be overridden but still auto generate the server part.
+             'ssl' => false,                        //Use SSL to connect.  (wss://)
+             'websockets' => true,                  //Use websockets.  Alternative is HTTP long-polling.
+             'url' => null,                         //Resolved URL override.  This allows you to override the entire URL.  For the above auto
+                                                    //URL generator to work, this needs to be NULL.
              'check' => 60,                         //Send a PING if no data is received from the client for this many seconds
-             'wait' => 5,                           //Wait this many seconds for a PONG before sending another PING
-             'pings' => 3,                          //Disconnect after this many unanswered PING attempts
-             'ssl' => false                         //Use SSL to connect.  (wss://)
+             'pingWait' => 5,                       //Wait this many seconds for a PONG before sending another PING
+             'pingCount' => 3,                      //Disconnect after this many unanswered PING attempts
+             'reconnect' => true,                   //When using WebSockets, automatically reconnect if connection is lost.
+             'reconnectDelay' => 0,
+             'reconnectRetries' => 0
          ),
          'timeouts' => array(
              'startup' => 1000,                     //Timeout for Warlock\Control to wait for the server to start
