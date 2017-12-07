@@ -58,7 +58,7 @@ var HazaarWarlock = function (options) {
         if (!guid) {
             this.__log('Generating new GUID');
             guid = window.name = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
         }
@@ -102,7 +102,7 @@ var HazaarWarlock = function (options) {
                 this.__socket.onerror = function (event) {
                     delete o.__socket;
                     return o.__errorHandler(event);
-                }
+                };
             } catch (ex) {
                 console.log(ex);
             }
@@ -141,18 +141,18 @@ var HazaarWarlock = function (options) {
             o.__unlongpoll();
         });
         this.__sockets.push(socket);
-        if (this.admin_key && this.__sockets.length == 1) {
+        if (this.admin_key && this.__sockets.length === 1) {
             this.__send(p.sync, { 'admin_key': this.admin_key });
         }
     };
     this.__unlongpoll = function (xhr) {
         for (x in o.__sockets) {
-            if (o.__sockets[x].readyState == 4)
+            if (o.__sockets[x].readyState === 4)
                 delete o.__sockets[x];
         }
     };
     this.__isWebSocket = function () {
-        return (this.__options.websockets && (("WebSocket" in window && window.WebSocket != undefined) || ("MozWebSocket" in window)))
+        return (this.__options.websockets && (("WebSocket" in window && window.WebSocket !== undefined) || ("MozWebSocket" in window)));
     };
     this.__disconnect = function () {
         this.__connect = false;
@@ -170,7 +170,7 @@ var HazaarWarlock = function (options) {
         return (this.__options.encoded ? btoa(packet) : packet);
     };
     this.__decode = function (packet) {
-        if (packet.length == 0)
+        if (packet.length === 0)
             return false;
         return JSON.parse((this.__options.encoded ? atob(packet) : packet));
     };
@@ -194,7 +194,6 @@ var HazaarWarlock = function (options) {
                 if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
                 else alert('ERROR\n\nCommand:\t' + packet.PLD.command + '\n\nReason:\t\t' + packet.PLD.reason);
                 return false;
-                break;
             case p.status:
                 if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
                 return true;
@@ -211,7 +210,6 @@ var HazaarWarlock = function (options) {
                 console.log(packet);
                 this.__disconnect();
                 return false;
-                break;
         }
         return true;
     };
@@ -257,9 +255,9 @@ var HazaarWarlock = function (options) {
             'SID': this.__options.sid,
             'TME': Math.round((new Date).getTime() / 1000)
         };
-        if (typeof payload != 'undefined') packet.PLD = payload;
+        if (typeof payload !== 'undefined') packet.PLD = payload;
         if (this.__isWebSocket()) {
-            if (o.__socket && o.__socket.readyState == 1)
+            if (o.__socket && o.__socket.readyState === 1)
                 this.__socket.send(this.__encode(packet));
             else if (queue)
                 this.__messageQueue.push([type, payload]);
@@ -267,10 +265,8 @@ var HazaarWarlock = function (options) {
             packet.CID = this.guid;
             $.post(this.__longPollingUrl, { CID: this.guid, P: this.__encode(packet) }).done(function (data) {
                 var packet = o.__decode(data);
-                if (packet.TYP == p.ok) {
-                } else {
+                if (packet.TYP !== p.ok)
                     alert('An error occured sending the trigger event!');
-                }
             }).fail(function (xhr) {
                 o.__messageQueue.push([type, payload]);
             });
@@ -280,7 +276,7 @@ var HazaarWarlock = function (options) {
         console.log('Warlock: ' + msg);
     };
     this.connected = function () {
-        return (this.__socket && this.__socket.readyState == 1);
+        return (this.__socket && this.__socket.readyState === 1);
     };
     this.sync = function (admin_key) {
         this.admin_key = admin_key;
@@ -351,7 +347,7 @@ var HazaarWarlock = function (options) {
     };
     this.enableWebsockets = function (autoReconnect) {
         this.__options.websockets = true;
-        this.__options.reconnect = (typeof autoReconnect == 'undefined') ? true : autoReconnect;
+        this.__options.reconnect = (typeof autoReconnect === 'undefined') ? true : autoReconnect;
         return this;
     };
     this.setUser = function (username) {
@@ -361,7 +357,7 @@ var HazaarWarlock = function (options) {
     this.status = function () {
         this.__send(p.status);
         return this;
-    }
+    };
     this.spawn = function (service, params) {
         this.__send(p.spawn, { 'name': service, 'params': params });
         return this;
