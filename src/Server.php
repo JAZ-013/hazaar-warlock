@@ -3383,11 +3383,9 @@ class Server extends WebSockets {
 
     private function sendAdminEvent($command, $data = array(), $force_queue = FALSE) {
 
-        stdout(W_WARN, 'Admin events have been temporarily disabled!');
-
-        return;
         $event = $this->config->admin->trigger;
 
+        //Force queue will trigger the event even if nothing is subscribed.
         if ($force_queue === FALSE && !array_key_exists($event, $this->waitQueue))
             return FALSE;
 
