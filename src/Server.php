@@ -1225,11 +1225,15 @@ class Server extends WebSockets {
 
                 $response = $this->httpResponse($responseCode, NULL, $responseHeaders);
 
-                socket_write($socket, $response, strlen($response));
+                $result = @socket_write($socket, $response, strlen($response));
 
-                stdout(W_NOTICE, 'WebSockets handshake successful!');
+                if($result !== false && $result > 0){
+                    
+                    stdout(W_NOTICE, 'WebSockets handshake successful!');
 
-                return TRUE;
+                    return TRUE;
+
+                }
 
             } elseif ($responseCode > 0) {
 
@@ -1243,7 +1247,7 @@ class Server extends WebSockets {
 
                 stdout(W_WARN, "Handshake failed with code $responseCode");
 
-                socket_write($socket, $response, strlen($response));
+                @socket_write($socket, $response, strlen($response));
 
             }
 
@@ -1329,7 +1333,7 @@ class Server extends WebSockets {
 
                 $response = $this->httpResponse(200, NULL, $responseHeaders);
 
-                socket_write($socket, $response, strlen($response));
+                @socket_write($socket, $response, strlen($response));
 
                 $client->handshake = TRUE;
 
@@ -1347,7 +1351,7 @@ class Server extends WebSockets {
                     'reason' => $reason
                 )), $responseHeaders);
 
-                socket_write($socket, $response, strlen($response));
+                @socket_write($socket, $response, strlen($response));
 
             }
 
@@ -1463,7 +1467,7 @@ class Server extends WebSockets {
 
                     $frame = $this->frame('', 'close', FALSE);
 
-                    socket_write($client->resource, $frame, strlen($frame));
+                    @socket_write($client->resource, $frame, strlen($frame));
 
                     if(($count = count($client->jobs)) > 0){
 
@@ -1486,7 +1490,7 @@ class Server extends WebSockets {
 
                 $frame = $this->frame('', 'pong', FALSE);
 
-                socket_write($client->resource, $frame, strlen($frame));
+                @socket_write($client->resource, $frame, strlen($frame));
 
                 return FALSE;
 
@@ -1546,11 +1550,11 @@ class Server extends WebSockets {
 
         stdout(W_DEBUG, "SOCKET_WRITE: BYTES=$len SOCKET=$resource LEGACY=" . ($is_legacy ? 'TRUE' : 'FALSE'));
 
-        $bytes_sent = socket_write($resource, $frame, $len);
+        $bytes_sent = @socket_write($resource, $frame, $len);
 
-        if ($bytes_sent == -1) {
+        if ($bytes_sent === false) {
 
-            stdout(W_ERR, 'An error occured while sending to the client');
+            stdout(W_WARN, 'An error occured while sending to the client. Could be disconnected.');
 
             return FALSE;
 
