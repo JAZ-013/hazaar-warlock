@@ -298,6 +298,9 @@ abstract class WebSockets {
         if(! $buffer)
             return FALSE;
 
+        if(strlen($buffer) < 2)
+            return -1;
+
         $payload = NULL;
 
         $headers = $this->getFrameHeaders($buffer);
