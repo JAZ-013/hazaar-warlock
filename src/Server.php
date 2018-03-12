@@ -2497,14 +2497,7 @@ class Server extends WebSockets {
 
         }
 
-        $params = array();
-
-        if (array_key_exists('params', $function)) {
-
-            foreach($function['params'] as $p)
-                $params[] = (string) $p;
-
-        }
+        $params = array_key_exists('params', $function) ? $function['params'] : array();
 
         $this->jobQueue[$id] = array(
             'id' => $id,
