@@ -1228,7 +1228,7 @@ class Server extends WebSockets {
                 $result = @socket_write($socket, $response, strlen($response));
 
                 if($result !== false && $result > 0){
-                    
+
                     stdout(W_NOTICE, 'WebSockets handshake successful!');
 
                     return TRUE;
@@ -2699,8 +2699,16 @@ class Server extends WebSockets {
 
                         }
 
-                        if (array_key_exists('params', $job) && count($job['params']) > 0)
-                            stdout(W_NOTICE, 'PARAMS: ' . implode(', ', $job['params']), $id);
+                        if (array_key_exists('params', $job) && count($job['params']) > 0){
+
+                            $pout = 'PARAMS: ';
+
+                            foreach($job['params'] as $param)
+                                $pout .= var_export($param, true);
+
+                            stdout(W_NOTICE, $pout, $id);
+
+                        }
 
                     }
 
