@@ -74,7 +74,7 @@ abstract class Process extends WebSockets {
          */
         $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key);
 
-        socket_write($this->socket, $handshake, strlen($handshake));
+        @socket_write($this->socket, $handshake, strlen($handshake));
 
         /**
          * Wait for the response header
@@ -133,7 +133,7 @@ abstract class Process extends WebSockets {
 
                 $frame = $this->frame('', 'close');
 
-                socket_write($this->socket, $frame, strlen($frame));
+                @socket_write($this->socket, $frame, strlen($frame));
 
                 $this->recv($payload);
 
@@ -232,7 +232,7 @@ abstract class Process extends WebSockets {
 
                 $frame = $this->frame('', 'pong', FALSE);
 
-                socket_write($this->socket, $frame, strlen($frame));
+                @socket_write($this->socket, $frame, strlen($frame));
 
                 return false;
 
@@ -280,7 +280,7 @@ abstract class Process extends WebSockets {
 
         $len = strlen($frame);
 
-        $bytes_sent = socket_write($this->socket, $frame, $len);
+        @$bytes_sent = socket_write($this->socket, $frame, $len);
 
         if($bytes_sent === -1 || $bytes_sent === FALSE) {
 
