@@ -30,6 +30,8 @@ abstract class Process extends WebSockets {
 
     public    $bytes_received = 0;
 
+    public    $socket_last_error = null;
+
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct(array('warlock'));
@@ -54,18 +56,23 @@ abstract class Process extends WebSockets {
 
     public function connect($application_name, $host, $port, $job_id = null, $access_key = null){
 
-        if(!($this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)))
+        if (!extension_loaded('sockets'))
+            throw new \Exception('The sockets extension is not loaded.');
+
+        $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+
+        if(!is_resource($this->socket))
             throw new \Exception('Unable to create TCP socket!');
 
-        if(@!socket_connect($this->socket, $host, $port)){
+        if(!@socket_connect($this->socket, $host, $port)){
+
+            $this->socket_last_error = socket_last_error($this->socket);
 
             socket_close($this->socket);
 
-            $error = socket_last_error($this->socket);
-
             $this->socket = null;
 
-            throw new \Exception(socket_strerror($error));
+            return false;
 
         }
 
@@ -118,6 +125,12 @@ abstract class Process extends WebSockets {
         }
 
         return true;
+
+    }
+
+    public function getLastSocketError($as_string = false){
+
+        return ($as_string ? socket_strerror($this->socket_last_error) : $this->socket_last_error);
 
     }
 
