@@ -1972,26 +1972,26 @@ class Server extends WebSockets {
         if ($client->type !== 'admin')
             return FALSE;
 
-        if ($command['value'] == NULL)
-            $command['value'] = 0;
+        if ($command->value == NULL)
+            $command->value = 0;
 
-        $when = time() + $command['value'];
+        $when = time() + $command->value;
 
         $tag = NULL;
 
         $tag_overwrite = FALSE;
 
-        if (array_key_exists('tag', $command)) {
+        if (property_exists($command, 'tag')) {
 
-            $tag = $command['tag'];
+            $tag = $command->tag;
 
-            $tag_overwrite = $command['overwrite'];
+            $tag_overwrite = $command->overwrite;
 
         }
 
-        if ($id = $this->scheduleJob($when, $command['function'], $command['application'], $tag, $tag_overwrite)) {
+        if ($id = $this->scheduleJob($when, $command->function, $command->application, $tag, $tag_overwrite)) {
 
-            stdout(W_NOTICE, "Successfully scheduled delayed function.  Executing in $command[value] seconds . ", $id);
+            stdout(W_NOTICE, "Successfully scheduled delayed function.  Executing in {$command->value} seconds . ", $id);
 
             return $this->send($resource, 'OK', array('job_id' => $id), $client->isLegacy());
 
@@ -2012,15 +2012,15 @@ class Server extends WebSockets {
 
         $tag_overwrite = FALSE;
 
-        if (array_key_exists('tag', $command)) {
+        if (property_exists($command, 'tag')) {
 
-            $tag = $command['tag'];
+            $tag = $command->tag;
 
-            $tag_overwrite = $command['overwrite'];
+            $tag_overwrite = $command->overwrite;
 
         }
 
-        if ($id = $this->scheduleJob($command['when'], $command['function'], $command['application'], $tag, $tag_overwrite)) {
+        if ($id = $this->scheduleJob($command->when, $command->function, $command->application, $tag, $tag_overwrite)) {
 
             stdout(W_NOTICE, "Function execution successfully scheduled", $id);
 
@@ -2448,7 +2448,7 @@ class Server extends WebSockets {
 
     private function scheduleJob($when, $function, $application, $tag = NULL, $overwrite = FALSE) {
 
-        if(!array_key_exists('code', $function)){
+        if(!property_exists($function, 'code')){
 
             stdout(W_ERR, 'Unable to schedule job without function code!');
 
@@ -2473,9 +2473,9 @@ class Server extends WebSockets {
 
         stdout(W_NOTICE, 'WHEN: ' . date('c', $when), $id);
 
-        stdout(W_NOTICE, 'APPLICATION_PATH: ' . $application['path'], $id);
+        stdout(W_NOTICE, 'APPLICATION_PATH: ' . $application->path, $id);
 
-        stdout(W_NOTICE, 'APPLICATION_ENV:  ' . $application['env'], $id);
+        stdout(W_NOTICE, 'APPLICATION_ENV:  ' . $application->env, $id);
 
         if (!$when || $when < time()) {
 
@@ -2515,18 +2515,16 @@ class Server extends WebSockets {
 
         }
 
-        $params = array_key_exists('params', $function) ? $function['params'] : array();
-
         $this->jobQueue[$id] = array(
             'id' => $id,
             'start' => $when,
             'type' => 'job',
             'application' => array(
-                'path' => $application['path'],
-                'env' => $application['env']
+                'path' => $application->path,
+                'env' => $application->env
             ),
-            'function' => $function['code'],
-            'params' => $params,
+            'function' => $function->code,
+            'params' => ake($function, 'params', array()),
             'tag' => $tag,
             'status' => STATUS_QUEUED,
             'status_text' => 'queued',

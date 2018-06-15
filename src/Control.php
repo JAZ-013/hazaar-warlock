@@ -274,7 +274,7 @@ class Control extends Process {
         $this->send('delay', $data);
 
         if($this->recv($payload) == 'OK')
-            return $payload['job_id'];
+            return $payload->job_id;
 
         return FALSE;
 
@@ -312,7 +312,7 @@ class Control extends Process {
         $this->send('schedule', $data);
 
         if($this->recv($payload) == 'OK')
-            return $payload['job_id'];
+            return $payload->job_id;
 
         return FALSE;
 
