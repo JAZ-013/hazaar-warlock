@@ -1,28 +1,36 @@
 var p = {
+    //SYSTEM MESSAGES
     noop: 0x00,         //Null Opperation
-    sync: 0x01,         //Sync with server
+    sync: 0x01,         //Sync client
     ok: 0x02,           //OK response
     error: 0x03,        //Error response
     status: 0x04,       //Status request/response
     shutdown: 0x05,     //Shutdown request
-    delay: 0x06,        //Execute code after a period
-    schedule: 0x07,     //Execute code at a set time
-    cancel: 0x08,       //Cancel a pending code execution
-    enable: 0x09,       //Start a service
-    disable: 0x0A,      //Stop a service
-    service: 0X0B,      //Service status
-    subscribe: 0x0C,    //Subscribe to an event
-    unsubscribe: 0x0D,  //Unsubscribe from an event
-    trigger: 0x0E,      //Trigger an event
-    event: 0x0F,        //An event
-    exec: 0x10,         //Execute some code in the Warlock Runner.
-    ping: 0x11,         //Typical PING
-    pong: 0x12,         //Typical PONG
-    log: 0x13,          //Send a log message to the server
-    spawn: 0x14,        //Spawn a new dynamic service on this connection
-    kill: 0x15,         //Kill a dynamic service
-    signal: 0x16,       //Send a signal to a dynamic service
-    debug: 0xFF
+    ping: 0x06,         //Typical PING
+    pong: 0x07,         //Typical PONG
+
+    //CODE EXECUTION MESSAGES
+    delay: 0x10,        //Execute code after a period
+    schedule: 0x11,     //Execute code at a set time
+    exec: 0x12,         //Execute some code in the Warlock Runner.
+    cancel: 0x13,       //Cancel a pending code execution
+
+    //SIGNALLING MESSAGES
+    subscribe: 0x20,    //Subscribe to an event
+    unsubscribe: 0x21,  //Unsubscribe from an event
+    trigger: 0x22,      //Trigger an event
+    event: 0x23,        //An event
+
+    //SERVICE MESSAGES
+    enable: 0x30,       //Start a service
+    disable: 0x31,      //Stop a service
+    service: 0x32,      //Service status
+    spawn: 0x33,        //Spawn a dynamic service
+    kill: 0x34,         //Kill a dynamic service instance
+
+    //LOGGING/OUTPUT MESSAGES
+    log: 0x90,          //Generic log message
+    debug: 0x91
 };
 
 //var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect, useSSL) {
