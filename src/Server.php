@@ -1471,10 +1471,14 @@ class Server extends WebSockets {
 
                     if(($count = count($client->jobs)) > 0){
 
-                        stdout(W_NOTICE, 'Cancelling ' . $count . ' running/pending child jobs');
+                        stdout(W_NOTICE, 'Disconnected WebSocket client has ' . $count . ' running/pending child jobs');
 
-                        foreach($client->jobs as $id => $job)
-                            $this->setJobStatus($id, STATUS_CANCELLED);
+                        foreach($client->jobs as $id => $job){
+
+                            if($job['detach'] !== true)
+                                $this->setJobStatus($id, STATUS_CANCELLED);
+
+                        }
 
                     }
 
@@ -2192,11 +2196,11 @@ class Server extends WebSockets {
         if (!array_key_exists($name, $this->services))
             return FALSE;
 
-        stdout(W_NOTICE, 'Spawning dynamic service: ' . $name);
+        $job_id = $this->getJobId();
+
+        stdout(W_NOTICE, 'Spawning dynamic service: ' . $name, $job_id);
 
         $service = & $this->services[$name];
-
-        $job_id = $this->getJobId();
 
         $job = new \Hazaar\Map(array(
             'id' => $job_id,
@@ -2212,6 +2216,7 @@ class Server extends WebSockets {
             'tag' => $name,
             'enabled' => TRUE,
             'dynamic' => TRUE,
+            'detach' => ake($payload, 'detach', false),
             'retries' => 0,
             'respawn' => FALSE,
             'respawn_delay' => 5,

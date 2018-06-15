@@ -492,7 +492,7 @@ abstract class Process extends WebSockets {
 
     public function spawn($service, $params = array()){
 
-        return $this->send('SPAWN', array('name' => $service, 'params' => $params));
+        return $this->send('SPAWN', array('name' => $service, 'detach' => true, 'params' => $params));
 
     }
 
