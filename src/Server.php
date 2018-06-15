@@ -3000,13 +3000,23 @@ class Server extends WebSockets {
 
                         if ($job['retries'] > $this->config->service->restarts) {
 
-                            stdout(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
+                            if($job['dynamic'] === true){
 
-                            $job['start'] = time() + $this->config->service->disable;
+                                stdout(W_WARN, "Dynamic service '$name' is restarting too often.  Cancelling spawn.");
 
-                            $job['retries'] = 0;
+                                $this->cancelJob($job['id']);
 
-                            $job['expire'] = 0;
+                            }else{
+
+                                stdout(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
+
+                                $job['start'] = time() + $this->config->service->disable;
+
+                                $job['retries'] = 0;
+
+                                $job['expire'] = 0;
+
+                            }
 
                         } else {
 
