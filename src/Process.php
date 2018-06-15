@@ -373,10 +373,10 @@ abstract class Process extends WebSockets {
 
             case 'EVENT':
 
-                if(! (array_key_exists('id', $payload) && array_key_exists($payload['id'], $this->subscriptions)))
+                if(! (property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
                     return FALSE;
 
-                $func = $this->subscriptions[$payload['id']];
+                $func = $this->subscriptions[$payload->id];
 
                 if(is_string($func))
                     $func = array($this, $func);
@@ -406,9 +406,17 @@ abstract class Process extends WebSockets {
 
             case 'PONG':
 
-                $trip_ms = (microtime(true) - $payload) * 1000;
+                if(is_int($payload)){
 
-                $this->send('DEBUG', 'PONG received in ' . $trip_ms . 'ms');
+                    $trip_ms = (microtime(true) - $payload) * 1000;
+
+                    $this->send('DEBUG', 'PONG received in ' . $trip_ms . 'ms');
+
+                }else{
+
+                    $this->send('ERROR', 'PONG received with invalid payload!');
+
+                }
 
                 break;
 

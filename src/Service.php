@@ -72,7 +72,7 @@ abstract class Service extends Process {
 
     }
 
-    public function main($params = array()) {
+    final public function main($params = array()) {
 
         if(! $this->start($params))
             return 1;
@@ -130,7 +130,7 @@ abstract class Service extends Process {
      *
      * @param mixed $name The name to use in the file.
      */
-    protected function redirectOutput($name){
+    final protected function redirectOutput($name){
 
         $this->ob_file = fopen($this->application->runtimePath($name . '.log'), 'at');
 
@@ -138,7 +138,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function writeOutput($buffer){
+    final protected function writeOutput($buffer){
 
         fwrite($this->ob_file, $buffer);
 
@@ -146,7 +146,7 @@ abstract class Service extends Process {
 
     }
 
-    public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
+    final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
 
         $msg = "#$errno on line $errline in file $errfile\n" . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40);
 
@@ -158,7 +158,7 @@ abstract class Service extends Process {
 
     }
 
-    public function __exceptionHandler($e){
+    final public function __exceptionHandler($e){
 
         $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n" . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40);
 
@@ -170,7 +170,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function __processCommand($command, $payload = NULL) {
+    final protected function __processCommand($command, $payload = NULL) {
 
         switch($command) {
 
@@ -201,7 +201,7 @@ abstract class Service extends Process {
 
     }
 
-    private function __processSchedule() {
+    final private function __processSchedule() {
 
         if(! is_array($this->schedule) || ! count($this->schedule) > 0)
             return;
@@ -271,7 +271,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function __sendHeartbeat() {
+    final protected function __sendHeartbeat() {
 
         $status = array(
             'pid'        => getmypid(),
@@ -291,7 +291,7 @@ abstract class Service extends Process {
 
     }
 
-    private function __stateString($state = NULL) {
+    final private function __stateString($state = NULL) {
 
         if($state === NULL)
             $state = $this->state;
@@ -329,7 +329,7 @@ abstract class Service extends Process {
      * CONTROL METHODS
      */
 
-    private function start($params = array()) {
+    final private function start($params = array()) {
 
         $init = true;
 
@@ -408,13 +408,13 @@ abstract class Service extends Process {
 
     }
 
-    public function stop() {
+    final public function stop() {
 
         return $this->state = HAZAAR_SERVICE_STOPPING;
 
     }
 
-    public function restart() {
+    final public function restart() {
 
         $this->stop();
 
@@ -422,7 +422,7 @@ abstract class Service extends Process {
 
     }
 
-    public function state() {
+    final public function state() {
 
         return $this->state;
 
@@ -436,7 +436,7 @@ abstract class Service extends Process {
      *
      * @param int $timeout
      */
-    protected function sleep($timeout = 0) {
+    final protected function sleep($timeout = 0) {
 
         if(!$this->socket)
             throw new \Exception('Trying to sleep without a socket!');
@@ -505,7 +505,7 @@ abstract class Service extends Process {
     /*
      * Command scheduling
      */
-    public function delay($seconds, $callback, $params = array()) {
+    final public function delay($seconds, $callback, $params = array()) {
 
         if(!is_int($seconds))
             return false;
@@ -539,7 +539,7 @@ abstract class Service extends Process {
 
     }
 
-    public function interval($seconds, $callback, $params = array()) {
+    final public function interval($seconds, $callback, $params = array()) {
 
         if(!is_int($seconds))
             return false;
@@ -575,7 +575,7 @@ abstract class Service extends Process {
 
     }
 
-    public function schedule($date, $callback, $params = array()) {
+    final public function schedule($date, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -612,7 +612,7 @@ abstract class Service extends Process {
 
     }
 
-    public function cron($format, $callback, $params = array()) {
+    final public function cron($format, $callback, $params = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
@@ -646,7 +646,7 @@ abstract class Service extends Process {
 
     }
 
-    public function cancel($id) {
+    final public function cancel($id) {
 
         if(! array_key_exists($id, $this->schedule))
             return FALSE;
@@ -657,13 +657,13 @@ abstract class Service extends Process {
 
     }
 
-    public function signal($event_id, $data){
+    final public function signal($event_id, $data){
 
         return $this->send('SIGNAL', array('service' => $this->name, 'id' => $event_id, 'data' => $data));
 
     }
 
-    protected function send($command, $payload = null) {
+    final protected function send($command, $payload = null) {
 
         try{
 

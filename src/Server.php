@@ -78,6 +78,9 @@ function stdout($level, $message, $job = NULL) {
 
         }
 
+        if(is_array($message) || $message instanceof \stdClass)
+            $message = 'Received ' . gettype($message) . "\n" . print_r($message, true);
+
         echo str_pad($label, 6, ' ', STR_PAD_LEFT) . ' - ' . ($job ? $job . ' - ' : '') . $message . "\n";
 
     }
@@ -1317,6 +1320,8 @@ class Server extends WebSockets {
 
             }
 
+            $payload = null;
+
             $socket_id = intval($socket);
 
             $this->client_lookup[$socket_id] = $client->id;
@@ -1763,21 +1768,21 @@ class Server extends WebSockets {
 
             case 'SUBSCRIBE' :
 
-                $filter = (array_key_exists('filter', $payload) ? $payload['filter'] : NULL);
+                $filter = (property_exists($payload, 'filter') ? $payload->filter : NULL);
 
-                return $this->commandSubscribe($resource, $client, $payload['id'], $filter);
+                return $this->commandSubscribe($resource, $client, $payload->id, $filter);
 
             case 'UNSUBSCRIBE' :
 
-                return $this->commandUnsubscribe($resource, $client, $payload['id']);
+                return $this->commandUnsubscribe($resource, $client, $payload->id);
 
             case 'TRIGGER' :
 
-                $data = (array_key_exists('data', $payload) ? $payload['data'] : NULL);
+                $data = ake($payload, 'data');
 
-                $echo = (array_key_exists('echo', $payload) ? $payload['echo'] : FALSE);
+                $echo = ake($payload, 'echo', false);
 
-                return $this->commandTrigger($resource, $client, $payload['id'], $data, $echo);
+                return $this->commandTrigger($resource, $client, $payload->id, $data, $echo);
 
             case 'PING' :
 
@@ -1785,9 +1790,17 @@ class Server extends WebSockets {
 
             case 'PONG':
 
-                $trip_ms = (microtime(true) - $payload) * 1000;
+                if(is_int($payload)){
 
-                stdout(W_INFO, 'PONG received in ' . $trip_ms . 'ms');
+                    $trip_ms = (microtime(true) - $payload) * 1000;
+
+                    stdout(W_INFO, 'PONG received in ' . $trip_ms . 'ms');
+
+                }else{
+
+                    stdout(W_WARN, 'PONG received with invalid payload!');
+
+                }
 
                 break;
 
@@ -1809,7 +1822,7 @@ class Server extends WebSockets {
 
             case 'DEBUG':
 
-                stdout(W_DEBUG, $payload);
+                stdout(W_DEBUG, $payload->data);
 
                 return true;
 
@@ -1823,9 +1836,9 @@ class Server extends WebSockets {
 
         stdout(W_DEBUG, "SYNC: CLIENT_ID=$client->id OFFSET=$client->offset");
 
-        if (is_array($payload)
-            && array_key_exists('admin_key', $payload)
-            && $payload['admin_key'] === $this->config->admin->key) {
+        if ($payload instanceof \stdClass
+            && property_exists($payload, 'admin_key')
+            && $payload->admin_key === $this->config->admin->key) {
 
             stdout(W_NOTICE, 'Warlock control authorised to ' . $client->id);
 
@@ -1833,12 +1846,12 @@ class Server extends WebSockets {
 
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
-        }elseif(is_array($payload)
-            && array_key_exists('job_id', $payload)
-            && $payload['client_id'] === $client->id
-            && array_key_exists($payload['job_id'], $this->procs)){
+        }elseif($payload instanceof \stdClass
+            && property_exists($payload, 'job_id')
+            && $payload->client_id === $client->id
+            && array_key_exists($payload->job_id, $this->procs)){
 
-            if(!array_key_exists($payload['job_id'], $this->jobQueue)){
+            if(!array_key_exists($payload->job_id, $this->jobQueue)){
 
                 stdout(W_WARN, 'Client tried to sync but job ID does not exist!');
 
@@ -1846,31 +1859,31 @@ class Server extends WebSockets {
 
             }
 
-            if(!array_key_exists($payload['job_id'], $this->procs)){
+            if(!array_key_exists($payload->job_id, $this->procs)){
 
-                stdout(W_ERR, 'Could not find process for job, but process is requesting sync!!!!!', $payload['job_id']);
+                stdout(W_ERR, 'Could not find process for job, but process is requesting sync!!!!!', $payload->job_id);
 
                 return false;
 
             }
 
-            $job =& $this->jobQueue[$payload['job_id']];
+            $job =& $this->jobQueue[$payload->job_id];
 
             if($job['access_key'] !== ake($payload, 'access_key')){
 
-                stdout(W_ERR, 'Service tried to sync with bad access key!', $payload['job_id']);
+                stdout(W_ERR, 'Service tried to sync with bad access key!', $payload->job_id);
 
                 return false;
 
             }
 
-            $this->jobQueue[$payload['job_id']]['client'] = $client;
+            $this->jobQueue[$payload->job_id]['client'] = $client;
 
-            $client->type = $this->procs[$payload['job_id']]['type'];
+            $client->type = $this->procs[$payload->job_id]['type'];
 
-            $client->process = $this->procs[$payload['job_id']];
+            $client->process = $this->procs[$payload->job_id];
 
-            stdout(W_NOTICE, ucfirst($client->type) . ' registered successfully', $payload['job_id']);
+            stdout(W_NOTICE, ucfirst($client->type) . ' registered successfully', $payload->job_id);
 
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
@@ -2169,9 +2182,9 @@ class Server extends WebSockets {
 
         $level = ake($payload, 'level', W_INFO);
 
-        if(is_array($payload['msg'])){
+        if(is_array($payload->msg)){
 
-            foreach($payload['msg'] as $msg){
+            foreach($payload->msg as $msg){
 
                 if(!$this->commandLog($resource, $client, array('level' => $level, 'msg' => $msg)))
                     return false;
@@ -2582,8 +2595,13 @@ class Server extends WebSockets {
 
     private function setJobStatus($job_id, $status) {
 
-        if (!array_key_exists($job_id, $this->jobQueue))
+        if (!array_key_exists($job_id, $this->jobQueue)){
+
+            stdout(W_WARN, 'Unable to cancel non-existent job!', $job_id);
+
             return false;
+
+        }
 
         $this->jobQueue[$job_id]['status'] = $status;
 
