@@ -452,7 +452,7 @@ class Server extends WebSockets {
 
         if ($this->config->admin->key === '0000') {
 
-            $msg = '* USING DEFAULT SYSTEM KEY!!!  PLEASE CONSIDER SETTING sys.key IN warlock config!!! *';
+            $msg = '* USING DEFAULT ADMIN KEY!!!  PLEASE CONSIDER SETTING server.key IN warlock config!!! *';
 
             stdout(W_WARN, str_repeat('*', strlen($msg)));
 
