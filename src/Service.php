@@ -70,11 +70,60 @@ abstract class Service extends Process {
 
         $this->config = ake($config, $this->name);
 
+        date_default_timezone_set(ake($this->config, 'timezone', 'UTC'));
+
     }
 
-    final public function main($params = array()) {
+    private function invokeMethod($method, $params = null){
 
-        if(! $this->start($params))
+        $args = array();
+
+        $initMethod = new \ReflectionMethod($this, $method);
+
+        foreach($initMethod->getParameters() as $parameter){
+
+            if(!($value = ake($params, $parameter->getName())))
+                $value = $parameter->getDefaultValue();
+
+            $args[$parameter->getPosition()] = $value;
+
+        }
+
+        return $initMethod->invokeArgs($this, $args);
+
+    }
+
+    final public function main($params = array(), $dynamic = false) {
+
+        $init = true;
+
+        if(method_exists($this, 'init'))
+            $init = $this->init();
+
+        if($this->state === HAZAAR_SERVICE_INIT) {
+
+            $this->state = (($init === FALSE) ? HAZAAR_SERVICE_ERROR : HAZAAR_SERVICE_READY);
+
+            if($this->state != HAZAAR_SERVICE_READY)
+                return 1;
+
+            $this->state = HAZAAR_SERVICE_RUNNING;
+
+        }
+
+        if($dynamic === true){
+
+            if(!method_exists($this, 'runOnce'))
+                return 5;
+
+            if($this->invokeMethod('runOnce', $params) === false)
+                return 1;
+
+            return 0;
+
+        }
+
+        if(! $this->start())
             return 1;
 
         $this->__sendHeartbeat();
@@ -89,7 +138,7 @@ abstract class Service extends Process {
 
             try{
 
-                $ret = $this->run();
+                $ret = $this->invokeMethod('run', $params);
 
                 if($ret === false)
                     $this->state = HAZAAR_SERVICE_STOPPING;
@@ -329,39 +378,7 @@ abstract class Service extends Process {
      * CONTROL METHODS
      */
 
-    final private function start($params = array()) {
-
-        $init = true;
-
-        if(method_exists($this, 'init')){
-
-            $args = array();
-
-            $initMethod = new \ReflectionMethod($this, 'init');
-
-            foreach($initMethod->getParameters() as $parameter){
-
-                if(!($value = ake($params, $parameter->getName())))
-                    $value = $parameter->getDefaultValue();
-
-                $args[$parameter->getPosition()] = $value;
-
-            }
-
-            $init = $initMethod->invokeArgs($this, $args);
-
-        }
-
-        if($this->state === HAZAAR_SERVICE_INIT) {
-
-            $this->state = (($init === FALSE) ? HAZAAR_SERVICE_ERROR : HAZAAR_SERVICE_READY);
-
-            if($this->state != HAZAAR_SERVICE_READY)
-                return FALSE;
-
-            $this->state = HAZAAR_SERVICE_RUNNING;
-
-        }
+    final private function start() {
 
         if(\Hazaar\Map::is_array($events = $this->config->get('subscribe'))){
 

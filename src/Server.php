@@ -2812,6 +2812,8 @@ class Server extends WebSockets {
                             //If the service is a dynamic service send parameters and cross link the client and process
                             if(ake($job, 'dynamic') === true && array_key_exists('parent', $job)){
 
+                                $payload['dynamic'] = true;
+
                                 //Add any dynamic parameters to the payload object
                                 $payload['params'] = $job['params'];
 
@@ -2991,6 +2993,14 @@ class Server extends WebSockets {
                         } elseif ($status['exitcode'] == 4) {
 
                             stdout(W_ERR, 'Service exited because it lost the control channel.  Restarting.');
+
+                        } elseif ($status['exitcode'] == 5) {
+
+                            stdout(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!');
+
+                            $this->setJobStatus($id, STATUS_ERROR);
+
+                            continue;
 
                         }
 
