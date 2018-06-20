@@ -748,19 +748,8 @@ class Server extends WebSockets {
 
                 $this->services[$name] = $options->toArray();
 
-                if ($options['enabled'] === TRUE){
-
-                    if($options['dynamic'] === TRUE){
-
-                        stdout(W_NOTICE, "Dynamic service ready: $name");
-
-                    }else{
-
-                        $this->serviceEnable($name, $options);
-
-                    }
-
-                }
+                if ($options['enabled'] === TRUE)
+                    $this->serviceEnable($name, $options);
 
             }
 
