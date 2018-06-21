@@ -2175,7 +2175,7 @@ class Server extends WebSockets {
 
             foreach($payload->msg as $msg){
 
-                if(!$this->commandLog($resource, $client, array('level' => $level, 'msg' => $msg)))
+                if(!$this->commandLog($resource, $client, (object)array('level' => $level, 'msg' => $msg)))
                     return false;
 
             }
