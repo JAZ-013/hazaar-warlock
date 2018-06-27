@@ -1811,7 +1811,7 @@ class Server extends WebSockets {
 
             case 'DEBUG':
 
-                stdout(W_DEBUG, $payload->data);
+                stdout(W_DEBUG, ake($payload, 'data'));
 
                 return true;
 
