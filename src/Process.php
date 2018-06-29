@@ -488,13 +488,13 @@ abstract class Process extends WebSockets {
         if(!is_int($level))
             return false;
 
-        return $this->send('LOG', array('level' => $level, 'msg' => $message));
+        return $this->send('LOG', array('level' => $level, 'msg' => 'SERVICE - ' . $this->name . ' - ' . $message));
 
     }
 
     public function debug($data){
 
-        return $this->send('DEBUG', array('data' => $data));
+        return $this->send('DEBUG', array('data' => $data, 'service' => $this->name));
 
     }
 
