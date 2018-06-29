@@ -446,10 +446,14 @@ class Server extends WebSockets {
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
+        if(!$this->config->loaded())
+            throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
+
         if(!$this->config->sys['php_binary'])
             $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
-        date_default_timezone_set($this->config->sys->timezone);
+        if($tz = $this->config->sys->get('timezone'))
+            date_default_timezone_set($tz);
 
         set_log_level($this->config->log->level);
 

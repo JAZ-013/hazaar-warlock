@@ -54,6 +54,9 @@ class Control extends Process {
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
+        if(!$this->config->loaded())
+            throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
+
         if(!$this->config->sys['php_binary'])
             $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
 
