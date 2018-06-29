@@ -2790,6 +2790,7 @@ class Server extends WebSockets {
                             'server_port' => $this->config->server['port'] ,
                             'job_id' => $id,
                             'access_key' => $job['access_key'] = uniqid(),
+                            'timezone' => date_default_timezone_get(),
                             'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
                         );
 

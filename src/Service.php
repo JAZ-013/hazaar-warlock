@@ -70,7 +70,8 @@ abstract class Service extends Process {
 
         $this->config = ake($config, $this->name);
 
-        date_default_timezone_set(ake($this->config, 'timezone', 'UTC'));
+        if($tz = $this->config->get('timezone'))
+            date_default_timezone_set($tz);
 
     }
 
