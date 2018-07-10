@@ -3004,7 +3004,7 @@ class Server extends WebSockets {
 
                         if ($job['retries'] > $this->config->service->restarts) {
 
-                            if($job['dynamic'] === true){
+                            if(array_key_exists('dynamic', $job) && $job['dynamic'] === true){
 
                                 stdout(W_WARN, "Dynamic service '$name' is restarting too often.  Cancelling spawn.");
 
