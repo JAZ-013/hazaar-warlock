@@ -1,8 +1,8 @@
 <?php
 
-namespace Hazaar\Warlock\Server\Socket;
+namespace Hazaar\Warlock\Server;
 
-class Client extends \Hazaar\Warlock\Server\Socket {
+abstract class Socket {
 
     private $log;
 
@@ -92,8 +92,8 @@ class Client extends \Hazaar\Warlock\Server\Socket {
 
         $this->resource = $resource;
 
-        if ($this->username != NULL)
-            $this->log->write(W_NOTICE, "USER: $this->username");
+        //if ($this->username != NULL)
+        //    stdout(W_NOTICE, "USER: $this->username");
 
         if (is_resource($this->resource)) {
 

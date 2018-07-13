@@ -249,8 +249,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->shutdown = time() + $timeout;
 
-        $this->sendAdminEvent('shutdown');
-
         return TRUE;
 
     }
@@ -401,18 +399,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->sockets[0] = $this->master;
 
-        $this->running = TRUE;
-
-        $this->log->write(W_INFO, "Ready for connections...");
-
-        return $this;
-
-    }
-
-    public function run() {
-
-        $this->start = time();
-
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
         if ($services->loaded()) {
@@ -443,9 +429,19 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        file_put_contents($this->pidfile, $this->pid);
+        $this->running = TRUE;
 
-        $this->sendAdminEvent('startup', array(), TRUE);
+        $this->log->write(W_INFO, "Ready for connections...");
+
+        return $this;
+
+    }
+
+    public function run() {
+
+        $this->start = time();
+
+        file_put_contents($this->pidfile, $this->pid);
 
         while($this->running) {
 
@@ -539,41 +535,42 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        if (count($this->procs) > 0) {
+        /*
+         * if (count($this->procs) > 0) {
 
-            $this->log->write(W_NOTICE, 'Terminating running processes');
+        $this->log->write(W_NOTICE, 'Terminating running processes');
 
-            foreach($this->procs as $p) {
+        foreach($this->procs as $p) {
 
-                $this->log->write(W_DEBUG, "TERMINATE: PID=$p[pid]");
+        $this->log->write(W_DEBUG, "TERMINATE: PID=$p[pid]");
 
-                $this->send($p['pipes'][0], 'cancel');
-
-            }
-
-            $this->log->write(W_NOTICE, 'Waiting for processes to exit');
-
-            $start = time();
-
-            while(count($this->procs) > 0) {
-
-                if ($start >= time() + 10) {
-
-                    $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
-
-                    break;
-                }
-
-                $this->processJobs();
-
-                if (count($this->procs) == 0)
-                    break;
-
-                sleep(1);
-
-            }
+        $this->send($p['pipes'][0], 'cancel');
 
         }
+
+        $this->log->write(W_NOTICE, 'Waiting for processes to exit');
+
+        $start = time();
+
+        while(count($this->procs) > 0) {
+
+        if ($start >= time() + 10) {
+
+        $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
+
+        break;
+        }
+
+        $this->processJobs();
+
+        if (count($this->procs) == 0)
+        break;
+
+        sleep(1);
+
+        }
+
+        }*/
 
         $this->log->write(W_NOTICE, 'Closing all connections');
 
@@ -652,19 +649,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $this->stats['clients']++;
 
-            $this->sendAdminEvent('add', array(
-                'type' => 'client',
-                'client' => array(
-                    'id' => $client->id,
-                    'username' => $client->username,
-                    'since' => $client->since,
-                    'ip' => $client->address,
-                    'port' => $client->port,
-                    'type' => $client->type,
-                    'legacy' => $client->isLegacy()
-                )
-            ));
-
         }
 
         // Create a socket -> client lookup entry
@@ -715,11 +699,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             unset($this->clients[$id]);
 
             $this->stats['clients']--;
-
-            $this->sendAdminEvent('remove', array(
-                'type' => 'client',
-                'client' => $id
-            ));
 
             return TRUE;
 
@@ -982,19 +961,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $this->log->write(W_DEBUG, "ADD: CLIENT=$client->id MODE=legacy SOCKET=$socket COUNT=$client->socketCount");
 
-                $this->sendAdminEvent('add', array(
-                    'type' => 'client',
-                    'client' => array(
-                        'id' => $client->id,
-                        'username' => $client->username,
-                        'since' => $client->since,
-                        'ip' => $client->address,
-                        'port' => $client->port,
-                        'type' => $client->type,
-                        'legacy' => $client->isLegacy()
-                    )
-                ));
-
             }
 
             $payload = null;
@@ -1157,8 +1123,8 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
                         foreach($client->jobs as $id => $job){
 
-                            if($job['detach'] !== true)
-                                $this->setJobStatus($id, STATUS_CANCELLED);
+                            if($job->detach !== true)
+                                $job->status = STATUS_CANCELLED;
 
                         }
 
@@ -1546,7 +1512,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $job =& $this->jobQueue[$payload->job_id];
 
-            if($job['access_key'] !== ake($payload, 'access_key')){
+            if($job->access_key !== ake($payload, 'access_key')){
 
                 $this->log->write(W_ERR, 'Service tried to sync with bad access key!', $payload->job_id);
 
@@ -1573,14 +1539,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             return false;
 
         }
-
-        $this->sendAdminEvent('update', array(
-            'type' => 'client',
-            'client' => array(
-                'id' => $client->id,
-                'type' => $client->type
-            )
-        ));
 
         return TRUE;
 
@@ -1782,15 +1740,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             'seen' => ($echo_client ? array() : array($client->id))
         );
 
-        if ($event_id != $this->config->admin->trigger) {
-
-            $this->sendAdminEvent('add', array(
-                'type' => 'event',
-                'event' => $new
-            ));
-
-        }
-
         if($client instanceof Server\Client)
             $this->send($resource, 'OK', NULL, $client->isLegacy());
 
@@ -1892,15 +1841,15 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $service = & $this->services[$name];
 
-        $job = new \Hazaar\Map(array(
+        $this->jobQueue[$job_id] = new Job\Service(array(
             'id' => $job_id,
+            'name' => $name,
             'start' => time(),
             'type' => 'service',
             'application' => array(
                 'path' => APPLICATION_PATH,
                 'env' => APPLICATION_ENV
             ),
-            'service' => $name,
             'status' => STATUS_QUEUED,
             'status_text' => 'queued',
             'tag' => $name,
@@ -1913,8 +1862,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             'parent' => $client,
             'params' => ake($payload, 'params')
         ), $service);
-
-        $this->jobQueue[$job_id] = $job->toArray();
 
         $client->jobs[$job_id] =& $this->jobQueue[$job_id];
 
@@ -1936,7 +1883,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $this->log->write(W_NOTICE, "KILL: SERVICE=$name JOB_ID=$id CLIENT={$client->id}");
 
-            $this->setJobStatus($id, STATUS_CANCELLED);
+            $client->jobs[$id]->status = STATUS_CANCELLED;
 
             unset($client->jobs[$id]);
 
@@ -1984,12 +1931,12 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $this->log->write(W_NOTICE, "SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$client->id}");
 
-                $resource = $job['client']->resource;
+                $resource = $job->client->resource;
 
-                $result = $this->send($resource, 'EVENT', $packet, $job['client']->isLegacy());
+                $result = $this->send($resource, 'EVENT', $packet, $job->client->isLegacy());
 
                 // Disconnect if we are a socket but not a websocket (legacy connection) and the result was negative.
-                if (get_resource_type($resource) == 'Socket' && $job['client']->isLegacy() && $result)
+                if (get_resource_type($resource) == 'Socket' && $job->client->isLegacy() && $result)
                     $this->disconnect($resource);
 
             }
@@ -2028,11 +1975,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $this->stats['subscriptions']++;
 
-            $this->sendAdminEvent('add', array(
-                'type' => 'subscription',
-                'event' => $event_id,
-                'data' => $new
-            ));
         }
 
         return TRUE;
@@ -2073,14 +2015,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                             } else {
 
                                 $this->stats['subscriptions']--;
-
-                                $this->sendAdminEvent('remove', array(
-                                    'type' => 'subscription',
-                                    'event' => $event_id,
-                                    'subscription' => array(
-                                        'client' => $client->id
-                                    )
-                                ));
 
                             }
 
@@ -2192,7 +2126,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->jobQueue[$id] = array(
+        $this->jobQueue[$id] = new Job\Runner(array(
             'id' => $id,
             'start' => $when,
             'type' => 'job',
@@ -2204,24 +2138,13 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             'params' => ake($function, 'params', array()),
             'tag' => $tag,
             'status' => STATUS_QUEUED,
-            'status_text' => 'queued',
             'retries' => 0,
             'expire' => 0
-        );
+        ));
 
         $this->log->write(W_NOTICE, 'Job added to queue', $id);
 
         $this->stats['queue']++;
-
-        $bad_keys = array(
-            'function'
-        );
-
-        $this->sendAdminEvent('add', array(
-            'type' => 'job',
-            'id' => $id,
-            'job' => array_diff_key($this->jobQueue[$id], array_flip($bad_keys))
-        ));
 
         return $id;
 
@@ -2259,85 +2182,12 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->setJobStatus($job_id, STATUS_CANCELLED);
+        $this->jobQueue[$job_id] = STATUS_CANCELLED;
 
         // Expire the job in 30 seconds
         $this->jobQueue[$job_id]['expire'] = time() + $this->config->job->expire;
 
         return TRUE;
-
-    }
-
-    private function setJobStatus($job_id, $status) {
-
-        if (!array_key_exists($job_id, $this->jobQueue)){
-
-            $this->log->write(W_WARN, 'Unable to cancel non-existent job!', $job_id);
-
-            return false;
-
-        }
-
-        $this->jobQueue[$job_id]['status'] = $status;
-
-        $this->jobQueue[$job_id]['status_text'] = $this->getJobStatus($job_id);
-
-        $this->log->write(W_NOTICE, strtoupper($this->jobQueue[$job_id]['status_text']), $job_id);
-
-        $this->sendAdminEvent('update', array(
-            'type' => 'job',
-            'id' => $job_id,
-            'job' => $this->jobQueue[$job_id]
-        ));
-
-        return true;
-
-    }
-
-    private function getJobStatus($job_id) {
-
-        if ($this->config->event->queue_timeout)
-            if (array_key_exists($job_id, $this->jobQueue)) {
-
-                switch ($this->jobQueue[$job_id]['status']) {
-
-                    case STATUS_QUEUED :
-                        $ret = 'queued';
-                        break;
-
-                    case STATUS_QUEUED_RETRY :
-                        $ret = 'queued (retrying)';
-                        break;
-
-                    case STATUS_STARTING :
-                        $ret = 'starting';
-                        break;
-
-                    case STATUS_RUNNING :
-                        $ret = 'running';
-                        break;
-
-                    case STATUS_COMPLETE :
-                        $ret = 'complete';
-                        break;
-
-                    case STATUS_CANCELLED :
-                        $ret = 'cancelled';
-                        break;
-
-                    case STATUS_ERROR :
-                        $ret = 'error';
-                        break;
-
-                    default :
-                        $ret = 'invalid';
-                        break;
-                }
-
-                return $ret;
-            }
-
-        return NULL;
 
     }
 
@@ -2348,475 +2198,301 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
      */
     private function processJobs() {
 
-        /*
-         * Check the queue for any jobs to run
-         */
-        foreach($this->jobQueue as $id => &$job) {
+        foreach($this->jobQueue as $id => &$job){
 
-            try{
+            //Jobs that are queued and ready to execute or ready to restart an execution retry.
+            if ($job->ready()){
 
                 $now = time();
 
-                if (($job['status'] == STATUS_QUEUED || $job['status'] == STATUS_QUEUED_RETRY) && $now >= $job['start']) {
+                if ($job instanceof Job\Runner){
 
-                    if (count($this->procs) >= $this->config->exec->limit) {
+                    if ($job->retries > 0)
+                        $this->stats['retries']++;
 
-                        $this->stats['limitHits']++;
+                    $this->rrd->setValue('jobs', 1);
 
-                        $this->log->write(W_WARN, 'Process limit of ' . $this->config->exec->limit . ' processes reached!');
+                    $this->log->write(W_INFO, "Starting job execution", $id);
 
-                        break;
+                    $this->log->write(W_NOTICE, 'NOW:  ' . date('c', $now), $id);
 
-                    }
+                    $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $job->start), $id);
 
-                    if ($job['type'] != 'service') {
+                    if ($job->retries > 0)
+                        $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
 
-                        if ($job['retries'] > 0)
-                            $this->stats['retries']++;
+                    $late = $now - $job->start;
 
-                        $this->rrd->setValue('jobs', 1);
+                    $job->late = $late;
 
-                        $this->log->write(W_INFO, "Starting job execution", $id);
+                    if ($late > 0) {
 
-                        $this->log->write(W_NOTICE, 'NOW:  ' . date('c', $now), $id);
+                        $this->log->write(W_DEBUG, "LATE: $late seconds", $id);
 
-                        $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $job['start']), $id);
-
-                        if ($job['retries'] > 0)
-                            $this->log->write(W_DEBUG, 'RETRIES: ' . $job['retries'], $id);
-
-                        $late = $now - $job['start'];
-
-                        $job['late'] = $late;
-
-                        if ($late > 0) {
-
-                            $this->log->write(W_DEBUG, "LATE: $late seconds", $id);
-
-                            $this->stats['lateExecs']++;
-
-                        }
-
-                        if (array_key_exists('params', $job) && count($job['params']) > 0){
-
-                            $pout = 'PARAMS: ';
-
-                            foreach($job['params'] as $param)
-                                $pout .= var_export($param, true);
-
-                            $this->log->write(W_NOTICE, $pout, $id);
-
-                        }
+                        $this->stats['lateExecs']++;
 
                     }
 
-                    /*
-                     * Open a new process to php CLI and pipe the function out to it for execution
-                     */
-                    $descriptorspec = array(
-                        0 => array('pipe', 'r'),
-                        1 => array('pipe', 'w'),
-                        2 => array('pipe', 'w')
+                    if (is_array($job->params) && count($job->params) > 0){
+
+                        $pout = 'PARAMS: ';
+
+                        foreach($job->params as $param)
+                            $pout .= var_export($param, true);
+
+                        $this->log->write(W_NOTICE, $pout, $id);
+
+                    }
+
+                }
+
+                /*
+                 * Open a new process to php CLI and pipe the function out to it for execution
+                 */
+                $process = new Process(array(
+                    'id' => $id,
+                    'type' => $job->type,
+                    'tag' => $job->tag,
+                    'application' => $job->application
+                ), $this->config);
+
+                if($process->is_running()) {
+
+                    $job->process = $process;
+
+                    $job->status = STATUS_RUNNING;
+
+                    $this->stats['processes']++;
+
+                    $payload = array(
+                        'job_id' => $id,
+                        'application_name' => APPLICATION_NAME,
+                        'timezone' => date_default_timezone_get(),
+                        'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
                     );
 
-                    $env = array_filter(array_merge($_SERVER, array(
-                        'APPLICATION_PATH' => $job['application']['path'],
-                        'APPLICATION_ENV' => $job['application']['env'],
-                        'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
-                        'HAZAAR_SID' => $this->config->sys->id,
-                        'USERNAME' => ake($_SERVER, 'USERNAME')
-                    )), 'is_string');
+                    if ($job instanceof Job\Service) {
 
-                    $cmd = realpath(LIBRAY_PATH . '/Runner.php');
+                        $name = $job->name;
 
-                    if (!$cmd || !file_exists($cmd))
-                        throw new \Exception('Application command runner could not be found!');
+                        $payload['name'] = $name;
 
-                    $php_binary = $this->config->sys['php_binary'];
+                        if($config = $job->config)
+                            $payload['config'] = array_merge($payload['config'], $config);
 
-                    if (!file_exists($php_binary))
-                        throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
+                        $process->write($this->protocol->encode('service', $payload));
 
-                    if (!is_executable($php_binary))
-                        throw new \Exception('The PHP CLI binary exists but is not executable!');
+                    } elseif ($job instanceof Job\Runner) {
 
-                    $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
+                        $payload['function'] = $job->function;
 
-                    $this->log->write(W_DEBUG, 'Exec: ' . $proc_cmd);
+                        if ($job->has('params') && is_array($job->params) && count($job->params) > 0)
+                            $payload['params'] = $job->params;
 
-                    $process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
-
-                    if (is_resource($process)) {
-
-                        $status = proc_get_status($process);
-
-                        $this->log->write(W_NOTICE, 'PID: ' . $status['pid'], $id);
-
-                        $this->procs[$id] = array(
-                           'id' => $id,
-                           'type' => $job['type'],
-                           'start' => time(),
-                           'pid' => $status['pid'],
-                           'tag' => $job['tag'],
-                           'env' => $job['application']['env'],
-                           'process' => $process,
-                           'pipes' => $pipes
-                        );
-
-                        $this->stats['processes']++;
-
-                        $this->setJobStatus($id, STATUS_RUNNING);
-
-                        $output = '';
-
-                        $payload = array(
-                            'application_name' => APPLICATION_NAME,
-                            'server_port' => $this->config->server['port'] ,
-                            'job_id' => $id,
-                            'access_key' => $job['access_key'] = uniqid(),
-                            'timezone' => date_default_timezone_get(),
-                            'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
-                        );
-
-                        if ($job['type'] == 'service') {
-
-                            $name = $job['service'];
-
-                            $payload['name'] = $job['service'];
-
-                            if($config = ake($job, 'config'))
-                                $payload['config'] = array_merge($payload['config'], $config);
-
-                            //If the service is a dynamic service send parameters and cross link the client and process
-                            if(ake($job, 'dynamic') === true && array_key_exists('parent', $job)){
-
-                                $payload['dynamic'] = true;
-
-                                //Add any dynamic parameters to the payload object
-                                $payload['params'] = $job['params'];
-
-                                //Link the Server\Client object to the process as a 'parent'
-                                $this->procs[$id]['parent'] = $job['parent'];
-
-                            }else{
-
-                                $this->services[$name]['status'] = 'running';
-
-                                $this->sendAdminEvent('update', array(
-                                    'type' => 'service',
-                                    'service' => $this->services[$name]
-                                ));
-
-                            }
-
-                            $output = $this->protocol->encode('service', $payload);
-
-                        } elseif ($job['type'] == 'job') {
-
-                            $payload['function'] = $job['function'];
-
-                            if (array_key_exists('params', $job) && is_array($job['params']) && count($job['params']) > 0)
-                                $payload['params'] = $job['params'];
-
-                            $output = $this->protocol->encode('exec', $payload);
-
-                        }
-
-                        fwrite($pipes[0], $output);
-
-                        fclose($pipes[0]); //Close the pipe to signal the end of the input
-
-                        $bad_keys = array(
-                            'process',
-                            'pipes'
-                        );
-
-                        $this->sendAdminEvent('add', array(
-                            'type' => 'process',
-                            'id' => $id,
-                            'process' => array_diff_key($this->procs[$id], array_flip($bad_keys))
-                        ));
-
-                    } else {
-
-                        $this->setJobStatus($id, STATUS_ERROR);
-
-                        $job['expire'] = time() + $this->config->job->expire;
-                        // Expire the job when the queue expiry is reached
-
-                        $this->log->write(W_ERR, 'Could not create child process.  Execution failed', $id);
-
-                    }
-
-                    if (array_key_exists('tag', $job) && $job['tag'])
-                        unset($this->tags[$job['tag']]);
-
-                    $this->stats['processed']++;
-
-                } elseif ($job['status'] == STATUS_ERROR || ($job['status'] == STATUS_COMPLETE && $job['expire'] > 0)) {
-
-                    if (!array_key_exists('expire', $job) || time() >= $job['expire']) {
-
-                        $this->log->write(W_NOTICE, 'Cleaning up', $id);
-
-                        $this->stats['queue']--;
-
-                        $this->sendAdminEvent('remove', array(
-                            'type' => 'job',
-                            'id' => $id
-                        ));
-
-                        if ($job['type'] == 'service')
-                            unset($this->services[$job['service']]['job']);
-
-                        unset($this->jobQueue[$id]);
-
-                    }
-
-                }
-
-            }
-            catch(\Exception $e){
-
-                $this->log->write(W_ERR, $e->getMessage());
-
-                $job['status'] = STATUS_ERROR;
-
-            }
-
-        }
-
-        /*
-         * Check running processes
-         */
-        foreach($this->procs as $id => &$proc) {
-
-            if (!array_key_exists($id, $this->jobQueue)) {
-
-                $this->log->write(W_ERR, 'Process found that has no job queue entry!');
-
-                proc_terminate($proc['process']);
-
-                unset($this->procs[$id]);
-
-                continue;
-
-            }
-
-            $job = & $this->jobQueue[$id];
-
-            $status = proc_get_status($proc['process']);
-
-            if ($status['running'] === FALSE) {
-
-                $this->stats['processes']--;
-
-                unset($this->procs[$id]);
-
-                $this->sendAdminEvent('remove', array(
-                    'type' => 'process',
-                    'id' => $id
-                ));
-
-                //Make sure we close all the pipes
-                foreach($proc['pipes'] as $sid => $pipe) {
-
-                    //Skip the STDIN pipe for this process as it is already closed by now.
-                    if($sid == 0)
-                        continue;
-
-                    if ($input = stream_get_contents($pipe))
-                        echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30) . "\n";
-
-                    fclose($pipe);
-
-                }
-
-                /**
-                 * Process a Service shutdown.
-                 */
-                if ($proc['type'] == 'service') {
-
-                    $name = $job['service'];
-
-                    $this->services[$name]['status'] = 'stopped';
-
-                    $this->sendAdminEvent('update', array(
-                        'type' => 'service',
-                        'service' => $this->services[$name]
-                    ));
-
-                    $this->log->write(W_DEBUG, "SERVICE=$name EXIT=$status[exitcode]");
-
-                    if ($status['exitcode'] > 0 && $job['status'] !== STATUS_CANCELLED) {
-
-                        $this->log->write(W_ERR, "Service '$name' returned status code $status[exitcode]");
-
-                        if ($status['exitcode'] == 2) {
-
-                            $this->log->write(W_ERR, 'Service failed to start because service class does not exist.  Disabling service.');
-
-                            $this->setJobStatus($id, STATUS_ERROR);
-
-                            continue;
-
-                        } elseif ($status['exitcode'] == 3) {
-
-                            $this->log->write(W_ERR, 'Service failed to start because it has missing required modules.  Disabling service.');
-
-                            $this->setJobStatus($id, STATUS_ERROR);
-
-                            continue;
-
-                        } elseif ($status['exitcode'] == 4) {
-
-                            $this->log->write(W_ERR, 'Service exited because it lost the control channel.  Restarting.');
-
-                        } elseif ($status['exitcode'] == 5) {
-
-                            $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!');
-
-                            $this->setJobStatus($id, STATUS_ERROR);
-
-                            continue;
-
-                        }
-
-                        $job['retries']++;
-
-                        $this->setJobStatus($id, STATUS_QUEUED_RETRY);
-
-                        if ($job['retries'] > $this->config->service->restarts) {
-
-                            if(array_key_exists('dynamic', $job) && $job['dynamic'] === true){
-
-                                $this->log->write(W_WARN, "Dynamic service '$name' is restarting too often.  Cancelling spawn.");
-
-                                $this->cancelJob($job['id']);
-
-                            }else{
-
-                                $this->log->write(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
-
-                                $job['start'] = time() + $this->config->service->disable;
-
-                                $job['retries'] = 0;
-
-                                $job['expire'] = 0;
-
-                            }
-
-                        } else {
-
-                            $this->log->write(W_NOTICE, "Restarting service '$name'. ({$job['retries']})");
-
-                            if (array_key_exists($job['service'], $this->services))
-                                $this->services[$job['service']]['restarts']++;
-
-                        }
-
-                    } elseif ($job['respawn'] == TRUE && $job['status'] == STATUS_RUNNING) {
-
-                        $this->log->write(W_NOTICE, "Respawning service '$name' in " . $job['respawn_delay'] . " seconds.");
-
-                        $job['start'] = time() + $job['respawn_delay'];
-
-                        $this->setJobStatus($id, STATUS_QUEUED);
-
-                        if (array_key_exists($job['service'], $this->services))
-                            $this->services[$job['service']]['restarts']++;
-
-                    } else {
-
-                        $this->setJobStatus($id, STATUS_COMPLETE);
-
-                        // Expire the job in 30 seconds
-                        $job['expire'] = time();
+                        $process->write($this->protocol->encode('exec', $payload));
 
                     }
 
                 } else {
 
-                    $this->log->write(W_NOTICE, "Process exited with return code: " . $status['exitcode'], $id);
+                    $job->status = STATUS_ERROR;
 
-                    if ($status['exitcode'] > 0) {
+                    // Expire the job when the queue expiry is reached
+                    $job->expire = time() + $this->config->job->expire;
 
-                        $this->log->write(W_WARN, 'Execution completed with error.', $id);
+                    $this->log->write(W_ERR, 'Could not create child process.  Execution failed', $id);
 
-                        if ($job['retries'] >= $this->config->job->retries) {
+                }
 
-                            $this->log->write(W_ERR, 'Cancelling job due to too many retries.', $id);
+            } elseif ($job->expired()) { //Clean up any expired jobs (completed or errored)
 
-                            $this->setJobStatus($id, STATUS_ERROR);
+                $this->log->write(W_NOTICE, 'Cleaning up', $id);
 
-                            $this->stats['failed']++;
+                $this->stats['queue']--;
+
+                if ($job instanceof Job\Service)
+                    unset($this->services[$job->service]['job']);
+
+                unset($this->jobQueue[$id]);
+
+            }elseif($job->status === STATUS_RUNNING){
+
+                $status = $job->process->status;
+
+                if ($status['running'] === FALSE) {
+
+                    $this->stats['processes']--;
+
+                    $job->process->close();
+
+                    /**
+                     * Process a Service shutdown.
+                     */
+                    if ($job instanceof Job\Service) {
+
+                        $name = $job->name;
+
+                        $this->services[$name]['status'] = 'stopped';
+
+                        $this->log->write(W_DEBUG, "SERVICE=$name EXIT=$status[exitcode]");
+
+                        if ($status['exitcode'] > 0 && $job->status !== STATUS_CANCELLED) {
+
+                            $this->log->write(W_ERR, "Service '$name' returned status code $status[exitcode]");
+
+                            if ($status['exitcode'] == 2) {
+
+                                $this->log->write(W_ERR, 'Service failed to start because service class does not exist.  Disabling service.');
+
+                                $job->status = STATUS_ERROR;
+
+                                continue;
+
+                            } elseif ($status['exitcode'] == 3) {
+
+                                $this->log->write(W_ERR, 'Service failed to start because it has missing required modules.  Disabling service.');
+
+                                $job->status = STATUS_ERROR;
+
+                                continue;
+
+                            } elseif ($status['exitcode'] == 4) {
+
+                                $this->log->write(W_ERR, 'Service exited because it lost the control channel.  Restarting.');
+
+                            } elseif ($status['exitcode'] == 5) {
+
+                                $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!');
+
+                                $job->status = STATUS_ERROR;
+
+                                continue;
+
+                            }
+
+                            $job->retries++;
+
+                            $job->status = STATUS_QUEUED_RETRY;
+
+                            if ($job->retries > $this->config->service->restarts) {
+
+                                if($job->dynamic === true){
+
+                                    $this->log->write(W_WARN, "Dynamic service '$name' is restarting too often.  Cancelling spawn.");
+
+                                    $this->cancelJob($job->id);
+
+                                }else{
+
+                                    $this->log->write(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
+
+                                    $job->start = time() + $this->config->service->disable;
+
+                                    $job->retries = 0;
+
+                                    $job->expire = 0;
+
+                                }
+
+                            } else {
+
+                                $this->log->write(W_NOTICE, "Restarting service '$name'. ({$job->retries})");
+
+                                if (array_key_exists($job->service, $this->services))
+                                    $this->services[$job->service]['restarts']++;
+
+                            }
+
+                        } elseif ($job->respawn == TRUE && $job->status == STATUS_RUNNING) {
+
+                            $this->log->write(W_NOTICE, "Respawning service '$name' in " . $job->respawn_delay . " seconds.");
+
+                            $job->start = time() + $job->respawn_delay;
+
+                            $job->status = STATUS_QUEUED;
+
+                            if (array_key_exists($job->service, $this->services))
+                                $this->services[$job->service]['restarts']++;
 
                         } else {
 
-                            $this->log->write(W_NOTICE, 'Re-queuing job for execution.', $id);
+                            $job->status = STATUS_COMPLETE;
 
-                            $this->setJobStatus($id, STATUS_QUEUED_RETRY);
-
-                            $job['start'] = time() + $this->config->job->retry;
-
-                            $job['retries']++;
+                            // Expire the job in 30 seconds
+                            $job->expire = time();
 
                         }
 
                     } else {
 
-                        $this->log->write(W_INFO, 'Execution completed successfully.', $id);
+                        $this->log->write(W_NOTICE, "Process exited with return code: " . $status['exitcode'], $id);
 
-                        $this->stats['execs']++;
+                        if ($status['exitcode'] > 0) {
 
-                        $this->setJobStatus($id, STATUS_COMPLETE);
+                            $this->log->write(W_WARN, 'Execution completed with error.', $id);
 
-                        // Expire the job in 30 seconds
-                        $job['expire'] = time() + $this->config->job->expire;
+                            if ($job->retries >= $this->config->job->retries) {
+
+                                $this->log->write(W_ERR, 'Cancelling job due to too many retries.', $id);
+
+                                $job->status = STATUS_ERROR;
+
+                                $this->stats['failed']++;
+
+                            } else {
+
+                                $this->log->write(W_NOTICE, 'Re-queuing job for execution.', $id);
+
+                                $job->status = STATUS_QUEUED_RETRY;
+
+                                $job->start = time() + $this->config->job->retry;
+
+                                $job->retries++;
+
+                            }
+
+                        } else {
+
+                            $this->log->write(W_INFO, 'Execution completed successfully.', $id);
+
+                            $this->stats['execs']++;
+
+                            $job->status = STATUS_COMPLETE;
+
+                            // Expire the job in 30 seconds
+                            $job->expire = time() + $this->config->job->expire;
+
+                        }
+
+                    }
+
+                    $job->process = null;
+
+                } elseif ($job->status === STATUS_CANCELLED) {
+
+                    $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
+
+                    $job->process->terminate();
+
+                } elseif ($job instanceof Job\Runner && $job->timeout()) {
+
+                    $this->log->write(W_WARN, "Process taking too long to execute - Attempting to kill it.", $id);
+
+                    if ($job->process->terminate()) {
+
+                        $this->log->write(W_DEBUG, 'Terminate signal sent.', $id);
+
+                    } else {
+
+                        $this->log->write(W_ERR, 'Failed to send terminate signal.', $id);
 
                     }
 
                 }
 
-                proc_close($proc['process']);
-
-            } elseif ($job['status'] == STATUS_CANCELLED) {
-
-                $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
-
-                if(substr(PHP_OS, 0, 3) == 'WIN')
-                    exec('taskkill /F /T /PID ' . $proc['pid']);
-                else
-                    proc_terminate($proc['process']);
-
-            } elseif ($proc['type'] != 'service' && time() >= ($proc['start'] + $this->config->exec->timeout)) {
-
-                $this->log->write(W_WARN, "Process taking too long to execute - Attempting to kill it.", $id);
-
-                if (proc_terminate($proc['process'])) {
-
-                    foreach($proc['pipes'] as $pipe)
-                        fclose($pipe);
-
-                    $proc['term'] = TRUE;
-
-                    $this->log->write(W_DEBUG, 'Terminate signal sent.', $id);
-
-                } else {
-
-                    $this->log->write(W_ERR, 'Failed to send terminate signal.', $id);
-
-                }
-
-            } elseif ($status['running'] === TRUE) {
-
-                //DO nothing and let it run!
-
             }
 
         }
-
-        return TRUE;
 
     }
 
@@ -2839,11 +2515,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                         if ($event_id != $this->config->admin->trigger) {
 
                             $this->log->write(W_DEBUG, "EXPIRE: NAME=$event_id TRIGGER=$id");
-
-                            $this->sendAdminEvent('remove', array(
-                                'type' => 'event',
-                                'id' => $id
-                            ));
 
                         }
 
@@ -3105,35 +2776,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
     }
 
-    private function sendAdminEvent($command, $data = array(), $force_queue = FALSE) {
-
-        $event = $this->config->admin->trigger;
-
-        //Force queue will trigger the event even if nothing is subscribed.
-        if ($force_queue === FALSE && !array_key_exists($event, $this->waitQueue))
-            return FALSE;
-
-        $trigger_id = uniqid();
-
-        $status = $this->getStatus(FALSE);
-
-        $this->eventQueue[$event][$trigger_id] = array(
-            'id' => $event,
-            'when' => time(),
-            'data' => array(
-                'command' => $command,
-                'args' => $data,
-                'status' => $status
-            )
-        );
-
-        // Check to see if there are any clients waiting for this event and send notifications to them all.
-        $this->processSubscriptionQueue($event, $trigger_id);
-
-        return TRUE;
-
-    }
-
     private function serviceEnable($name, $options = null) {
 
         if (!array_key_exists($name, $this->services))
@@ -3145,48 +2787,25 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $service['job'] = $job_id = $this->getJobId();
 
-        $job = new \Hazaar\Map(array(
+        $this->jobQueue[$job_id] = new Job\Service(array(
             'id' => $job_id,
+            'name' => $name,
             'start' => time(),
             'type' => 'service',
+            'enabled' => true,
             'application' => array(
                 'path' => APPLICATION_PATH,
                 'env' => APPLICATION_ENV
             ),
-            'service' => $name,
             'status' => STATUS_QUEUED,
             'status_text' => 'queued',
             'tag' => $name,
-            'enabled' => TRUE,
             'retries' => 0,
-            'respawn' => FALSE,
+            'respawn' => false,
             'respawn_delay' => 5
         ), $service);
 
-        $service['enabled'] = TRUE;
-
-        $service['status'] = 'starting';
-
-        $service['restarts'] = 0;
-
-        $service['last_heartbeat'] = NULL;
-
-        $service['heartbeats'] = 0;
-
-        $this->jobQueue[$job_id] = $job->toArray();
-
-        $this->sendAdminEvent('update', array(
-            'type' => 'service',
-            'service' => $service
-        ));
-
         $this->stats['queue']++;
-
-        $this->sendAdminEvent('add', array(
-            'type' => 'job',
-            'id' => $job_id,
-            'job' => $this->jobQueue[$job_id]
-        ));
 
         return TRUE;
 
@@ -3204,13 +2823,11 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
-        $service['enabled'] = FALSE;
-
-        $service['status'] = 'stopping';
+        $service['enabled'] = false;
 
         if ($job_id = ake($service, 'job')) {
 
-            $this->setJobStatus($job_id, STATUS_CANCELLED);
+            $this->jobQueue[$job_id]->status = STATUS_CANCELLED;
 
             $this->jobQueue[$job_id]['expire'] = time() + $this->config->job->expire;
 
@@ -3223,11 +2840,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
             }
 
         }
-
-        $this->sendAdminEvent('update', array(
-            'type' => 'service',
-            'service' => $service
-        ));
 
         return TRUE;
 
