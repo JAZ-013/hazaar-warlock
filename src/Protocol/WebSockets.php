@@ -8,7 +8,7 @@
  * @package     Socket
  */
 
-namespace Hazaar\Warlock;
+namespace Hazaar\Warlock\Protocol;
 
 abstract class WebSockets {
 

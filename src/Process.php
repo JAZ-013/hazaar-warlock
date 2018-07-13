@@ -7,7 +7,7 @@ namespace Hazaar\Warlock;
 
 require_once('Constants.php');
 
-abstract class Process extends WebSockets {
+abstract class Process extends Protocol\WebSockets {
 
     protected $id;
 

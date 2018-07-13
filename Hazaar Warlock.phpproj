@@ -22,6 +22,7 @@
     <Compile Include="src\Container.php" />
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Process.php" />
+    <Compile Include="src\Server\Server.php" />
     <Compile Include="src\View\Helper\Warlock.php" />
     <Compile Include="src\Control.php" />
     <Compile Include="src\Server.php" />
@@ -35,6 +36,7 @@
     <Folder Include="libs\console\css\" />
     <Folder Include="libs\console\images\" />
     <Folder Include="libs\console\js\" />
+    <Folder Include="src\Server\" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />
