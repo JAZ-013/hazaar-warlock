@@ -457,9 +457,6 @@ abstract class Service extends Process {
      */
     final protected function sleep($timeout = 0) {
 
-        if(!$this->socket)
-            throw new \Exception('Trying to sleep without a socket!');
-
         $start = microtime(true);
 
         $slept = FALSE;
@@ -690,6 +687,8 @@ abstract class Service extends Process {
 
         }
         catch(\Exception $e){
+
+            echo "SOCKET ERROR!\n";
 
             //We have lost the control channel so we must die!
             exit(4);

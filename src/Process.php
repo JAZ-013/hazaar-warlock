@@ -297,7 +297,7 @@ abstract class Process extends Protocol\WebSockets {
 
         $len = strlen($frame);
 
-        @$bytes_sent = socket_write($this->socket, $frame, $len);
+        $bytes_sent = @socket_write($this->socket, $frame, $len);
 
         if($bytes_sent === -1 || $bytes_sent === FALSE) {
 
@@ -315,9 +315,6 @@ abstract class Process extends Protocol\WebSockets {
 
     protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
-        if(! $this->socket)
-            return FALSE;
-
         //Process any frames sitting in the local frame buffer first.
         while($frame = $this->processFrame()){
 
@@ -327,6 +324,12 @@ abstract class Process extends Protocol\WebSockets {
             return $this->protocol->decode($frame, $payload);
 
         }
+
+        if(!$this->socket)
+            exit(4);
+
+        if(socket_get_option($this->socket, SOL_SOCKET, SO_ERROR) > 0)
+            exit(4);
 
         $read = array(
             $this->socket
