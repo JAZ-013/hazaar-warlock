@@ -20,7 +20,7 @@ namespace Hazaar\Warlock;
  *
  * @module      warlock
  */
-abstract class Service {
+abstract class Service extends Process {
 
     protected $name;
 
@@ -325,6 +325,7 @@ abstract class Service {
 
         $status = array(
             'pid'        => getmypid(),
+            'job_id'     => $this->job_id,
             'name'       => $this->name,
             'start'      => $this->start,
             'state_code' => $this->state,
@@ -681,19 +682,21 @@ abstract class Service {
 
     }
 
-    protected function send($command, $payload = null) {
+    final protected function send($command, $payload = null) {
 
-        if(!($packet = $this->protocol->encode($command, $payload)))
-            return false;
+        try{
 
-        $frame = $this->frame($packet, 'text');
+            return parent::send($command, $payload);
 
-        echo $frame;
+        }
+        catch(\Exception $e){
 
-        return TRUE;
+            //We have lost the control channel so we must die!
+            exit(4);
+
+        }
 
     }
 
 }
-
 

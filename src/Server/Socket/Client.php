@@ -62,12 +62,6 @@ class Client extends \Hazaar\Warlock\Server\Socket {
     public $subscriptions = array();
 
     /**
-     * If the client has an associated process.  ie: a service
-     * @var array The proccess array
-     */
-    public $process;
-
-    /**
      * If the client has any child jobs
      * @var mixed
      */

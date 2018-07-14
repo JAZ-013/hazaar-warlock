@@ -32,6 +32,8 @@ abstract class Process extends Protocol\WebSockets {
 
     public    $socket_last_error = null;
 
+    protected $job_id;
+
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct(array('warlock'));
@@ -106,6 +108,8 @@ abstract class Process extends Protocol\WebSockets {
 
         //If we have a job_id and access_key we can register as a control channel
         if($job_id && $access_key){
+
+            $this->job_id = $job_id;
 
             $this->send('SYNC', array(
                 'client_id' => $this->id,

@@ -8,6 +8,7 @@ class Service extends \Hazaar\Warlock\Server\Job {
 
         return array(
             'name' => 'string',
+            'type' => array('value' => 'service'),
             'dynamic' => array(
                 'type' => 'boolean',
                 'default' => false

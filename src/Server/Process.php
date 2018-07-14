@@ -123,19 +123,13 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
-    public function write($output){
+    public function start($output){
 
         $this->log->write(W_DECODE, 'OUT -> ' . $output);
 
         fwrite($this->pipes[0], $output);
 
-        //fclose($this->pipes[0]);
-
-    }
-
-    public function read(){
-
-        return fread($this->pipes[1], 1024);
+        fclose($this->pipes[0]);
 
     }
 

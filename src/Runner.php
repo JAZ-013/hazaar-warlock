@@ -11,4 +11,4 @@ include APPLICATION_PATH . '/../vendor/autoload.php';
 // Create application, bootstrap, and run
 $application = new \Hazaar\Application(APPLICATION_ENV);
 
-$application->bootstrap(TRUE)->runSTDIN();
+$application->bootstrap(TRUE)->runStdin();

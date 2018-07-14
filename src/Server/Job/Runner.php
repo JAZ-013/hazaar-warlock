@@ -7,6 +7,7 @@ class Runner extends \Hazaar\Warlock\Server\Job {
     public function init(){
 
         return array(
+            'type' => array('value' => 'runner'),
             'function' => array(
                 'type' => 'string'
             )

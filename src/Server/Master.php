@@ -524,8 +524,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $this->rrd->setValue('services', $count);
 
-                $this->rrd->setValue('processes', count($this->procs));
-
                 if ($this->rrd->update())
                     gc_collect_cycles();
 
@@ -580,8 +578,6 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
         $this->sockets = array();
 
         $this->log->write(W_NOTICE, 'Cleaning up');
-
-        $this->procs = array();
 
         $this->jobQueue = array();
 
@@ -1492,23 +1488,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
         }elseif($payload instanceof \stdClass
             && property_exists($payload, 'job_id')
             && $payload->client_id === $client->id
-            && array_key_exists($payload->job_id, $this->procs)){
-
-            if(!array_key_exists($payload->job_id, $this->jobQueue)){
-
-                $this->log->write(W_WARN, 'Client tried to sync but job ID does not exist!');
-
-                return false;
-
-            }
-
-            if(!array_key_exists($payload->job_id, $this->procs)){
-
-                $this->log->write(W_ERR, 'Could not find process for job, but process is requesting sync!!!!!', $payload->job_id);
-
-                return false;
-
-            }
+            && array_key_exists($payload->job_id, $this->jobQueue)){
 
             $job =& $this->jobQueue[$payload->job_id];
 
@@ -1520,11 +1500,11 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             }
 
-            $this->jobQueue[$payload->job_id]['client'] = $client;
+            $job->client = $client;
 
-            $client->type = $this->procs[$payload->job_id]['type'];
+            $client->type = $job->type;
 
-            $client->process = $this->procs[$payload->job_id];
+            $client->jobs[$job->id] = $job;
 
             $this->log->write(W_NOTICE, ucfirst($client->type) . ' registered successfully', $payload->job_id);
 
@@ -1569,7 +1549,9 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             }
 
-            if(!$client->process){
+            $job = ake($client->jobs, $payload->job_id);
+
+            if(!$job){
 
                 $this->log->write(W_WARN, 'Service status received for client with no job ID');
 
@@ -1577,7 +1559,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
             }
 
-            $service = ake($this->jobQueue[$client->process['id']], 'service');
+            $service = ake($job, 'name');
 
             if(!array_key_exists($service, $this->services)){
 
@@ -2161,31 +2143,31 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
         if (array_key_exists('tag', $this->jobQueue[$job_id]))
             unset($this->tags[$this->jobQueue[$job_id]['tag']]);
 
+        $job =& $this->jobQueue[$job_id];
+
         /**
          * Stop the job if it is currently running
          */
-        if ($this->jobQueue[$job_id]['status'] == STATUS_RUNNING) {
+        if ($job->status == STATUS_RUNNING) {
 
-            $type = $this->jobQueue[$job_id]['type'];
+            if ($job->process) {
 
-            if (array_key_exists($job_id, $this->procs)) {
+                $this->log->write(W_NOTICE, 'Stopping running ' . $job->type);
 
-                $this->log->write(W_NOTICE, 'Stopping running ' . $type);
-
-                proc_close($this->procs[$job_id]['process']);
+                $job->process->termiante();
 
             } else {
 
-                $this->log->write(W_ERR, ucfirst($type) . ' has running status but proccess resource was not found!');
+                $this->log->write(W_ERR, ucfirst($job->type) . ' has running status but proccess resource was not found!');
 
             }
 
         }
 
-        $this->jobQueue[$job_id] = STATUS_CANCELLED;
+        $job->status = STATUS_CANCELLED;
 
         // Expire the job in 30 seconds
-        $this->jobQueue[$job_id]['expire'] = time() + $this->config->job->expire;
+        $job->expire = time() + $this->config->job->expire;
 
         return TRUE;
 
@@ -2265,8 +2247,10 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                     $this->stats['processes']++;
 
                     $payload = array(
-                        'job_id' => $id,
                         'application_name' => APPLICATION_NAME,
+                        'server_port' => $this->config->server['port'] ,
+                        'job_id' => $id,
+                        'access_key' => $job['access_key'] = uniqid(),
                         'timezone' => date_default_timezone_get(),
                         'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
                     );
@@ -2280,7 +2264,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                         if($config = $job->config)
                             $payload['config'] = array_merge($payload['config'], $config);
 
-                        $process->write($this->protocol->encode('service', $payload));
+                        $process->start($this->protocol->encode('service', $payload));
 
                     } elseif ($job instanceof Job\Runner) {
 
@@ -2289,7 +2273,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                         if ($job->has('params') && is_array($job->params) && count($job->params) > 0)
                             $payload['params'] = $job->params;
 
-                        $process->write($this->protocol->encode('exec', $payload));
+                        $process->start($this->protocol->encode('exec', $payload));
 
                     }
 
@@ -2300,7 +2284,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                     // Expire the job when the queue expiry is reached
                     $job->expire = time() + $this->config->job->expire;
 
-                    $this->log->write(W_ERR, 'Could not create child process.  Execution failed', $id);
+                    $this->log->start(W_ERR, 'Could not create child process.  Execution failed', $id);
 
                 }
 
@@ -2827,17 +2811,14 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if ($job_id = ake($service, 'job')) {
 
-            $this->jobQueue[$job_id]->status = STATUS_CANCELLED;
+            $job =& $this->jobQueue($job_id);
 
-            $this->jobQueue[$job_id]['expire'] = time() + $this->config->job->expire;
+            $job->status = STATUS_CANCELLED;
 
-            if (array_key_exists($job_id, $this->procs)) {
+            $job->expire = time() + $this->config->job->expire;
 
-                $out = $this->procs[$job_id]['pipes'][0];
-
-                $this->send($out, 'cancel');
-
-            }
+            if ($job->process)
+                $this->send($job->client, 'cancel');
 
         }
 
