@@ -24,6 +24,7 @@
     <Compile Include="src\Process.php" />
     <Compile Include="src\Server.php" />
     <Compile Include="src\Server\Job.php" />
+    <Compile Include="src\Server\Service.php" />
     <Compile Include="src\Server\Socket.php" />
     <Compile Include="src\Server\Job\Runner.php" />
     <Compile Include="src\Server\Job\Service.php" />
@@ -31,7 +32,6 @@
     <Compile Include="src\Server\Logger.php" />
     <Compile Include="src\Server\Socket\Client.php" />
     <Compile Include="src\Server\Master.php" />
-    <Compile Include="src\Server\Socket\Service.php" />
     <Compile Include="src\View\Helper\Warlock.php" />
     <Compile Include="src\Control.php" />
     <Compile Include="src\Service.php" />

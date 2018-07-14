@@ -135,6 +135,8 @@ class Process extends \Hazaar\Model\Strict {
 
     public function terminate(){
 
+        $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid);
+
         if(substr(PHP_OS, 0, 3) == 'WIN')
             $result = exec('taskkill /F /T /PID ' . $this->pid);
         else

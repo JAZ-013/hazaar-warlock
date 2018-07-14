@@ -76,7 +76,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
     /**
      * JOBS & SERVICES
      */
-    private $procs = array();
+    private $processes = array();
     // Currently running processes (jobs AND services)
     private $jobQueue = array();
     // Main job queue
@@ -399,6 +399,10 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->sockets[0] = $this->master;
 
+        $this->running = TRUE;
+
+        $this->log->write(W_INFO, "Ready for connections...");
+
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
         if ($services->loaded()) {
@@ -409,29 +413,14 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $this->log->write(W_NOTICE, "Found service: $name");
 
-                $options->enhance(array(
-                    'enabled' => false,
-                    'name' => $name,
-                    'status' => 'stopped',
-                    'job' => null,
-                    'restarts' => 0,
-                    'last_heartbeat' => null,
-                    'heartbeats' => 0,
-                    'info' => null
-                ));
-
-                $this->services[$name] = $options->toArray();
+                $this->services[$name] = new Service($options);
 
                 if ($options['enabled'] === TRUE)
-                    $this->serviceEnable($name, $options);
+                    $this->serviceEnable($name);
 
             }
 
         }
-
-        $this->running = TRUE;
-
-        $this->log->write(W_INFO, "Ready for connections...");
 
         return $this;
 
@@ -533,42 +522,36 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        /*
-         * if (count($this->procs) > 0) {
+        if (count($this->processes) > 0) {
 
-        $this->log->write(W_NOTICE, 'Terminating running processes');
+            $this->log->write(W_NOTICE, 'Terminating running processes');
 
-        foreach($this->procs as $p) {
+            foreach($this->processes as $process)
+                $process->cancel();
 
-        $this->log->write(W_DEBUG, "TERMINATE: PID=$p[pid]");
+            $this->log->write(W_NOTICE, 'Waiting for processes to exit');
 
-        $this->send($p['pipes'][0], 'cancel');
+            $start = time();
 
-        }
+            while(count($this->processes) > 0) {
 
-        $this->log->write(W_NOTICE, 'Waiting for processes to exit');
+                if ($start >= time() + 10) {
 
-        $start = time();
+                    $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
 
-        while(count($this->procs) > 0) {
+                    break;
+                }
 
-        if ($start >= time() + 10) {
+                $this->processJobs();
 
-        $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
+                if (count($this->procs) == 0)
+                    break;
 
-        break;
-        }
+                sleep(1);
 
-        $this->processJobs();
-
-        if (count($this->procs) == 0)
-        break;
-
-        sleep(1);
+            }
 
         }
-
-        }*/
 
         $this->log->write(W_NOTICE, 'Closing all connections');
 
@@ -2250,21 +2233,21 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                         'application_name' => APPLICATION_NAME,
                         'server_port' => $this->config->server['port'] ,
                         'job_id' => $id,
-                        'access_key' => $job['access_key'] = uniqid(),
+                        'access_key' => $job->access_key,
                         'timezone' => date_default_timezone_get(),
                         'config' => array('app' => array('root' => '/')) //Sets the default web root to / but this can be overridden in service config
                     );
 
+                    $packet = null;
+
                     if ($job instanceof Job\Service) {
 
-                        $name = $job->name;
-
-                        $payload['name'] = $name;
+                        $payload['name'] = $job->name;
 
                         if($config = $job->config)
                             $payload['config'] = array_merge($payload['config'], $config);
 
-                        $process->start($this->protocol->encode('service', $payload));
+                        $packet = $this->protocol->encode('service', $payload);
 
                     } elseif ($job instanceof Job\Runner) {
 
@@ -2273,9 +2256,11 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                         if ($job->has('params') && is_array($job->params) && count($job->params) > 0)
                             $payload['params'] = $job->params;
 
-                        $process->start($this->protocol->encode('exec', $payload));
+                        $packet = $this->protocol->encode('exec', $payload);
 
                     }
+
+                    $process->start($packet);
 
                 } else {
 
@@ -2295,7 +2280,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
                 $this->stats['queue']--;
 
                 if ($job instanceof Job\Service)
-                    unset($this->services[$job->service]['job']);
+                    unset($this->services[$job->name]['job']);
 
                 unset($this->jobQueue[$id]);
 
@@ -2767,7 +2752,7 @@ class Master extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->log->write(W_INFO, 'Enabling service: ' . $name);
 
-        $service = & $this->services[$name];
+        $service =& $this->services[$name];
 
         $service['job'] = $job_id = $this->getJobId();
 

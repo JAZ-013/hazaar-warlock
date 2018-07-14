@@ -41,7 +41,10 @@ abstract class Job extends \Hazaar\Model\Strict {
             ),
             'tag' => 'string',
             'info' => 'string',
-            'access_key' => 'string',
+            'access_key' => array(
+                'type' => 'string',
+                'value' => uniqid()
+            ),
             'enabled' => array(
                 'type' => 'boolean',
                 'default' => true
