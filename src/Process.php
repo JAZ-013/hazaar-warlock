@@ -492,7 +492,7 @@ abstract class Process extends Protocol\WebSockets {
 
     public function log($level, $message){
 
-        if(!is_int($level))
+        if(!(is_int($level) && is_string($message)))
             return false;
 
         return $this->send('LOG', array('level' => $level, 'msg' => 'SERVICE - ' . $this->name . ' - ' . $message));
