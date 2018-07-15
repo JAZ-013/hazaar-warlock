@@ -464,7 +464,7 @@ class Master {
 
                 $options['name'] = $name;
 
-                $this->services[$name] = new Service($options);
+                $this->services[$name] = new Service($options->toArray());
 
                 if ($options['enabled'] === true)
                     $this->serviceEnable($name);
