@@ -22,11 +22,19 @@
     <Compile Include="src\Container.php" />
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Process.php" />
+    <Compile Include="src\Server.php" />
+    <Compile Include="src\Server\Job.php" />
+    <Compile Include="src\Server\Service.php" />
+    <Compile Include="src\Server\Job\Runner.php" />
+    <Compile Include="src\Server\Job\Service.php" />
+    <Compile Include="src\Server\Process.php" />
+    <Compile Include="src\Server\Logger.php" />
+    <Compile Include="src\Server\Client.php" />
+    <Compile Include="src\Server\Master.php" />
     <Compile Include="src\View\Helper\Warlock.php" />
     <Compile Include="src\Control.php" />
-    <Compile Include="src\Server.php" />
     <Compile Include="src\Service.php" />
-    <Compile Include="src\WebSockets.php" />
+    <Compile Include="src\Protocol\WebSockets.php" />
     <Compile Include="composer.json" />
   </ItemGroup>
   <ItemGroup>
@@ -35,6 +43,9 @@
     <Folder Include="libs\console\css\" />
     <Folder Include="libs\console\images\" />
     <Folder Include="libs\console\js\" />
+    <Folder Include="src\Protocol\" />
+    <Folder Include="src\Server\" />
+    <Folder Include="src\Server\Job\" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />

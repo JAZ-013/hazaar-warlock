@@ -27,6 +27,7 @@ var p = {
     service: 0x32,      //Service status
     spawn: 0x33,        //Spawn a dynamic service
     kill: 0x34,         //Kill a dynamic service instance
+    signal: 0x35,       //Send a trigger signal directly to an attached service
 
     //LOGGING/OUTPUT MESSAGES
     log: 0x90,          //Generic log message
@@ -200,24 +201,22 @@ var HazaarWarlock = function (options) {
                 break;
             case p.error:
                 if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
-                else alert('ERROR\n\nCommand:\t' + packet.PLD.command + '\n\nReason:\t\t' + packet.PLD.reason);
+                else console.error('Command: ' + packet.PLD.command + ' Reason: ' + packet.PLD.reason);
                 return false;
             case p.status:
                 if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
-                return true;
+                break;
             case p.ping:
                 this.__send(p.pong);
-                return true;
+                break;
             case p.pong:
                 if (this.__callbacks.pong) this.__callbacks.pong(packet.PLD);
-                return true;
+                break;
             case p.ok:
-                return true;
+                break;
             default:
-                this.__log('Protocol Error!');
-                console.log(packet);
-                this.__disconnect();
-                return false;
+                console.log(packet.PLD);
+                break;
         }
         return true;
     };
@@ -286,11 +285,6 @@ var HazaarWarlock = function (options) {
     this.connected = function () {
         return (this.__socket && this.__socket.readyState === 1);
     };
-    this.sync = function (admin_key) {
-        this.admin_key = admin_key;
-        this.__send(p.sync, { 'admin_key': this.admin_key }, true);
-        return this;
-    };
     this.onconnect = function (callback) {
         this.__callbacks.connect = callback;
         return this;
@@ -313,6 +307,12 @@ var HazaarWarlock = function (options) {
     };
     this.close = function () {
         this.__disconnect();
+        return this;
+    };
+    /* Client Commands */
+    this.sync = function (admin_key) {
+        this.admin_key = admin_key;
+        this.__send(p.sync, { 'admin_key': this.admin_key }, true);
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {
@@ -341,12 +341,21 @@ var HazaarWarlock = function (options) {
         }, true);
         return this;
     };
+    /* Admin Commands (These require sync with admin key) */
+    this.stop = function (delay_sec) {
+        this.__send(p.shutdown, (delay_sec > 0 ? { delay: delay_sec } : null));
+        return this;
+    };
     this.enable = function (service) {
         this.__send(p.enable, service);
         return this;
     };
     this.disable = function (service) {
         this.__send(p.disable, service);
+        return this;
+    };
+    this.service = function (name) {
+        this.__send(p.service, name);
         return this;
     };
     this.enableEncoding = function () {

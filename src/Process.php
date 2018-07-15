@@ -7,7 +7,7 @@ namespace Hazaar\Warlock;
 
 require_once('Constants.php');
 
-abstract class Process extends WebSockets {
+abstract class Process extends Protocol\WebSockets {
 
     protected $id;
 
@@ -31,6 +31,8 @@ abstract class Process extends WebSockets {
     public    $bytes_received = 0;
 
     public    $socket_last_error = null;
+
+    protected $job_id;
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -106,6 +108,8 @@ abstract class Process extends WebSockets {
 
         //If we have a job_id and access_key we can register as a control channel
         if($job_id && $access_key){
+
+            $this->job_id = $job_id;
 
             $this->send('SYNC', array(
                 'client_id' => $this->id,
@@ -293,7 +297,7 @@ abstract class Process extends WebSockets {
 
         $len = strlen($frame);
 
-        @$bytes_sent = socket_write($this->socket, $frame, $len);
+        $bytes_sent = @socket_write($this->socket, $frame, $len);
 
         if($bytes_sent === -1 || $bytes_sent === FALSE) {
 
@@ -311,9 +315,6 @@ abstract class Process extends WebSockets {
 
     protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
-        if(! $this->socket)
-            return FALSE;
-
         //Process any frames sitting in the local frame buffer first.
         while($frame = $this->processFrame()){
 
@@ -323,6 +324,12 @@ abstract class Process extends WebSockets {
             return $this->protocol->decode($frame, $payload);
 
         }
+
+        if(!$this->socket)
+            exit(4);
+
+        if(socket_get_option($this->socket, SOL_SOCKET, SO_ERROR) > 0)
+            exit(4);
 
         $read = array(
             $this->socket
@@ -485,7 +492,7 @@ abstract class Process extends WebSockets {
 
     public function log($level, $message){
 
-        if(!is_int($level))
+        if(!(is_int($level) && is_string($message)))
             return false;
 
         return $this->send('LOG', array('level' => $level, 'msg' => 'SERVICE - ' . $this->name . ' - ' . $message));

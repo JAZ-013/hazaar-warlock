@@ -41,20 +41,3 @@ define('HAZAAR_SCHEDULE_INTERVAL', 1);
 define('HAZAAR_SCHEDULE_NORM', 2);
 
 define('HAZAAR_SCHEDULE_CRON', 3);
-
-/**
- * STATUS CONSTANTS
- */
-define('STATUS_QUEUED', 0);
-
-define('STATUS_QUEUED_RETRY', 1);
-
-define('STATUS_STARTING', 2);
-
-define('STATUS_RUNNING', 3);
-
-define('STATUS_COMPLETE', 4);
-
-define('STATUS_CANCELLED', 5);
-
-define('STATUS_ERROR', 6);

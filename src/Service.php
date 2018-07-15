@@ -325,6 +325,7 @@ abstract class Service extends Process {
 
         $status = array(
             'pid'        => getmypid(),
+            'job_id'     => $this->job_id,
             'name'       => $this->name,
             'start'      => $this->start,
             'state_code' => $this->state,
@@ -455,9 +456,6 @@ abstract class Service extends Process {
      * @param int $timeout
      */
     final protected function sleep($timeout = 0) {
-
-        if(!$this->socket)
-            throw new \Exception('Trying to sleep without a socket!');
 
         $start = microtime(true);
 
@@ -690,6 +688,8 @@ abstract class Service extends Process {
         }
         catch(\Exception $e){
 
+            echo "SOCKET ERROR!\n";
+
             //We have lost the control channel so we must die!
             exit(4);
 
@@ -698,5 +698,4 @@ abstract class Service extends Process {
     }
 
 }
-
 
