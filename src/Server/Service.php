@@ -18,7 +18,9 @@ class Service extends \Hazaar\Model\Strict {
                 'type' => 'integer',
                 'default' => HAZAAR_SERVICE_INIT
             ),
-            'job' => array('type' => 'Job\Service'),
+            'job' => array(
+                'type' => 'Job\Service'
+            ),
             'restarts' => array(
                 'type' => 'integer',
                 'default' => 0
@@ -77,6 +79,16 @@ class Service extends \Hazaar\Model\Strict {
 
         return $ret;
 
+    }
+
+    public function disable($expire = null){
+
+        $this->enabled = false;
+
+        if ($this->job instanceof Job\Service)
+            $this->job->cancel($expire);
+
+        return true;
     }
 
 }

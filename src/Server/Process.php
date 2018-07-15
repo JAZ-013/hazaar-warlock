@@ -2,6 +2,8 @@
 
 namespace Hazaar\Warlock\Server;
 
+use \Hazaar\Warlock\Server\Master;
+
 class Process extends \Hazaar\Model\Strict {
 
     private $config;

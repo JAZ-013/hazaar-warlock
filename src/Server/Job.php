@@ -23,12 +23,41 @@ define('STATUS_ERROR', 7);
 
 abstract class Job extends \Hazaar\Model\Strict {
 
+    private $client;
+
     protected $log;
+
+    static private $job_ids = array();
+
+    /*
+     * This method simple increments the jids integer but makes sure it is unique before returning it.
+     */
+    public function getJobId() {
+
+        $count = 0;
+
+        $jid = NULL;
+
+        while(in_array($jid = uniqid(), Job::$job_ids)) {
+
+            if ($count >= 10)
+                throw new \Exception("Unable to generate job ID after $count attempts . Giving up . This is bad! ");
+
+        }
+
+        Job::$job_ids[] = $jid;
+
+        return $jid;
+
+    }
 
     public function init(){
 
         return array(
-            'id' => 'string',
+            'id' => array(
+                'type' => 'string',
+                'default' => $this->getJobID()
+            ),
             'type' => 'string',
             'status' => array(
                 'type' => 'int',
@@ -44,10 +73,6 @@ abstract class Job extends \Hazaar\Model\Strict {
             'access_key' => array(
                 'type' => 'string',
                 'value' => uniqid()
-            ),
-            'enabled' => array(
-                'type' => 'boolean',
-                'default' => true
             ),
             'start' => array(
                 'type' => 'int',
@@ -109,6 +134,13 @@ abstract class Job extends \Hazaar\Model\Strict {
 
     }
 
+    final public function destruct(){
+
+        if(($index = array_search($this->id, Job::$job_ids)) !== false)
+            unset(Job::$job_ids[$index]);
+
+    }
+
     public function status() {
 
         switch ($this->status) {
@@ -150,6 +182,14 @@ abstract class Job extends \Hazaar\Model\Strict {
 
     }
 
+    public function registerClient(Client $client){
+
+        $this->log->write(W_NOTICE, 'Client ' . $client->id . ' registered as control channel.', $this->id);
+
+        $this->client = $client;
+
+    }
+
     public function ready(){
 
         return (($this->status === STATUS_QUEUED || $this->status === STATUS_QUEUED_RETRY) && time() >= $this->start);
@@ -168,4 +208,22 @@ abstract class Job extends \Hazaar\Model\Strict {
             || ($this->status === STATUS_COMPLETE && $this->expire > 0 && time() >= $this->expire));
 
     }
+
+    public function cancel($expire = 30){
+
+        $this->status = STATUS_CANCELLED;
+
+        $this->expire = time() + $expire;
+
+        if($this->client)
+            $this->client->send('cancel');
+
+    }
+
+    public function sendEvent($event_id, $trigger_id, $data = null){
+
+        return $this->client->sendEvent($event_id, $trigger_id, $data);
+
+    }
+
 }

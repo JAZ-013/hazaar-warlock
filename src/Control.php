@@ -292,7 +292,7 @@ class Control extends Process {
                 'path' => APPLICATION_PATH,
                 'env'  => APPLICATION_ENV
             ),
-            'when'        => $when,
+            'when'        => strtotime($when),
             'function'    => array(
                 'code' => (string)$function
             )

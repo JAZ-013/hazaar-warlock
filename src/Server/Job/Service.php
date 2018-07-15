@@ -9,6 +9,10 @@ class Service extends \Hazaar\Warlock\Server\Job {
         return array(
             'name' => 'string',
             'type' => array('value' => 'service'),
+            'enabled' => array(
+                'type' => 'boolean',
+                'default' => true
+            ),
             'dynamic' => array(
                 'type' => 'boolean',
                 'default' => false
@@ -18,7 +22,7 @@ class Service extends \Hazaar\Warlock\Server\Job {
                 'default' => false
             ),
             'parent' => array(
-                'type' => 'Hazaar\Warlock\Server\Socket\Client'
+                'type' => 'Hazaar\Warlock\Server\Client'
             )
         );
 
