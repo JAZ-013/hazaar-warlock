@@ -860,8 +860,7 @@ class Master {
                 'since' => $client->since,
                 'ip' => $client->address,
                 'port' => $client->port,
-                'type' => $client->type,
-                'legacy' => $client->isLegacy()
+                'type' => $client->type
             );
         }
 
@@ -1016,6 +1015,14 @@ class Master {
                     throw new \Exception('Unable to disable service ' . $payload);
 
                 $client->send('OK', array('command' => $command, 'name' => $payload));
+
+                break;
+
+            case 'STATUS':
+
+                $this->log->write(W_NOTICE, "STATUS: CLIENT=$client->id");
+
+                $client->send('STATUS', $this->getStatus());
 
                 break;
 

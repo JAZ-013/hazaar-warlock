@@ -526,10 +526,6 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 return $this->commandSync($payload);
 
-            case 'STATUS' :
-
-                return $this->commandStatus($payload);
-
             case 'SUBSCRIBE' :
 
                 $filter = (property_exists($payload, 'filter') ? $payload->filter : NULL);
@@ -573,6 +569,11 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
                 $this->log->write(W_DEBUG, ake($payload, 'data'));
 
                 return true;
+
+            case 'STATUS' :
+
+                if($payload)
+                    return $this->commandStatus($payload);
 
             default:
 
@@ -629,34 +630,25 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     private function commandStatus(\stdClass $payload = null) {
 
-        if($payload){
+        if($this->type !== 'service'){
 
-            if($this->type !== 'service'){
+            $this->log->write(W_WARN, 'Client sent status but client is not a service!', $this->address);
 
-                $this->log->write(W_WARN, 'Client sent status but client is not a service!', $this->address);
-
-                throw new \Exception('Status only allowed for services!');
-
-            }
-
-            $job = ake($this->jobs, $payload->job_id);
-
-            if(!$job){
-
-                $this->log->write(W_WARN, 'Service status received for client with no job ID');
-
-                throw new \Exception('Service has no running job!');
-
-            }
-
-            return true;
+            throw new \Exception('Status only allowed for services!');
 
         }
 
-        if ($this->type !== 'admin')
-            throw new \Exception('Not allowed!');
+        $job = ake($this->jobs, $payload->job_id);
 
-        return $this->send('STATUS', $this->getStatus());
+        if(!$job){
+
+            $this->log->write(W_WARN, 'Service status received for client with no job ID');
+
+            throw new \Exception('Service has no running job!');
+
+        }
+
+        return true;
 
     }
 
