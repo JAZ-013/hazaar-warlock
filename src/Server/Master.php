@@ -862,65 +862,32 @@ class Master {
                 'port' => $client->port,
                 'type' => $client->type
             );
+
         }
 
         $arrays = array(
-            // Main job queue
-            'queue' => array(
-                &$this->jobQueue,
-                array(
-                    'function',
-                    'client'
-                )
-            ),
-            // Active process queue
-            'processes' => array(
-                &$this->processes,
-                array(
-                    'pipes',
-                    'process'
-                )
-            ),
-            // Configured services
-            'services' => array(
-                &$this->services
-            ),
-            // Event queue
-            'events' => array(
-                &$this->eventQueue
-            )
+            'queue' => $this->jobQueue,             // Main job queue
+            'processes' => $this->processes,        // Active process queue
+            'services' => $this->services,          // Configured services
+            'events' => $this->eventQueue           // Event queue
         );
 
-        foreach($arrays as $name => $array) {
+        foreach($arrays as $name => &$array){
 
-            $count = (is_array($array) ? count($array[0]) : count($array));
+            if($array instanceof \Hazaar\Model\Strict)
+                $status['stats'][$name] = $array->count();
+            elseif(is_array($array))
+                $status['stats'][$name] = count($array);
 
-            $status['stats'][$name] = $count;
+            if ($name == 'events' && array_key_exists($this->config->admin->trigger, $array)) {
 
-            if ($count > 0) {
+                $status[$name] = array_diff_key($array, array_flip(array(
+                    $this->config->admin->trigger
+                )));
 
-                if (isset($array[1])) {
+            } else {
 
-                    $bad_keys = $array[1];
-
-                    foreach($array[0] as $id => $item)
-                        $status[$name][$id] = array_diff_key($item, array_flip($bad_keys));
-
-                } else {
-
-                    if ($name == 'events' && array_key_exists($this->config->admin->trigger, $array[0])) {
-
-                        $status[$name] = array_diff_key($array[0], array_flip(array(
-                            $this->config->admin->trigger
-                        )));
-
-                    } else {
-
-                        $status[$name] = $array[0];
-
-                    }
-
-                }
+                $status[$name] = $array;
 
             }
 
