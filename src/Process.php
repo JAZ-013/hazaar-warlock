@@ -297,7 +297,7 @@ abstract class Process extends Protocol\WebSockets {
 
         $len = strlen($frame);
 
-        $bytes_sent = @socket_write($this->socket, $frame, $len);
+        @$bytes_sent = socket_write($this->socket, $frame, $len);
 
         if($bytes_sent === -1 || $bytes_sent === FALSE) {
 
