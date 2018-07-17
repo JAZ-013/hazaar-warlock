@@ -202,7 +202,7 @@ abstract class Service extends Process {
 
         $this->send('ERROR', $msg);
 
-        echo "ERROR $msg\n\n";
+        echo date('Y-m-d H:i:s') . " - ERROR $msg\n\n";
 
         return true;
 
@@ -214,7 +214,7 @@ abstract class Service extends Process {
 
         $this->send('ERROR', $msg);
 
-        echo "EXCEPTION $msg\n\n";
+        echo date('Y-m-d H:i:s') . " - EXCEPTION $msg\n\n";
 
         return true;
 
