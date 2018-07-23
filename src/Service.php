@@ -204,6 +204,10 @@ abstract class Service extends Process {
 
         echo date('Y-m-d H:i:s') . " - ERROR $msg\n\n";
 
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+
+        echo str_repeat('-', 40) . "\n";
+
         return true;
 
     }
@@ -215,6 +219,8 @@ abstract class Service extends Process {
         $this->send('ERROR', $msg);
 
         echo date('Y-m-d H:i:s') . " - EXCEPTION $msg\n\n";
+
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         return true;
 
