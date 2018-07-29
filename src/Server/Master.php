@@ -1730,10 +1730,10 @@ class Master {
 
         while($field = current($search)) {
 
-            if (!array_key_exists($field, $array))
+            if (!property_exists($array, $field))
                 return false;
 
-            $array = &$array[$field];
+            $array = &$array->$field;
 
             next($search);
 
@@ -1749,10 +1749,10 @@ class Master {
 
         while($field = current($search)) {
 
-            if (!array_key_exists($field, $array))
+            if (!property_exists($array, $field))
                 return false;
 
-            $array = &$array[$field];
+            $array = &$array->$field;
 
             next($search);
 
@@ -1777,7 +1777,7 @@ class Master {
      */
     private function filterEvent($event, $filter = NULL) {
 
-        if (!($filter && is_array($filter)))
+        if (!$filter instanceof \stdClass)
             return false;
 
         $this->log->write(W_DEBUG, 'Checking event filter for \'' . $event['id'] . '\'');
@@ -1786,60 +1786,59 @@ class Master {
 
             $field = explode('.', $field);
 
-            if ($this->fieldExists($field, $event['data'])) {
+            if (!$this->fieldExists($field, $event['data']))
+                return true;
 
-                $field_value = $this->getFieldValue($field, $event['data']);
+            $field_value = $this->getFieldValue($field, $event['data']);
 
-                if (is_array($data)) { // If $data is an array it's a complex filter
+            if ($data instanceof \stdClass) { // If $data is an array it's a complex filter
 
-                    foreach($data as $filter_type => $filter_value) {
+                foreach($data as $filter_type => $filter_value) {
 
-                        switch ($filter_type) {
-                            case 'is' :
+                    switch ($filter_type) {
+                        case 'is' :
 
-                                if ($field_value != $filter_value)
-                                    return true;
+                            if ($field_value != $filter_value)
+                                return true;
 
-                                break;
+                            break;
 
-                            case 'not' :
+                        case 'not' :
 
-                                if ($field_value == $filter_value)
-                                    return true;
+                            if ($field_value == $filter_value)
+                                return true;
 
-                                break;
+                            break;
 
-                            case 'like' :
+                        case 'like' :
 
-                                if (!preg_match($filter_value, $field_value))
-                                    return true;
+                            if (!preg_match($filter_value, $field_value))
+                                return true;
 
-                                break;
+                            break;
 
-                            case 'in' :
+                        case 'in' :
 
-                                if (!in_array($field_value, $filter_value))
-                                    return true;
+                            if (!in_array($field_value, $filter_value))
+                                return true;
 
-                                break;
+                            break;
 
-                            case 'nin' :
+                        case 'nin' :
 
-                                if (in_array($field_value, $filter_value))
-                                    return true;
+                            if (in_array($field_value, $filter_value))
+                                return true;
 
-                                break;
-
-                        }
+                            break;
 
                     }
 
-                } else { // Otherwise it's a simple filter with an acceptable value in it
-
-                    if ($field_value != $data)
-                        return true;
-
                 }
+
+            } else { // Otherwise it's a simple filter with an acceptable value in it
+
+                if ($field_value != $data)
+                    return true;
 
             }
 
