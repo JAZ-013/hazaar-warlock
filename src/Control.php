@@ -74,7 +74,7 @@ class Control extends Process {
         if($autostart === NULL)
             $autostart = (boolean)$this->config->sys->autostart;
 
-        if($autostart && !$this->isRunning()){
+        if($autostart === true){
 
             if(!$this->start())
                 throw new \Exception('Autostart of Warlock server has failed!');
