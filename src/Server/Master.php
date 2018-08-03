@@ -1952,14 +1952,14 @@ class Master {
 
     }
 
-    private function serviceEnable($name, $options = null) {
+    private function serviceEnable($name) {
 
         if (!array_key_exists($name, $this->services))
             return false;
 
-        $this->log->write(W_INFO, 'Enabling service: ' . $name);
-
         $service = $this->services[$name];
+
+        $this->log->write(W_INFO, 'Enabling service: ' . $name . (($service->delay > 0) ? ' (delay=' . $service->delay . ')': null));
 
         $service->enabled = true;
 
@@ -1972,6 +1972,9 @@ class Master {
             'tag' => $name,
             'respawn' => false
         ));
+
+        if($service->delay > 0)
+            $job->start = time() + $service->delay;
 
         $this->services[$name]->job = $this->queueAddJob($job);
 

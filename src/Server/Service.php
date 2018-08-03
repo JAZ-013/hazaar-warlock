@@ -35,6 +35,10 @@ class Service extends \Hazaar\Model\Strict {
             ),
             'info' => array(
                 'type' => 'array'
+            ),
+            'delay' => array(
+                'type' => 'int',
+                'default' => 0
             )
         );
 
