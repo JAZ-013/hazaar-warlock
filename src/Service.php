@@ -144,9 +144,8 @@ abstract class Service extends Process {
                 if($ret === false)
                     $this->state = HAZAAR_SERVICE_STOPPING;
 
-
             }
-            catch(\Exception $e){
+            catch(\Throwable $e){
 
                 $this->__exceptionHandler($e);
 
