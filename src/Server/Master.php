@@ -1509,29 +1509,31 @@ class Master {
 
                             $this->log->write(W_ERR, "Service '$name' returned status code $status[exitcode]");
 
-                            if ($status['exitcode'] == 2) {
+                            if ($status['exitcode'] == 4) {
 
-                                $this->log->write(W_ERR, 'Service failed to start because service class does not exist.  Disabling service.');
+                                $this->log->write(W_ERR, 'Service exited because it lost the control channel.
+Restarting.');
+                            }else{
 
-                                $job->status = STATUS_ERROR;
+                                if ($status['exitcode'] == 1) {
 
-                                continue;
+                                    $this->log->write(W_ERR, 'Service failed to start because the application failed to decode the start payload.', $name);
 
-                            } elseif ($status['exitcode'] == 3) {
+                                } elseif ($status['exitcode'] == 2) {
 
-                                $this->log->write(W_ERR, 'Service failed to start because it has missing required modules.  Disabling service.');
+                                    $this->log->write(W_ERR, 'Service failed to start because the application runner does not understand the start payload type.', $name);
 
-                                $job->status = STATUS_ERROR;
+                                } elseif ($status['exitcode'] == 3) {
 
-                                continue;
+                                    $this->log->write(W_ERR, 'Service failed to start because service class does not exist.', $name);
 
-                            } elseif ($status['exitcode'] == 4) {
+                                } elseif ($status['exitcode'] == 5) {
 
-                                $this->log->write(W_ERR, 'Service exited because it lost the control channel.  Restarting.');
+                                    $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!', $name);
 
-                            } elseif ($status['exitcode'] == 5) {
+                                }
 
-                                $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!');
+                                $this->log->write(W_ERR, 'Disabling the service.', $name);
 
                                 $job->status = STATUS_ERROR;
 
