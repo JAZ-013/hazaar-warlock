@@ -71,7 +71,7 @@ abstract class Service extends Process {
             $this->name => array(
                 'enabled'   => false,
                 'heartbeat' => 10,
-                'checkfile' => 60
+                'checkfile' => 1
             )
         );
 
@@ -185,7 +185,7 @@ abstract class Service extends Process {
 
                 $this->last_checkfile = time();
 
-                clearstatcache();
+                clearstatcache(true, $this->service_file);
 
                 //Check if the service file has been modified and initiate a restart
                 if(filemtime($this->service_file) > $this->service_file_mtime){
