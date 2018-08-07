@@ -238,8 +238,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         $this->lastContact = time();
 
         /**
-         * Sometimes we can get multiple frames in a single buffer so we cycle through them until they are all processed.
-         * This will even allow partial frames to be added to the client frame buffer.
+         * Sometimes we can get multiple frames in a single buffer so we cycle through
+         * them until they are all processed.  This will even allow partial frames to be
+         * added to the client frame buffer.
          */
         while($frame = $this->processFrame($buf)) {
 
@@ -382,8 +383,12 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         /**
          * If we get an opcode that equals false then we got a bad frame.
          *
-         * If we get a opcode of -1 there are more frames to come for this payload. So, we return false if there are no
-         * more frames to process, or true if there are already more frames in the buffer to process.
+         * If we get an opcode actually equals true, then the FIN flag was not set so this is a fragmented
+         * frame and there wil be one or more coninuation frames.  So, we return false if there are no more
+         * frames to process, or true if there are already more frames in the buffer to process.
+         *
+         * If we get a opcode of -1 then we received only part of the frame and there is more data
+         * required to complete the frame.
          */
         if ($opcode === false) {
 
@@ -393,17 +398,25 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             return false;
 
-        } elseif ($opcode === -1) {
+        } elseif ($opcode === true) {
+
+            $this->log->write(W_WARN, 'Fragment frame received.');
 
             $this->payloadBuffer .= $payload;
 
-            return (strlen($frameBuffer) > 0);
+            return false;
+
+        } elseif ($opcode === -1) {
+
+            $this->frameBuffer = $frameBuffer;
+
+            return false;
 
         }
 
         $this->log->write(W_DECODE2, "OPCODE: $opcode");
 
-        //Save any leftover frame data in the client framebuffer
+        //Save any leftover frame data in the client framebuffer because we got more than a whole frame)
         if (strlen($frameBuffer) > 0) {
 
             $this->frameBuffer = $frameBuffer;
@@ -412,25 +425,29 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        //If we have data in the payload buffer (because we previously received OPCODE -1) then retrieve it here.
-        if ($this->payloadBuffer) {
-
-            $payload = $this->payloadBuffer . $payload;
-
-            $this->payloadBuffer = '';
-
-        }
-
         //Check the WebSocket OPCODE and see if we need to do any internal processing like PING/PONG, CLOSE, etc.
         switch ($opcode) {
 
-            case 0 :
-            case 1 :
-            case 2 :
+            case 0 : //If the opcode is 0, then this is our FIN continuation frame.
+
+                //If we have data in the payload buffer (we absolutely should) then retrieve it here.
+                if (!$this->payloadBuffer)
+                    $this->log(W_WARN, 'Got finaly continuation frame but there is no payload in the buffer!?');
+
+                $payload = $this->payloadBuffer . $payload;
+
+                $this->payloadBuffer = '';
 
                 break;
 
-            case 8 :
+            case 1 : //Text frame
+            case 2 : //Binary frame
+
+                //These are our normal frame types which will already be processed into $payload.
+
+                break;
+
+            case 8 : //Close frame
 
                 if($this->closing === false){
 
@@ -462,7 +479,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 return false;
 
-            case 9 :
+            case 9 : //Ping
 
                 $this->log->write(W_DEBUG, "WEBSOCKET_PING: HOST=$this->address:$this->port");
 
@@ -472,7 +489,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 return false;
 
-            case 10 :
+            case 10 : //Pong
 
                 $this->log->write(W_DEBUG, "WEBSOCKET_PONG: HOST=$this->address:$this->port");
 
@@ -480,7 +497,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 return false;
 
-            default :
+            default : //Unknown!
 
                 $this->log->write(W_DEBUG, "DISCONNECT: REASON=unknown opcode HOST=$this->address:$this->port");
 
