@@ -459,7 +459,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                     @socket_write($this->socket, $frame, strlen($frame));
 
-                    if(($count = count($this->jobs)) > 0){
+                    if($this->type === 'client' && ($count = count($this->jobs)) > 0){
 
                         $this->log->write(W_NOTICE, 'Disconnected WebSocket client has '
                             . $count . ' running/pending child jobs');
