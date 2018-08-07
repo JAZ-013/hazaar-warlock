@@ -1507,12 +1507,18 @@ class Master {
 
                         if ($status['exitcode'] > 0 && $job->status !== STATUS_CANCELLED) {
 
-                            $this->log->write(W_ERR, "Service '$name' returned status code $status[exitcode]");
+                            $this->log->write(W_ERR, "Service returned status code $status[exitcode]", $name);
 
                             if ($status['exitcode'] == 4) {
 
-                                $this->log->write(W_ERR, 'Service exited because it lost the control channel.
+                                $this->log->write(W_WARN, 'Service exited because it lost the control channel.
 Restarting.');
+                            } elseif ($status['exitcode'] == 6) {
+
+                                $job->retries = 0;
+
+                                $this->log->write(W_INFO, 'Service exited because it\'s source file was modified.', $name);
+
                             }else{
 
                                 if ($status['exitcode'] == 1) {
@@ -1541,21 +1547,17 @@ Restarting.');
 
                             }
 
-                            $job->retries++;
-
-                            $job->status = STATUS_QUEUED_RETRY;
-
                             if ($job->retries > $this->config->service->restarts) {
 
                                 if($job->dynamic === true){
 
-                                    $this->log->write(W_WARN, "Dynamic service '$name' is restarting too often.  Cancelling spawn.");
+                                    $this->log->write(W_WARN, "Dynamic service is restarting too often.  Cancelling spawn.", $name);
 
                                     $this->cancelJob($job->id);
 
                                 }else{
 
-                                    $this->log->write(W_WARN, "Service '$name' is restarting too often.  Disabling for {$this->config->service->disable} seconds.");
+                                    $this->log->write(W_WARN, "Service is restarting too often.  Disabling for {$this->config->service->disable} seconds.", $name);
 
                                     $job->start = time() + $this->config->service->disable;
 
@@ -1567,16 +1569,22 @@ Restarting.');
 
                             } else {
 
-                                $this->log->write(W_NOTICE, "Restarting service '$name'. ({$job->retries})");
+                                $this->log->write(W_NOTICE, "Restarting service"
+                                    . (($job->retries > 0) ? " ({$job->retries})" : null), $name);
 
                                 if (array_key_exists($job->service, $this->services))
                                     $this->services[$job->service]['restarts']++;
+
+                                $job->retries++;
+
+                                $job->status = STATUS_QUEUED_RETRY;
 
                             }
 
                         } elseif ($job->respawn == true && $job->status == STATUS_RUNNING) {
 
-                            $this->log->write(W_NOTICE, "Respawning service '$name' in " . $job->respawn_delay . " seconds.");
+                            $this->log->write(W_NOTICE, "Respawning service in " 
+                                . $job->respawn_delay . " seconds.", $name);
 
                             $job->start = time() + $job->respawn_delay;
 
@@ -1589,7 +1597,6 @@ Restarting.');
 
                             $job->status = STATUS_COMPLETE;
 
-                            // Expire the job in 30 seconds
                             $job->expire = time();
 
                         }
