@@ -94,7 +94,7 @@ abstract class Process extends Protocol\WebSockets {
 
         $sockets = socket_select($read, $write, $except, 3000);
 
-        if($sockets == 0) return FALSE;
+        if($sockets == 0) return false;
 
         socket_recv($this->socket, $buf, 65536, 0);
 
@@ -161,11 +161,11 @@ abstract class Process extends Protocol\WebSockets {
 
             $this->socket = null;
 
-            return TRUE;
+            return true;
 
         }
 
-        return FALSE;
+        return false;
 
     }
 
@@ -206,21 +206,21 @@ abstract class Process extends Protocol\WebSockets {
         }
 
         if (!$frameBuffer)
-            return FALSE;
+            return false;
 
         $opcode = $this->getFrame($frameBuffer, $payload);
 
         /**
-         * If we get an opcode that equals FALSE then we got a bad frame.
+         * If we get an opcode that equals false then we got a bad frame.
          *
-         * If we get a opcode of -1 there are more frames to come for this payload. So, we return FALSE if there are no
-         * more frames to process, or TRUE if there are already more frames in the buffer to process.
+         * If we get a opcode of -1 there are more frames to come for this payload. So, we return false if there are no
+         * more frames to process, or true if there are already more frames in the buffer to process.
          */
-        if ($opcode === FALSE) {
+        if ($opcode === false) {
 
             $this->disconnect(true);
 
-            return FALSE;
+            return false;
 
         } elseif ($opcode === -1) {
 
@@ -247,7 +247,7 @@ abstract class Process extends Protocol\WebSockets {
 
             case 9 :
 
-                $frame = $this->frame('', 'pong', FALSE);
+                $frame = $this->frame('', 'pong', false);
 
                 @socket_write($this->socket, $frame, strlen($frame));
 
@@ -288,7 +288,7 @@ abstract class Process extends Protocol\WebSockets {
     protected function send($command, $payload = null) {
 
         if(! $this->socket)
-            return FALSE;
+            return false;
 
         if(!($packet = $this->protocol->encode($command, $payload)))
             return false;
@@ -297,19 +297,32 @@ abstract class Process extends Protocol\WebSockets {
 
         $len = strlen($frame);
 
-        @$bytes_sent = socket_write($this->socket, $frame, $len);
+        $attempts = 0;
 
-        if($bytes_sent === -1 || $bytes_sent === FALSE) {
+        $total_sent = 0;
 
-            throw new \Exception('An error occured while sending to the socket');
+        while($frame){
 
-        } elseif($bytes_sent !== $len) {
+            $attempts++;
 
-            throw new \Exception($bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
+            @$bytes_sent = socket_write($this->socket, $frame, $len);
+
+            if($bytes_sent === -1 || $bytes_sent === false)
+                throw new \Exception('An error occured while sending to the socket');
+
+            $total_sent += $bytes_sent;
+
+            if($total_sent === $len) //If all the bytes sent then don't waste time processing the leftover frame
+                break;
+
+            if($attempts >= 100)
+                throw new \Exception('Unable to write to socket.  Socket appears to be stuck.');
+
+            $frame = substr($frame, $bytes_sent);
 
         }
 
-        return TRUE;
+        return true;
 
     }
 
@@ -381,7 +394,7 @@ abstract class Process extends Protocol\WebSockets {
             case 'EVENT':
 
                 if(! (property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
-                    return FALSE;
+                    return false;
 
                 $func = $this->subscriptions[$payload->id];
 
@@ -457,7 +470,7 @@ abstract class Process extends Protocol\WebSockets {
     public function subscribe($event, $callback, $filter = null) {
 
         if(! method_exists($this, $callback))
-            return FALSE;
+            return false;
 
         $this->subscriptions[$event] = $callback;
 
@@ -468,7 +481,7 @@ abstract class Process extends Protocol\WebSockets {
     public function unsubscribe($event) {
 
         if(! array_key_exists($event, $this->subscriptions))
-            return FALSE;
+            return false;
 
         unset($this->subscriptions[$event]);
 
