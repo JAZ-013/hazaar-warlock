@@ -28,13 +28,21 @@ abstract class Service extends Process {
 
     protected $state    = HAZAAR_SERVICE_INIT;
 
-    protected $schedule = array(); //callback execution schedule
+    protected $schedule = array();              //callback execution schedule
 
-    protected $next     = null;    //Timestamp of next executable schedule item
+    protected $next     = null;                 //Timestamp of next executable schedule item
 
     protected $slept    = false;
 
     private   $ob_file;
+
+    private   $last_heartbeat;
+
+    private   $last_checkfile;
+
+    private   $service_file;                    //The file in which the service is defined
+
+    private   $service_file_mtime;              //The last modified time of the service file
 
     final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -62,7 +70,8 @@ abstract class Service extends Process {
         $defaults = array(
             $this->name => array(
                 'enabled'   => false,
-                'heartbeat' => 10
+                'heartbeat' => 10,
+                'checkfile' => 60
             )
         );
 
@@ -72,6 +81,18 @@ abstract class Service extends Process {
 
         if($tz = $this->config->get('timezone'))
             date_default_timezone_set($tz);
+
+        if($this->config['checkfile'] > 0){
+
+            $reflection = new \ReflectionClass($this);
+
+            $this->service_file = $reflection->getFileName();
+
+            $this->service_file_mtime = filemtime($this->service_file);
+
+            $this->last_checkfile = time();
+
+        }
 
     }
 
@@ -131,6 +152,8 @@ abstract class Service extends Process {
 
         $this->__processSchedule();
 
+        $code = 0;
+
         while($this->state == HAZAAR_SERVICE_RUNNING || $this->state == HAZAAR_SERVICE_SLEEP) {
 
             $this->slept = FALSE;
@@ -158,6 +181,25 @@ abstract class Service extends Process {
             if(! $this->slept)
                 $this->sleep(0);
 
+            if($this->service_file_mtime > 0 && time() >= ($this->last_checkfile + $this->config['checkfile'])){
+
+                $this->last_checkfile = time();
+
+                clearstatcache();
+
+                //Check if the service file has been modified and initiate a restart
+                if(filemtime($this->service_file) > $this->service_file_mtime){
+
+                    $this->log(W_INFO, 'Service file modified. Initiating restart.');
+
+                    $this->state = HAZAAR_SERVICE_STOPPING;
+
+                    $code = 6;
+
+                }
+
+            }
+
         }
 
         $this->state = HAZAAR_SERVICE_STOPPING;
@@ -170,7 +212,7 @@ abstract class Service extends Process {
 
         $this->state = HAZAAR_SERVICE_STOPPED;
 
-        return 0;
+        return $code;
 
     }
 
@@ -339,7 +381,7 @@ abstract class Service extends Process {
             'peak'       => memory_get_peak_usage()
         );
 
-        $this->lastHeartbeat = time();
+        $this->last_heartbeat = time();
 
         $this->send('status', $status);
 
@@ -479,7 +521,7 @@ abstract class Service extends Process {
 
                 $diff = ($start + $timeout) - microtime(true);
 
-                $hb = $this->lastHeartbeat + $this->config['heartbeat'];
+                $hb = $this->last_heartbeat + $this->config['heartbeat'];
 
                 $next = ((! $this->next || $hb < $this->next) ? $hb : $this->next);
 
@@ -508,7 +550,7 @@ abstract class Service extends Process {
             if($this->next > 0 && $this->next <= time())
                 $this->__processSchedule();
 
-            if(($this->lastHeartbeat + $this->config['heartbeat']) <= time())
+            if(($this->last_heartbeat + $this->config['heartbeat']) <= time())
                 $this->__sendHeartbeat();
 
             $slept = true;

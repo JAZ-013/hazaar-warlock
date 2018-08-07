@@ -150,7 +150,7 @@ abstract class Job extends \Hazaar\Model\Strict {
                 break;
 
             case STATUS_QUEUED_RETRY :
-                $ret = 'queued (retrying)';
+                $ret = 'queued (restart)';
                 break;
 
             case STATUS_STARTING :

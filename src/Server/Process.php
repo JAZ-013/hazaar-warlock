@@ -103,7 +103,7 @@ class Process extends \Hazaar\Model\Strict {
 
         $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
 
-        $this->log->write(W_DEBUG, 'Exec: ' . $proc_cmd);
+        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd);
 
         $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
 
