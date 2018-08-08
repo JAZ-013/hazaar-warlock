@@ -129,6 +129,8 @@ abstract class Service extends Process {
 
             echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $message . "\n";
 
+            flush();
+            
         }
 
     }
