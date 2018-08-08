@@ -503,12 +503,12 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function log($level, $message){
+    public function log($level, $message, $name = null){
 
         if(!(is_int($level) && is_string($message)))
             return false;
 
-        return $this->send('LOG', array('level' => $level, 'msg' => 'SERVICE - ' . $this->name . ' - ' . $message));
+        return $this->send('LOG', array('level' => $level, 'msg' => $message, 'name' => $name));
 
     }
 

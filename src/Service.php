@@ -2,6 +2,8 @@
 
 namespace Hazaar\Warlock;
 
+define('W_LOCAL', -1);
+
 /**
  * @brief       The Warlock application service class
  *
@@ -43,6 +45,10 @@ abstract class Service extends Process {
     private   $service_file;                    //The file in which the service is defined
 
     private   $service_file_mtime;              //The last modified time of the service file
+
+    private   $__log_levels = array();
+
+    private   $__str_pad = 0;
 
     final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
@@ -94,6 +100,37 @@ abstract class Service extends Process {
 
         }
 
+        $consts = get_defined_constants(TRUE);
+
+        //Load the warlock log levels into an array.
+        foreach($consts['user'] as $name => $value) {
+
+            if (substr($name, 0, 2) == 'W_'){
+
+                $len = strlen($this->__log_levels[$value] = substr($name, 2));
+
+                if($len > $this->__str_pad)
+                    $this->__str_pad = $len;
+
+            }
+
+        }
+
+    }
+
+    public function log($level, $message, $name = null){
+
+        if($name === null)
+            $name = $this->name;
+
+        if($level === W_LOCAL || parent::log($level, $message, $name) === true){
+
+            $label = ake($this->__log_levels, $level, 'NONE');
+
+            echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $message . "\n";
+
+        }
+
     }
 
     private function invokeMethod($method, $params = null){
@@ -116,6 +153,8 @@ abstract class Service extends Process {
     }
 
     final public function main($params = array(), $dynamic = false) {
+
+        $this->log(W_LOCAL, '*** SERVICE STARTING UP ***');
 
         $init = true;
 
@@ -243,9 +282,9 @@ abstract class Service extends Process {
 
         $this->send('ERROR', $msg);
 
-        echo date('Y-m-d H:i:s') . " - ERROR $msg\n\n";
+        $this->log(W_LOCAL, 'ERROR ' . $msg);
 
-        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         echo str_repeat('-', 40) . "\n";
 
@@ -259,9 +298,11 @@ abstract class Service extends Process {
 
         $this->send('ERROR', $msg);
 
-        echo date('Y-m-d H:i:s') . " - EXCEPTION $msg\n\n";
+        $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
 
         debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
+
+        echo str_repeat('-', 40) . "\n";
 
         return true;
 

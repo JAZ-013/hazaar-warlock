@@ -712,14 +712,16 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $level = ake($payload, 'level', W_INFO);
 
+        $name = ake($payload, 'name');
+
         if(is_array($payload->msg)){
 
             foreach($payload->msg as $msg)
-                $this->commandLog((object)array('level' => $level, 'msg' => $msg));
+                $this->commandLog((object)array('level' => $level, 'msg' => $msg, 'name' => $name));
 
         }else{
 
-            $this->log->write($level, ake($payload, 'msg', '--'));
+            $this->log->write($level, ake($payload, 'msg', '--'), $name);
 
         }
 
