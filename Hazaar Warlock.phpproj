@@ -43,6 +43,7 @@
     <Folder Include="libs\console\css\" />
     <Folder Include="libs\console\images\" />
     <Folder Include="libs\console\js\" />
+    <Folder Include="bin\" />
     <Folder Include="src\Protocol\" />
     <Folder Include="src\Server\" />
     <Folder Include="src\Server\Job\" />
@@ -51,6 +52,7 @@
     <Folder Include="src" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="bin\warlock.sh" />
     <Content Include="libs\client.js" />
     <Content Include="libs\console\connections.phtml" />
     <Content Include="libs\console\controlpanel.phtml" />
