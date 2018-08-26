@@ -2228,7 +2228,7 @@ Restarting.');
 
                 foreach($keys as $key){
 
-                    $this->log->write(W_DEBUG, 'KVEXPIRE: ' . $key);
+                    $this->log->write(W_DEBUG, 'KVEXPIRE: ' . $namespace . '::' . $key);
 
                     unset($this->kv_store[$namespace][$key]);
 
