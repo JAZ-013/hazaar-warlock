@@ -2183,7 +2183,16 @@ Restarting.');
 
         $this->log->write(W_DEBUG, 'KVLIST: ' . $namespace);
 
-        $list = (array_key_exists($namespace, $this->kv_store) ? $this->kv_store[$namespace] : null);
+        $list = null;
+        
+        if(array_key_exists($namespace, $this->kv_store)){
+            
+            $list = array();
+            
+            foreach($this->kv_store[$namespace] as $key => $data)
+                $list[$key] = $data['v'];
+
+        }
 
         return $client->send('KVLIST', $list);
 
