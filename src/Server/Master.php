@@ -117,6 +117,8 @@ class Master {
 
     private $kv_store = array();
 
+    private $kv_expire = array();
+
     /**
      * Warlock server constructor
      *
@@ -556,6 +558,8 @@ class Master {
                 $this->queueCleanup();
 
                 $this->checkClients();
+
+                $this->expireKeys();
 
                 $this->rrd->setValue('sockets', count($this->sockets));
 
@@ -2047,8 +2051,25 @@ Restarting.');
 
             $this->log->write(W_DEBUG, 'KVGET: ' . $namespace . '::' . $payload->k);
 
-            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]))
-                $value = $this->kv_store[$namespace][$payload->k]['v'];
+            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])){
+
+                $slot =& $this->kv_store[$namespace][$payload->k];
+
+                if(array_key_exists('e', $slot)
+                    && ($key = array_search($payload->k, $this->kv_expire[$namespace][$slot['e']])) !== false)
+                    unset($this->kv_expire[$namespace][$slot['e']][$key]);
+
+                if(array_key_exists('t', $slot)){
+
+                    $slot['e'] = time() + $slot['t'];
+
+                    $this->kv_expire[$namespace][$slot['e']][] = $payload->k;
+
+                }
+
+                $value = $slot['v'];
+
+            }
 
         }else{
 
@@ -2070,7 +2091,30 @@ Restarting.');
 
             $this->log->write(W_DEBUG, 'KVSET: ' . $namespace . '::' . $payload->k);
 
-            $this->kv_store[$namespace][$payload->k] = array('v' => ake($payload, 'v'));
+            if(array_key_exists($namespace, $this->kv_store)
+                && array_key_exists($payload->k, $this->kv_store[$namespace])
+                && array_key_exists('e', $this->kv_store[$namespace][$payload->k])){
+
+                $e = $this->kv_store[$namespace][$payload->k]['e'];
+
+                if(($key = array_search($payload->k, $this->kv_expire[$namespace][$e])) !== false)
+                    unset($this->kv_expire[$namespace][$e][$key]);
+
+            }
+
+            $slot = array('v' => ake($payload, 'v'));
+
+            if(property_exists($payload, 't')){
+
+                $slot['t'] = $payload->t;
+
+                $slot['e'] = time() + $payload->t;
+
+                $this->kv_expire[$namespace][$slot['e']][] = $payload->k;
+
+            }
+
+            $this->kv_store[$namespace][$payload->k] = $slot;
 
             $result = true;
 
@@ -2166,6 +2210,35 @@ Restarting.');
         }
 
         return $client->send('KVDEL', $result);
+
+    }
+
+    private function expireKeys(){
+
+        ksort($this->kv_expire);
+
+        $now = time();
+
+        foreach($this->kv_expire as $namespace => &$slots){
+
+            foreach($slots as $time => $keys){
+
+                if($time > $now)
+                    break;
+
+                foreach($keys as $key){
+
+                    $this->log->write(W_DEBUG, 'KVEXPIRE: ' . $key);
+
+                    unset($this->kv_store[$namespace][$key]);
+
+                }
+
+                unset($slots[$time]);
+
+            }
+
+        }
 
     }
 
