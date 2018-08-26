@@ -2039,51 +2039,70 @@ Restarting.');
 
     private function processKVGET($client, $payload){
 
-        if(!property_exists($payload, 'k')){
+        $value = null;
+
+        if(property_exists($payload, 'k')){
+
+            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
+
+            $this->log->write(W_DEBUG, 'KVGET: ' . $namespace . '::' . $payload->k);
+
+            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]))
+                $value = $this->kv_store[$namespace][$payload->k]['v'];
+
+        }else{
 
             $this->log->write(W_ERR, 'KVGET requires \'k\'');
 
-            return false;
-
         }
 
-        $this->log->write(W_DEBUG, 'KVGET: ' . $payload->k);
-
-        return $client->send('KVGET', (array_key_exists($payload->k, $this->kv_store) ? $this->kv_store[$payload->k] : null));
+        return $client->send('KVGET', $value);
 
     }
 
     private function processKVSET($client, $payload){
 
-        if(!property_exists($payload, 'k')){
+        $result = false;
+
+        if(property_exists($payload, 'k')){
+
+            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
+
+            $this->log->write(W_DEBUG, 'KVSET: ' . $namespace . '::' . $payload->k);
+
+            $this->kv_store[$namespace][$payload->k] = array('v' => ake($payload, 'v'));
+
+            $result = true;
+
+        }else{
 
             $this->log->write(W_ERR, 'KVSET requires \'k\'');
 
-            return false;
-
         }
 
-        $this->log->write(W_DEBUG, 'KVSET: ' . $payload->k);
-
-        $this->kv_store[$payload->k] = ake($payload, 'v');
-
-        return $client->send('KVSET', true);
+        return $client->send('KVSET', $result);
 
     }
 
     private function processKVHAS($client, $payload){
 
-        if(!property_exists($payload, 'k')){
+        $result = false;
+
+        if(property_exists($payload, 'k')){
+
+            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
+
+            $this->log->write(W_DEBUG, 'KVHAS: ' . $namespace . '::' . $payload->k);
+
+            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
+
+        }else{
 
             $this->log->write(W_ERR, 'KVHAS requires \'k\'');
 
-            return false;
-
         }
 
-        $this->log->write(W_DEBUG, 'KVHAS: ' . $payload->k);
-
-        $client->send('KVHAS', array_key_exists($payload->k, $this->kv_store));
+        $client->send('KVHAS', $result);
 
         return true;
 
@@ -2091,46 +2110,62 @@ Restarting.');
 
     private function processKVDEL($client, $payload){
 
-        if(!property_exists($payload, 'k')){
+        $result = false;
+
+        if(property_exists($payload, 'k')){
+
+            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
+
+            $this->log->write(W_DEBUG, 'KVDEL: ' . $namespace . '::' . $payload->k);
+
+            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
+
+            if($result === true)
+                unset($this->kv_store[$namespace][$payload->k]);
+
+        }else{
 
             $this->log->write(W_ERR, 'KVDEL requires \'k\'');
 
-            return false;
-
         }
 
-        if($exists = array_key_exists($payload->k, $this->kv_store))
-            unset($this->kv_store[$payload->k]);
-
-        $this->log->write(W_DEBUG, 'KVDEL: ' . $payload->k);
-
-        return $client->send('KVDEL', $exists);
+        return $client->send('KVDEL', $result);
 
     }
 
     private function processKVLIST($client, $payload){
 
-        $this->log->write(W_DEBUG, 'KVLIST');
+        $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
 
-        return $client->send('KVLIST', $this->kv_store);
+        $this->log->write(W_DEBUG, 'KVLIST: ' . $namespace);
+
+        $list = (array_key_exists($namespace, $this->kv_store) ? $this->kv_store[$namespace] : null);
+
+        return $client->send('KVLIST', $list);
 
     }
 
     private function processKVCLEAR($client, $payload){
 
-        if(!property_exists($payload, 'k')){
+        $result = false;
+
+        if(property_exists($payload, 'k')){
+
+            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
+
+            $this->log->write(W_DEBUG, 'KVDEL: ' . $namespace);
+
+            $this->kv_store[$namespace] = array();
+
+            $result = true;
+
+        }else{
 
             $this->log->write(W_ERR, 'KVCLEAR requires \'k\'');
 
-            return false;
-
         }
 
-        $this->log->write(W_DEBUG, 'KVCLEAR');
-
-        $this->kv_store = array();
-
-        return $client->send('KVDEL', true);
+        return $client->send('KVDEL', $result);
 
     }
 
