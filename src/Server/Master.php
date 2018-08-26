@@ -115,6 +115,8 @@ class Master {
     // The Warlock protocol encoder/decoder.
     static public $protocol;
 
+    private $kv_store = array();
+
     /**
      * Warlock server constructor
      *
@@ -1044,6 +1046,34 @@ class Master {
 
                 break;
 
+            case 'KVGET':
+
+                return $this->processKVGET($client, $payload);
+
+            case 'KVSET':
+
+                return $this->processKVSET($client, $payload);
+
+            case 'KVHAS':
+
+                return $this->processKVHAS($client, $payload);
+
+            case 'KVDEL':
+
+                return $this->processKVDEL($client, $payload);
+
+            case 'KVLIST':
+
+                return $this->processKVLIST($client, $payload);
+
+            case 'KVCLEAR':
+
+                return $this->processKVCLEAR($client, $payload);
+
+            default:
+
+                throw new \Exception('Unhandled command: ' . $command);
+
         }
 
         return true;
@@ -1583,7 +1613,7 @@ Restarting.');
 
                         } elseif ($job->respawn == true && $job->status == STATUS_RUNNING) {
 
-                            $this->log->write(W_NOTICE, "Respawning service in " 
+                            $this->log->write(W_NOTICE, "Respawning service in "
                                 . $job->respawn_delay . " seconds.", $name);
 
                             $job->start = time() + $job->respawn_delay;
@@ -2004,6 +2034,103 @@ Restarting.');
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
+
+    }
+
+    private function processKVGET($client, $payload){
+
+        if(!property_exists($payload, 'k')){
+
+            $this->log->write(W_ERR, 'KVGET requires \'k\'');
+
+            return false;
+
+        }
+
+        $this->log->write(W_DEBUG, 'KVGET: ' . $payload->k);
+
+        return $client->send('KVGET', (array_key_exists($payload->k, $this->kv_store) ? $this->kv_store[$payload->k] : null));
+
+    }
+
+    private function processKVSET($client, $payload){
+
+        if(!property_exists($payload, 'k')){
+
+            $this->log->write(W_ERR, 'KVSET requires \'k\'');
+
+            return false;
+
+        }
+
+        $this->log->write(W_DEBUG, 'KVSET: ' . $payload->k);
+
+        $this->kv_store[$payload->k] = ake($payload, 'v');
+
+        return $client->send('KVSET', true);
+
+    }
+
+    private function processKVHAS($client, $payload){
+
+        if(!property_exists($payload, 'k')){
+
+            $this->log->write(W_ERR, 'KVHAS requires \'k\'');
+
+            return false;
+
+        }
+
+        $this->log->write(W_DEBUG, 'KVHAS: ' . $payload->k);
+
+        $client->send('KVHAS', array_key_exists($payload->k, $this->kv_store));
+
+        return true;
+
+    }
+
+    private function processKVDEL($client, $payload){
+
+        if(!property_exists($payload, 'k')){
+
+            $this->log->write(W_ERR, 'KVDEL requires \'k\'');
+
+            return false;
+
+        }
+
+        if($exists = array_key_exists($payload->k, $this->kv_store))
+            unset($this->kv_store[$payload->k]);
+
+        $this->log->write(W_DEBUG, 'KVDEL: ' . $payload->k);
+
+        return $client->send('KVDEL', $exists);
+
+    }
+
+    private function processKVLIST($client, $payload){
+
+        $this->log->write(W_DEBUG, 'KVLIST');
+
+        return $client->send('KVLIST', $this->kv_store);
+
+    }
+
+    private function processKVCLEAR($client, $payload){
+
+        if(!property_exists($payload, 'k')){
+
+            $this->log->write(W_ERR, 'KVCLEAR requires \'k\'');
+
+            return false;
+
+        }
+
+        $this->log->write(W_DEBUG, 'KVCLEAR');
+
+        $this->kv_store = array();
+
+        return $client->send('KVDEL', true);
 
     }
 
