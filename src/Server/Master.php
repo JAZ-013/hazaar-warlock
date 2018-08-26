@@ -2215,13 +2215,13 @@ Restarting.');
 
     private function expireKeys(){
 
-        ksort($this->kv_expire);
-
         $now = time();
 
         foreach($this->kv_expire as $namespace => &$slots){
 
-            foreach($slots as $time => $keys){
+            ksort($this->kv_expire[$namespace], SORT_NUMERIC);
+
+            foreach($slots as $time => &$keys){
 
                 if($time > $now)
                     break;
@@ -2234,9 +2234,12 @@ Restarting.');
 
                 }
 
-                unset($slots[$time]);
+                unset($this->kv_expire[$namespace][$time]);
 
             }
+
+            if(count($slots) === 0)
+                unset($this->kv_expire[$namespace]);
 
         }
 
