@@ -324,6 +324,17 @@ class Controller extends \Hazaar\Controller\Action {
 
     }
 
+    /**
+     * Test a service
+     *
+     * Developing services can be difficult to debug.  While Warlock provides exceptional error handling
+     * and logging output, there is nothing that can replace stepping through with breakpoints.  The
+     * \Hazaar\Warlock\Control::test() method allows a service to be executed in the frontend application
+     * instance and allows debuggers to work with service code.
+     *
+     * @throws \Exception
+     * @return Response\Json
+     */
     public function test() {
 
         $out = new Response\Json(array(

@@ -356,5 +356,118 @@ class Control extends Process {
 
     }
 
+    public function kvGet($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVGET', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVGET')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvSet($key, $value, $timeout = NULL, $namespace = null) {
+
+        $data = array('k' => $key, 'v' => $value);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if($timeout !== null)
+            $data['t'] = $timeout;
+
+        if(!$this->send('KVSET', $data))
+            return false;
+
+        $resp = $this->recv($payload);
+
+        if($resp !== 'KVSET')
+            throw new \Exception('Invalid response from server: ' . $resp);
+
+        return $payload;
+
+    }
+
+    public function kvHas($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVHAS', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVHAS')
+            throw new \Exception('Got invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvDel($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVDEL', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVDEL')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvClear($namespace = null) {
+
+        $data = ($namespace ? array('n' => $namespace) : null);
+
+        $payload = null;
+
+        if(!$this->send('KVCLEAR', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVCLEAR')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvList($namespace = null){
+
+        $data = ($namespace ? array('n' => $namespace) : null);
+
+        $payload = null;
+
+        if(!$this->send('KVLIST', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVLIST')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
 }
 
