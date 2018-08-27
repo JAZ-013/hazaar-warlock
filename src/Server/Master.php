@@ -115,9 +115,7 @@ class Master {
     // The Warlock protocol encoder/decoder.
     static public $protocol;
 
-    private $kv_store = array();
-
-    private $kv_expire = array();
+    private $kv_store;
 
     /**
      * Warlock server constructor
@@ -429,6 +427,14 @@ class Master {
         if ($this->isRunning())
             throw new \Exception("Warlock is already running.");
 
+        if($this->config->server['kvstore'] === true){
+
+            $this->log->write(W_NOTICE, 'Initialising KV Store');
+
+            $this->kv_store = new Kvstore($this->log);
+
+        }
+
         $this->log->write(W_NOTICE, 'Creating TCP socket');
 
         $this->master = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -559,7 +565,8 @@ class Master {
 
                 $this->checkClients();
 
-                $this->expireKeys();
+                if($this->kv_store)
+                    $this->kv_store->expireKeys();
 
                 $this->rrd->setValue('sockets', count($this->sockets));
 
@@ -914,6 +921,9 @@ class Master {
      */
     public function processCommand(Client $client, $command, &$payload) {
 
+        if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
+            return $this->kv_store->process($client, $command, $payload);
+
         if (!($command && array_key_exists($client->id, $this->admins)))
             throw new \Exception('Admin commands only allowed by authorised clients!');
 
@@ -1049,30 +1059,6 @@ class Master {
                 $client->send('OK', array('command' => $command, 'name' => $payload));
 
                 break;
-
-            case 'KVGET':
-
-                return $this->processKVGET($client, $payload);
-
-            case 'KVSET':
-
-                return $this->processKVSET($client, $payload);
-
-            case 'KVHAS':
-
-                return $this->processKVHAS($client, $payload);
-
-            case 'KVDEL':
-
-                return $this->processKVDEL($client, $payload);
-
-            case 'KVLIST':
-
-                return $this->processKVLIST($client, $payload);
-
-            case 'KVCLEAR':
-
-                return $this->processKVCLEAR($client, $payload);
 
             default:
 
@@ -2038,219 +2024,6 @@ Restarting.');
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
-
-    }
-
-    private function processKVGET($client, $payload){
-
-        $value = null;
-
-        if(property_exists($payload, 'k')){
-
-            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-            $this->log->write(W_DEBUG, 'KVGET: ' . $namespace . '::' . $payload->k);
-
-            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])){
-
-                $slot =& $this->kv_store[$namespace][$payload->k];
-
-                if(array_key_exists('e', $slot)
-                    && ($key = array_search($payload->k, $this->kv_expire[$namespace][$slot['e']])) !== false)
-                    unset($this->kv_expire[$namespace][$slot['e']][$key]);
-
-                if(array_key_exists('t', $slot)){
-
-                    $slot['e'] = time() + $slot['t'];
-
-                    $this->kv_expire[$namespace][$slot['e']][] = $payload->k;
-
-                }
-
-                $value = $slot['v'];
-
-            }
-
-        }else{
-
-            $this->log->write(W_ERR, 'KVGET requires \'k\'');
-
-        }
-
-        return $client->send('KVGET', $value);
-
-    }
-
-    private function processKVSET($client, $payload){
-
-        $result = false;
-
-        if(property_exists($payload, 'k')){
-
-            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-            $this->log->write(W_DEBUG, 'KVSET: ' . $namespace . '::' . $payload->k);
-
-            if(array_key_exists($namespace, $this->kv_store)
-                && array_key_exists($payload->k, $this->kv_store[$namespace])
-                && array_key_exists('e', $this->kv_store[$namespace][$payload->k])){
-
-                $e = $this->kv_store[$namespace][$payload->k]['e'];
-
-                if(($key = array_search($payload->k, $this->kv_expire[$namespace][$e])) !== false)
-                    unset($this->kv_expire[$namespace][$e][$key]);
-
-            }
-
-            $slot = array('v' => ake($payload, 'v'));
-
-            if(property_exists($payload, 't')){
-
-                $slot['t'] = $payload->t;
-
-                $slot['e'] = time() + $payload->t;
-
-                $this->kv_expire[$namespace][$slot['e']][] = $payload->k;
-
-            }
-
-            $this->kv_store[$namespace][$payload->k] = $slot;
-
-            $result = true;
-
-        }else{
-
-            $this->log->write(W_ERR, 'KVSET requires \'k\'');
-
-        }
-
-        return $client->send('KVSET', $result);
-
-    }
-
-    private function processKVHAS($client, $payload){
-
-        $result = false;
-
-        if(property_exists($payload, 'k')){
-
-            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-            $this->log->write(W_DEBUG, 'KVHAS: ' . $namespace . '::' . $payload->k);
-
-            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
-
-        }else{
-
-            $this->log->write(W_ERR, 'KVHAS requires \'k\'');
-
-        }
-
-        $client->send('KVHAS', $result);
-
-        return true;
-
-    }
-
-    private function processKVDEL($client, $payload){
-
-        $result = false;
-
-        if(property_exists($payload, 'k')){
-
-            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-            $this->log->write(W_DEBUG, 'KVDEL: ' . $namespace . '::' . $payload->k);
-
-            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
-
-            if($result === true)
-                unset($this->kv_store[$namespace][$payload->k]);
-
-        }else{
-
-            $this->log->write(W_ERR, 'KVDEL requires \'k\'');
-
-        }
-
-        return $client->send('KVDEL', $result);
-
-    }
-
-    private function processKVLIST($client, $payload){
-
-        $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-        $this->log->write(W_DEBUG, 'KVLIST: ' . $namespace);
-
-        $list = null;
-        
-        if(array_key_exists($namespace, $this->kv_store)){
-            
-            $list = array();
-            
-            foreach($this->kv_store[$namespace] as $key => $data)
-                $list[$key] = $data['v'];
-
-        }
-
-        return $client->send('KVLIST', $list);
-
-    }
-
-    private function processKVCLEAR($client, $payload){
-
-        $result = false;
-
-        if(property_exists($payload, 'k')){
-
-            $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
-
-            $this->log->write(W_DEBUG, 'KVDEL: ' . $namespace);
-
-            $this->kv_store[$namespace] = array();
-
-            $result = true;
-
-        }else{
-
-            $this->log->write(W_ERR, 'KVCLEAR requires \'k\'');
-
-        }
-
-        return $client->send('KVDEL', $result);
-
-    }
-
-    private function expireKeys(){
-
-        $now = time();
-
-        foreach($this->kv_expire as $namespace => &$slots){
-
-            ksort($this->kv_expire[$namespace], SORT_NUMERIC);
-
-            foreach($slots as $time => &$keys){
-
-                if($time > $now)
-                    break;
-
-                foreach($keys as $key){
-
-                    $this->log->write(W_DEBUG, 'KVEXPIRE: ' . $namespace . '::' . $key);
-
-                    unset($this->kv_store[$namespace][$key]);
-
-                }
-
-                unset($this->kv_expire[$namespace][$time]);
-
-            }
-
-            if(count($slots) === 0)
-                unset($this->kv_expire[$namespace]);
-
-        }
 
     }
 

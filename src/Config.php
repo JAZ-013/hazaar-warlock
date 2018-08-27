@@ -25,7 +25,8 @@ class Config {
              'listen' => '127.0.0.1',               //Server IP to listen on.  127.0.0.1 by default which only accept connections from localhost.  Use 0.0.0.0 to listen on all addresses.
              'port' => 8000,                        //Server port to listen on.  The client will automatically attempt to connect on this port unluess overridden in the client section
              'encoded' => TRUE,
-             'win_bg' => false
+             'win_bg' => false,
+             'kvstore' => true
          ),
          'client' => array(
              'connect' => true,                     //Connect automatically on startup.  If false, connect() must be called manually.

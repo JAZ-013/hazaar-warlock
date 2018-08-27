@@ -29,6 +29,7 @@
     <Compile Include="src\Process.php" />
     <Compile Include="src\Server.php" />
     <Compile Include="src\Server\Job.php" />
+    <Compile Include="src\Server\Kvstore.php" />
     <Compile Include="src\Server\Service.php" />
     <Compile Include="src\Server\Job\Runner.php" />
     <Compile Include="src\Server\Job\Service.php" />

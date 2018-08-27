@@ -469,5 +469,144 @@ class Control extends Process {
 
     }
 
+    public function kvPull($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVPULL', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVPULL')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvPush($key, $value, $namespace = null){
+
+        $data = array('k' => $key, 'v' => $value);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVPUSH', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVPUSH')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvPop($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVPOP', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVPOP')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvShift($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVSHIFT', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVSHIFT')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvUnshift($key, $value, $namespace = null){
+
+        $data = array('k' => $key, 'v' => $value);
+
+        $payload = null;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVUNSHIFT', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVUNSHIFT')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvIncr($key, $step = null, $namespace = null){
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($step > 0)
+            $data['s'] = $step;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVINCR', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVINCR')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
+    public function kvDecr($key, $step = null, $namespace = null){
+
+        $data = array('k' => $key);
+
+        $payload = null;
+
+        if($step > 0)
+            $data['s'] = $step;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if(!$this->send('KVDECR', $data))
+            return false;
+
+        if($this->recv($payload) !== 'KVDECR')
+            throw new \Exception('Invalid response from server!');
+
+        return $payload;
+
+    }
+
 }
 
