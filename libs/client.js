@@ -34,7 +34,6 @@ var p = {
     debug: 0x91
 };
 
-//var HazaarWarlock = function (sid, host, useWebSockets, websocketsAutoReconnect, useSSL) {
 var HazaarWarlock = function (options) {
     var o = this;
     this.__options = hazaar.extend(options, {
@@ -75,20 +74,13 @@ var HazaarWarlock = function (options) {
     };
     this.connect = function () {
         this.__connect = true;
-        if (!this.__isWebSocket()) {
-            this.__longPollingUrl = 'http://' + this.__options.server
-                + ':' + this.__options.port
-                + '/' + this.__options.applicationName
-                + '/warlock';
-            return true;
-        }
         if (!this.__socket) {
             var url = 'ws' + (this.__options.ssl ? 's' : '') + '://'
+                + (this.__options.username ? btoa(this.__options.username) + '@' : '')
                 + this.__options.server + ':'
                 + this.__options.port + '/'
                 + this.__options.applicationName
                 + '/warlock?CID=' + this.guid;
-            if (this.__options.username) url += '&UID=' + btoa(this.__options.username);
             this.__socket = new WebSocket(url, 'warlock');
             try {
                 this.__socket.onopen = function (event) {
@@ -117,62 +109,10 @@ var HazaarWarlock = function (options) {
             }
         }
     };
-    this.__longpoll = function (event_id, callback, filter) {
-        this.__connectHandler();
-        var packet = {
-            'TYP': p.subscribe,
-            'SID': this.__options.sid,
-            'PLD': {
-                'id': event_id,
-                'filter': filter
-            }
-        };
-        var data = {
-            CID: this.guid,
-            P: this.__encode(packet)
-        };
-        if (this.username) data['UID'] = btoa(this.username);
-        var socket = $.get(this.__longPollingUrl, data).done(function (data) {
-            var result = true;
-            o.__options.reconnectRetries = 0;
-            if (data.length > 0) {
-                result = o.__messageHandler(o.__decode(data));
-            }
-            if (result) {
-                setTimeout(function () {
-                    o.__longpoll(event_id, callback, filter);
-                }, 0);
-                return result;
-            }
-        }).fail(function (jqXHR) {
-            o.__closeHandler({ data: { 'id': event_id, 'callback': callback, 'filter': filter } });
-        }).always(function () {
-            o.__unlongpoll();
-        });
-        this.__sockets.push(socket);
-        if (this.admin_key && this.__sockets.length === 1) {
-            this.__send(p.sync, { 'admin_key': this.admin_key });
-        }
-    };
-    this.__unlongpoll = function (xhr) {
-        for (x in o.__sockets) {
-            if (o.__sockets[x].readyState === 4)
-                delete o.__sockets[x];
-        }
-    };
-    this.__isWebSocket = function () {
-        return (this.__options.websockets && (("WebSocket" in window && window.WebSocket !== undefined) || ("MozWebSocket" in window)));
-    };
     this.__disconnect = function () {
         this.__connect = false;
-        if (this.__isWebSocket()) {
-            this.__socket.close();
-            this.__socket = null;
-        } else {
-            for (i in this.__sockets)
-                this.__sockets[i].abort();
-            this.__sockets = [];
-        }
+        this.__socket.close();
+        this.__socket = null;
     };
     this.__encode = function (packet) {
         packet = JSON.stringify(packet);
@@ -225,15 +165,9 @@ var HazaarWarlock = function (options) {
             this.__options.reconnectRetries++;
             if (this.__options.reconnectDelay < 30000)
                 this.__options.reconnectDelay = this.__options.reconnectRetries * 1000;
-            if (this.__isWebSocket()) {
-                if (this.__options.reconnect) {
-                    setTimeout(function () {
-                        o.connect();
-                    }, this.__options.reconnectDelay);
-                }
-            } else {
+            if (this.__options.reconnect) {
                 setTimeout(function () {
-                    o.__longpoll(event.data.id, event.data.callback, event.data.filter);
+                    o.connect();
                 }, this.__options.reconnectDelay);
             }
         } else {
@@ -263,21 +197,10 @@ var HazaarWarlock = function (options) {
             'TME': Math.round((new Date).getTime() / 1000)
         };
         if (typeof payload !== 'undefined') packet.PLD = payload;
-        if (this.__isWebSocket()) {
-            if (o.__socket && o.__socket.readyState === 1)
-                this.__socket.send(this.__encode(packet));
-            else if (queue)
-                this.__messageQueue.push([type, payload]);
-        } else {
-            packet.CID = this.guid;
-            $.post(this.__longPollingUrl, { CID: this.guid, P: this.__encode(packet) }).done(function (data) {
-                var packet = o.__decode(data);
-                if (packet.TYP !== p.ok)
-                    alert('An error occured sending the trigger event!');
-            }).fail(function (xhr) {
-                o.__messageQueue.push([type, payload]);
-            });
-        }
+        if (o.__socket && o.__socket.readyState === 1)
+            this.__socket.send(this.__encode(packet));
+        else if (queue)
+            this.__messageQueue.push([type, payload]);
     };
     this.__log = function (msg) {
         console.log('Warlock: ' + msg);
@@ -319,15 +242,11 @@ var HazaarWarlock = function (options) {
         this.__subscribeQueue[event_id] = {
             'callback': callback, 'filter': filter
         };
-        if (this.__isWebSocket()) {
-            this.__subscribe(event_id, filter);
-        } else {
-            this.__longpoll(event_id, callback, filter);
-        }
+        this.__subscribe(event_id, filter);
         return this;
     };
     this.unsubscribe = function (event_id) {
-        if (!(this.__isWebSocket() && this.__subscribeQueue[event_id]))
+        if (!this.__subscribeQueue[event_id])
             return false;
         delete this.__subscribeQueue[event_id];
         this.__unsubscribe(event_id);
@@ -360,15 +279,6 @@ var HazaarWarlock = function (options) {
     };
     this.enableEncoding = function () {
         this.__options.encoded = true;
-        return this;
-    };
-    this.enableWebsockets = function (autoReconnect) {
-        this.__options.websockets = true;
-        this.__options.reconnect = (typeof autoReconnect === 'undefined') ? true : autoReconnect;
-        return this;
-    };
-    this.setUser = function (username) {
-        this.username = username;
         return this;
     };
     this.status = function () {
