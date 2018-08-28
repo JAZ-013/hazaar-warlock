@@ -96,7 +96,11 @@ class Control extends Process {
         if($config)
             $this->config->extend($config);
 
-        if(! $this->connect(APPLICATION_NAME, $this->config->client['server'], $this->config->client['port'])) {
+        $headers = array(
+            'X-WARLOCK-ADMIN-KEY' => base64_encode($this->config->admin->key)
+        );
+
+        if(!$this->connect(APPLICATION_NAME, $this->config->client['server'], $this->config->client['port'], $headers)) {
 
             $this->disconnect(FALSE);
 
@@ -106,11 +110,6 @@ class Control extends Process {
                 throw new \Exception('Unable to communicate with Warlock.  Is it running?');
 
         }
-
-        $this->send('sync', array('admin_key' => $this->config->admin->key));
-
-        if($this->recv() !== 'OK')
-            throw new \Exception('Connected to Warlock, but server refused our admin key!');
 
         Control::$instance = $this;
 
