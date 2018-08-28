@@ -285,7 +285,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function send($command, $payload = null) {
+    protected function send($command, $payload = null) {
 
         if(! $this->socket)
             return false;
@@ -326,7 +326,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
+    protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
         //Process any frames sitting in the local frame buffer first.
         while($frame = $this->processFrame()){
