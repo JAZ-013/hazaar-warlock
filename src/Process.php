@@ -56,7 +56,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function connect($application_name, $host, $port, $job_id = null, $access_key = null){
+    public function connect($application_name, $host, $port, $extra_headers = null){
 
         if (!extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
@@ -78,10 +78,17 @@ abstract class Process extends Protocol\WebSockets {
 
         }
 
+        $headers = array(
+            'X-WARLOCK-USER' => base64_encode(get_current_user())
+        );
+
+        if(is_array($extra_headers))
+            $headers = array_merge($headers, $extra_headers);
+
         /**
          * Initiate a WebSockets connection
          */
-        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key);
+        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key, $headers);
 
         @socket_write($this->socket, $handshake, strlen($handshake));
 
@@ -105,28 +112,6 @@ abstract class Process extends Protocol\WebSockets {
 
         if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
             throw new \Exception('Warlock server denied our connection attempt!');
-
-        //If we have a job_id and access_key we can register as a control channel
-        if($job_id && $access_key){
-
-            $this->job_id = $job_id;
-
-            $this->send('SYNC', array(
-                'client_id' => $this->id,
-                'user' => base64_encode(get_current_user()),
-                'job_id' => $job_id,
-                'access_key' => $access_key
-            ));
-
-            if($this->recv() != 'OK'){
-
-                $this->send('ERROR', 'Service was unable to register control channel');
-
-                return false;
-
-            }
-
-        }
 
         return true;
 

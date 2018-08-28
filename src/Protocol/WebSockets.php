@@ -63,7 +63,7 @@ abstract class WebSockets {
 
     }
 
-    protected function createHandshake($path, $host, $origin, $key) {
+    protected function createHandshake($path, $host, $origin, $key, $extra_headers = null) {
 
         $headers = array(
             'Host'                   => $host,
@@ -77,13 +77,13 @@ abstract class WebSockets {
         if($origin)
             $header['Origin'] = $origin;
 
+        if(is_array($extra_headers))
+            $headers = array_merge($headers, $extra_headers);
+
         $requestHeaders = 'GET ' . $path . " HTTP/1.1\r\n";
 
-        foreach($headers as $name => $value) {
-
+        foreach($headers as $name => $value) 
             $requestHeaders .= $name . ': ' . $value . "\r\n";
-
-        }
 
         return $requestHeaders . "\r\n";
 

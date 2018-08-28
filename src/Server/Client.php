@@ -116,35 +116,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $responseCode = $this->acceptHandshake($headers, $responseHeaders, NULL, $results);
 
-        if (array_key_exists('get', $headers) && $responseCode === 101) {
-
-            $this->log->write(W_NOTICE, "Initiating WebSockets handshake");
-
-            if (!($this->id = $results['url']['CID']))
-                return false;
-
-            if(array_key_exists('UID', $results['url'])){
-
-                $this->username = base64_decode($results['url']['UID']);
-
-                if ($this->username != NULL)
-                    $this->log->write(W_NOTICE, "USER: $this->username");
-
-            }
-
-            $response = $this->httpResponse($responseCode, NULL, $responseHeaders);
-
-            $result = @socket_write($this->socket, $response, strlen($response));
-
-            if($result !== false && $result > 0){
-
-                $this->log->write(W_NOTICE, 'WebSockets handshake successful!');
-
-                return true;
-
-            }
-
-        } elseif ($responseCode > 0) {
+        if (!array_key_exists('get', $headers) || $responseCode !== 101) {
 
             $responseHeaders['Connection'] = 'close';
 
@@ -158,9 +130,56 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             @socket_write($this->socket, $response, strlen($response));
 
+            return false;
+
         }
 
-        return false;
+        $this->log->write(W_NOTICE, "Initiating WebSockets handshake");
+
+        if (!($this->id = $results['url']['CID']))
+            return false;
+
+        if(array_key_exists('UID', $results['url'])){
+
+            $this->username = base64_decode($results['url']['UID']);
+
+            if ($this->username != NULL)
+                $this->log->write(W_NOTICE, "USER: $this->username");
+
+        }
+
+        $response = $this->httpResponse($responseCode, NULL, $responseHeaders);
+
+        $bytes = strlen($response);
+
+        $result = @socket_write($this->socket, $response, $bytes);
+
+        if($result === false || $result !== $bytes)
+            return false;
+
+        if(array_key_exists('x-warlock-admin-key', $headers)){
+
+            $payload = (object)array('admin_key' => base64_decode($headers['x-warlock-admin-key']));
+
+            if(!$this->commandSync($payload, false))
+                return false;
+
+        }elseif(array_key_exists('x-warlock-job-id', $headers) && array_key_exists('x-warlock-access-key', $headers)){
+
+            $payload = (object)array(
+                'client_id' => $this->id,
+                'job_id' => $headers['x-warlock-job-id'],
+                'access_key' => $headers['x-warlock-access-key']
+            );
+
+            if(!$this->commandSync($payload, false))
+                return false;
+
+        }
+
+        $this->log->write(W_NOTICE, 'WebSockets handshake successful!');
+
+        return true;
 
     }
 
@@ -602,7 +621,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     }
 
-    private function commandSync(\stdClass $payload){
+    private function commandSync(\stdClass $payload, $acknowledge = true){
 
         $this->log->write(W_DEBUG, "SYNC: CLIENT_ID=$this->id OFFSET=$this->offset");
 
@@ -616,7 +635,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             }
 
-            $this->send('OK');
+            if($acknowledge === true) $this->send('OK');
+
+            return true;
 
         }elseif(property_exists($payload, 'job_id')
             && $payload->client_id === $this->id){
@@ -629,19 +650,17 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             }
 
-            $this->send('OK');
+            if($acknowledge === true) $this->send('OK');
 
-        } else {
-
-            $this->log->write(W_ERR, 'Client requested bad sync!');
-
-            $this->closing = true;
-
-            throw new \Exception('Rejected');
+            return true;
 
         }
 
-        return true;
+        $this->log->write(W_ERR, 'Client requested bad sync!');
+
+        if($acknowledge) $this->send('ERROR');
+
+        return false;
 
     }
 

@@ -790,8 +790,13 @@ class Master {
             if (!($client = $this->addClient($socket)))
                 $this->disconnect($socket);
 
-            if(!$client->initiateHandshake($buf))
+            if(!$client->initiateHandshake($buf)){
+
                 $this->removeClient($socket);
+
+                socket_close($socket);
+
+            }
 
         }
 
