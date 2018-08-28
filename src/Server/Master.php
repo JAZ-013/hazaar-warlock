@@ -429,7 +429,7 @@ class Master {
 
         if($this->config->server['kvstore'] === true){
 
-            $this->log->write(W_NOTICE, 'Initialising KV Store');
+            $this->log->write(W_INFO, 'Initialising KV Store');
 
             $this->kv_store = new Kvstore($this->log);
 
