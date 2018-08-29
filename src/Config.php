@@ -15,6 +15,7 @@ class Config {
     static public $default_config = array(
          'sys' => array(
              'id' => 0,                             //Server ID is used to prevent clients from talking to the wrong server.
+             'application_name' => null,            //The application is also used to prevent clients from talking to the wrong server.
              'autostart' => FALSE,                  //If TRUE the Warlock\Control class will attempt to autostart the server if it is not running.
              'pid' => 'warlock.pid',                //The name of the warlock process ID file relative to the application runtime directory.  For absolute paths prefix with /.
              'cleanup' => TRUE,                     //Enable/Disable message queue cleanup.

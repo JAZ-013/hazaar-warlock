@@ -39,6 +39,8 @@ class Control extends Process {
 
         Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
+        Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
+
         $app = \Hazaar\Application::getInstance();
 
         $guid_file = $app->runtimePath('warlock.guid');
@@ -56,6 +58,9 @@ class Control extends Process {
 
         if(!$this->config->loaded())
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
+
+        if($config)
+            $this->config->extend($config);
 
         if(!$this->config->sys['php_binary'])
             $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
@@ -93,14 +98,11 @@ class Control extends Process {
 
         }
 
-        if($config)
-            $this->config->extend($config);
-
         $headers = array(
             'X-WARLOCK-ADMIN-KEY' => base64_encode($this->config->admin->key)
         );
 
-        if(!$this->connect(APPLICATION_NAME, $this->config->client['server'], $this->config->client['port'], $headers)) {
+        if(!$this->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers)) {
 
             $this->disconnect(FALSE);
 
