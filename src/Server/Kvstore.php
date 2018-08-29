@@ -136,6 +136,14 @@ class Kvstore {
 
                 return $this->decr($client, $payload, $namespace);
 
+            case 'KVKEYS':
+
+                return $this->keys($client, $payload, $namespace);
+
+            case 'KVVALS':
+
+                return $this->values($client, $payload, $namespace);
+
         }
 
         return null;
@@ -429,4 +437,25 @@ class Kvstore {
 
     }
 
+    public function keys(Client $client, $payload, $namespace){
+
+        $result = null;
+
+        if(array_key_exists($namespace, $this->kv_store))
+            $result = array_keys($this->kv_store[$namespace]);
+
+        return $client->send('KVKEYS', $result);
+
+    }
+
+    public function values(Client $client, $payload, $namespace){
+
+        $result = null;
+
+        if(array_key_exists($namespace, $this->kv_store))
+            $result = array_values($this->kv_store[$namespace]);
+
+        return $client->send('KVVALS', $result);
+
+    }
 }

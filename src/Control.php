@@ -518,4 +518,26 @@ class Control extends Process {
 
     }
 
+    public function kvKeys($namespace = null){
+
+        $data = array();
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVKEYS', $data);
+
+    }
+
+    public function kvVals($namespace = null){
+
+        $data = array();
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVVALS', $data);
+
+    }
+
 }
