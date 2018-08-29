@@ -8,6 +8,10 @@ class Runner extends \Hazaar\Warlock\Server\Job {
 
         return array(
             'type' => array('value' => 'runner'),
+            'timeout' => array(
+                'type' => 'int',
+                'default' => 60
+            ),
             'function' => array(
                 'type' => 'string'
             )
@@ -58,7 +62,7 @@ class Runner extends \Hazaar\Warlock\Server\Job {
 
     public function timeout(){
 
-        return (time() >= ($this->process->start + $this->config->exec->timeout));
+        return (time() >= ($this->process->start + $this->timeout));
 
     }
 

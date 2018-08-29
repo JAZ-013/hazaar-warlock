@@ -1273,7 +1273,8 @@ class Master {
                 'env' => $application->env
             ),
             'function' => $function->code,
-            'params' => ake($function, 'params', array())
+            'params' => ake($function, 'params', array()),
+            'timeout' => $this->config->exec->timeout
         ));
 
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
