@@ -358,22 +358,28 @@ class Control extends Process {
 
     }
 
+    private function __kv_send_recv($command, $data){
+
+        if(!$this->send($command, $data))
+            return false;
+
+        $payload = null;
+
+        if(($ret = $this->recv($payload)) !== $command)
+            throw new \Exception('Invalid response from server: ' . $ret . (property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+
+        return $payload;
+
+    }
+
     public function kvGet($key, $namespace = null) {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVGET', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVGET')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVGET', $data);
 
     }
 
@@ -381,23 +387,13 @@ class Control extends Process {
 
         $data = array('k' => $key, 'v' => $value);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
         if($timeout !== null)
             $data['t'] = $timeout;
 
-        if(!$this->send('KVSET', $data))
-            return false;
-
-        $resp = $this->recv($payload);
-
-        if($resp !== 'KVSET')
-            throw new \Exception('Invalid response from server: ' . $resp);
-
-        return $payload;
+        return $this->__kv_send_recv('KVSET', $data);
 
     }
 
@@ -405,18 +401,10 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVHAS', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVHAS')
-            throw new \Exception('Got invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVHAS', $data);
 
     }
 
@@ -424,18 +412,10 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVDEL', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVDEL')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVDEL', $data);
 
     }
 
@@ -443,15 +423,7 @@ class Control extends Process {
 
         $data = ($namespace ? array('n' => $namespace) : null);
 
-        $payload = null;
-
-        if(!$this->send('KVCLEAR', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVCLEAR')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVCLEAR', $data);
 
     }
 
@@ -459,15 +431,7 @@ class Control extends Process {
 
         $data = ($namespace ? array('n' => $namespace) : null);
 
-        $payload = null;
-
-        if(!$this->send('KVLIST', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVLIST')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVLIST', $data);
 
     }
 
@@ -475,18 +439,10 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVPULL', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVPULL')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVPULL', $data);
 
     }
 
@@ -494,18 +450,10 @@ class Control extends Process {
 
         $data = array('k' => $key, 'v' => $value);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVPUSH', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVPUSH')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVPUSH', $data);
 
     }
 
@@ -513,18 +461,10 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVPOP', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVPOP')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVPOP', $data);
 
     }
 
@@ -532,18 +472,10 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVSHIFT', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVSHIFT')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVSHIFT', $data);
 
     }
 
@@ -551,18 +483,10 @@ class Control extends Process {
 
         $data = array('k' => $key, 'v' => $value);
 
-        $payload = null;
-
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVUNSHIFT', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVUNSHIFT')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVUNSHIFT', $data);
 
     }
 
@@ -570,21 +494,13 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($step > 0)
             $data['s'] = $step;
 
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVINCR', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVINCR')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVINCR', $data);
 
     }
 
@@ -592,23 +508,14 @@ class Control extends Process {
 
         $data = array('k' => $key);
 
-        $payload = null;
-
         if($step > 0)
             $data['s'] = $step;
 
         if($namespace)
             $data['n'] = $namespace;
 
-        if(!$this->send('KVDECR', $data))
-            return false;
-
-        if($this->recv($payload) !== 'KVDECR')
-            throw new \Exception('Invalid response from server!');
-
-        return $payload;
+        return $this->__kv_send_recv('KVDECR', $data);
 
     }
 
 }
-
