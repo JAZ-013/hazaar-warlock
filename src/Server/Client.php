@@ -627,11 +627,11 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if (property_exists($payload, 'admin_key')){
 
-            if(!Master::$instance->authorise($this, $payload->admin_key)){
+            if(!Master::$instance->authorise($this, $payload->admin_key) && $acknowledge === true) {
 
                 $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id);
 
-                throw new \Exception('Rejected');
+                $this->send('ERROR');
 
             }
 
@@ -646,7 +646,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $this->log->write(W_ERR, 'Service tried to sync with bad access key!', $payload->job_id);
 
-                throw new \Exception('Rejected');
+                return false; //A bad access key will drop the service.
 
             }
 
