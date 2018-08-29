@@ -32,8 +32,6 @@ abstract class Process extends Protocol\WebSockets {
 
     public    $socket_last_error = null;
 
-    protected $job_id;
-
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         parent::__construct(array('warlock'));

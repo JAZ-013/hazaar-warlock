@@ -169,7 +169,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
             $payload = (object)array(
                 'client_id' => $this->id,
                 'job_id' => $headers['x-warlock-job-id'],
-                'access_key' => $headers['x-warlock-access-key']
+                'access_key' => base64_decode($headers['x-warlock-access-key'])
             );
 
             if(!$this->commandSync($payload, false))
