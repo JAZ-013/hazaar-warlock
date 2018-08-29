@@ -98,9 +98,10 @@ class Control extends Process {
 
         }
 
-        $headers = array(
-            'X-WARLOCK-ADMIN-KEY' => base64_encode($this->config->admin->key)
-        );
+        $headers = array();
+
+        if($this->config->admin->key !== null)
+            $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
 
         if(!$this->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers)) {
 
