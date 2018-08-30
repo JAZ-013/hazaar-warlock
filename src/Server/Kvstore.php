@@ -78,6 +78,9 @@ class Kvstore {
 
     public function process(Client $client, $command, &$payload){
 
+        if(!$payload)
+            return false;
+
         $namespace = (property_exists($payload, 'n') ? $payload->n : 'default');
 
         $this->log->write(W_DEBUG, $command . ': ' . $namespace . (property_exists($payload, 'k') ? '::' . $payload->k : ''));
