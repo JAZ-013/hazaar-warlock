@@ -116,7 +116,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $responseCode = $this->acceptHandshake($headers, $responseHeaders, NULL, $results);
 
-        if (!array_key_exists('get', $headers) || $responseCode !== 101) {
+        if (!(array_key_exists('get', $headers) && $responseCode === 101)) {
 
             $responseHeaders['Connection'] = 'close';
 
@@ -148,7 +148,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $response = $this->httpResponse($responseCode, NULL, $responseHeaders);
+        $response = $this->httpResponse($responseCode, null, $responseHeaders);
 
         $bytes = strlen($response);
 
@@ -156,6 +156,17 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if($result === false || $result !== $bytes)
             return false;
+
+        $init_frame = $this->frame(json_encode(\Hazaar\Application\Protocol::$typeCodes), 'text', false);
+
+        //If this is NOT a Warlock process request (ie: it's a browser) send the protocol init frame!
+        if(!(array_key_exists('x-warlock-php', $headers) && $headers['x-warlock-php'] === 'true')){
+
+            $this->log->write(W_DEBUG, 'Sending Hazaar\Application\Protocol initialisation frame');
+
+            $this->write($init_frame);
+
+        }
 
         if(array_key_exists('x-warlock-admin-key', $headers)){
 

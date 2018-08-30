@@ -1,41 +1,7 @@
-var p = {
-    //SYSTEM MESSAGES
-    noop: 0x00,         //Null Opperation
-    sync: 0x01,         //Sync client
-    ok: 0x02,           //OK response
-    error: 0x03,        //Error response
-    status: 0x04,       //Status request/response
-    shutdown: 0x05,     //Shutdown request
-    ping: 0x06,         //Typical PING
-    pong: 0x07,         //Typical PONG
-
-    //CODE EXECUTION MESSAGES
-    delay: 0x10,        //Execute code after a period
-    schedule: 0x11,     //Execute code at a set time
-    exec: 0x12,         //Execute some code in the Warlock Runner.
-    cancel: 0x13,       //Cancel a pending code execution
-
-    //SIGNALLING MESSAGES
-    subscribe: 0x20,    //Subscribe to an event
-    unsubscribe: 0x21,  //Unsubscribe from an event
-    trigger: 0x22,      //Trigger an event
-    event: 0x23,        //An event
-
-    //SERVICE MESSAGES
-    enable: 0x30,       //Start a service
-    disable: 0x31,      //Stop a service
-    service: 0x32,      //Service status
-    spawn: 0x33,        //Spawn a dynamic service
-    kill: 0x34,         //Kill a dynamic service instance
-    signal: 0x35,       //Send a trigger signal directly to an attached service
-
-    //LOGGING/OUTPUT MESSAGES
-    log: 0x90,          //Generic log message
-    debug: 0x91
-};
-
 var HazaarWarlock = function (options) {
     var o = this;
+    this.p = null; //The current protocol
+    this.op = null; //The original protocol as it was sent
     this.__options = hazaar.extend(options, {
         "sid": null,
         "connect": true,
@@ -86,11 +52,6 @@ var HazaarWarlock = function (options) {
                 this.__socket.onopen = function (event) {
                     o.__options.reconnectDelay = 0;
                     o.__options.reconnectRetries = 0;
-                    if (Object.keys(o.__subscribeQueue).length > 0) {
-                        for (event_id in o.__subscribeQueue) {
-                            o.__subscribe(event_id, o.__subscribeQueue[event_id].filter);
-                        }
-                    }
                     o.__connectHandler(event);
                 };
                 this.__socket.onmessage = function (event) {
@@ -124,39 +85,56 @@ var HazaarWarlock = function (options) {
         return JSON.parse((this.__options.encoded ? atob(packet) : packet));
     };
     this.__connectHandler = function (event) {
-        if (this.__messageQueue.length > 0) {
-            for (i in this.__messageQueue) {
-                var msg = this.__messageQueue[i];
-                this.__send(msg[0], msg[1]);
-            }
-            this.__messageQueue = [];
-        }
         if (this.__callbacks.connect) this.__callbacks.connect(event);
     };
     this.__messageHandler = function (packet) {
-        switch (packet.TYP) {
-            case p.event:
-                var event = packet.PLD;
-                if (this.__subscribeQueue[event.id]) this.__subscribeQueue[event.id].callback(event.data, event);
-                break;
-            case p.error:
-                if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
-                else console.error('Command: ' + packet.PLD.command + ' Reason: ' + packet.PLD.reason);
-                return false;
-            case p.status:
-                if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
-                break;
-            case p.ping:
-                this.__send(p.pong);
-                break;
-            case p.pong:
-                if (this.__callbacks.pong) this.__callbacks.pong(packet.PLD);
-                break;
-            case p.ok:
-                break;
-            default:
-                console.log(packet.PLD);
-                break;
+        if (!this.p && typeof packet === 'object') {
+            this.op = packet;
+            this.p = {};
+            for (x in packet) this.p[packet[x].toLowerCase()] = parseInt(x);
+            if (Object.keys(o.__subscribeQueue).length > 0) {
+                for (event_id in o.__subscribeQueue) {
+                    o.__subscribe(event_id, o.__subscribeQueue[event_id].filter);
+                }
+            }
+            if (this.__messageQueue.length > 0) {
+                for (i in this.__messageQueue) {
+                    var msg = this.__messageQueue[i];
+                    this.__send(msg[0], msg[1]);
+                }
+                this.__messageQueue = [];
+            }
+        } else if (packet.TYP in this.op) {
+            var type = this.op[packet.TYP].toLowerCase();
+            if (type in this.__callbacks && Array.isArray(this.__callbacks[type])) {
+                let callback = this.__callbacks[type].shift();
+                if (typeof callback === 'function') callback(packet.PLD);
+            }
+        } else {
+            switch (packet.TYP) {
+                case this.p.event:
+                    var event = packet.PLD;
+                    if (this.__subscribeQueue[event.id]) this.__subscribeQueue[event.id].callback(event.data, event);
+                    break;
+                case this.p.error:
+                    if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
+                    else console.error('Command: ' + packet.PLD.command + ' Reason: ' + packet.PLD.reason);
+                    return false;
+                case this.p.status:
+                    if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
+                    break;
+                case this.p.ping:
+                    this.__send('pong');
+                    break;
+                case this.p.pong:
+                    if (this.__callbacks.pong) this.__callbacks.pong(packet.PLD);
+                    break;
+                case this.p.ok:
+                    break;
+                default:
+                    console.log(packet.PLD);
+                    break;
+            }
         }
         return true;
     };
@@ -180,26 +158,29 @@ var HazaarWarlock = function (options) {
         if (o.__callbacks.error) o.__callbacks.error(event);
     };
     this.__subscribe = function (event_id, filter) {
-        this.__send(p.subscribe, {
+        this.__send('subscribe', {
             'id': event_id,
             'filter': filter
         }, false);
     };
     this.__unsubscribe = function (event_id) {
-        this.__send(p.unsubscribe, {
+        this.__send('unsubscribe', {
             'id': event_id
         }, false);
     };
     this.__send = function (type, payload, queue) {
-        var packet = {
-            'TYP': type,
-            'SID': this.__options.sid,
-            'TME': Math.round((new Date).getTime() / 1000)
-        };
-        if (typeof payload !== 'undefined') packet.PLD = payload;
-        if (o.__socket && o.__socket.readyState === 1)
-            this.__socket.send(this.__encode(packet));
-        else if (queue)
+        if (this.__socket && this.__socket.readyState === 1 && this.p) {
+            var type_id = typeof type === 'string' ? this.p[type] : type;
+            if (type_id >= 0) {
+                var packet = {
+                    'TYP': type_id,
+                    'SID': this.__options.sid,
+                    'TME': Math.round((new Date).getTime() / 1000)
+                };
+                if (typeof payload !== 'undefined') packet.PLD = payload;
+                this.__socket.send(this.__encode(packet));
+            } else console.warn('Unknown Warlock packet type: ' + type);
+        } else if (queue !== false)
             this.__messageQueue.push([type, payload]);
     };
     this.__log = function (msg) {
@@ -235,7 +216,7 @@ var HazaarWarlock = function (options) {
     /* Client Commands */
     this.sync = function (admin_key) {
         this.admin_key = admin_key;
-        this.__send(p.sync, { 'admin_key': this.admin_key }, true);
+        this.__send('sync', { 'admin_key': this.admin_key }, true);
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {
@@ -253,7 +234,7 @@ var HazaarWarlock = function (options) {
         return this;
     };
     this.trigger = function (event_id, data, echo_self) {
-        this.__send(p.trigger, {
+        this.__send('trigger', {
             'id': event_id,
             'data': data,
             'echo': (echo_self === true)
@@ -262,19 +243,19 @@ var HazaarWarlock = function (options) {
     };
     /* Admin Commands (These require sync with admin key) */
     this.stop = function (delay_sec) {
-        this.__send(p.shutdown, (delay_sec > 0 ? { delay: delay_sec } : null));
+        this.__send('shutdown', (delay_sec > 0 ? { delay: delay_sec } : null));
         return this;
     };
     this.enable = function (service) {
-        this.__send(p.enable, service);
+        this.__send('enable', service);
         return this;
     };
     this.disable = function (service) {
-        this.__send(p.disable, service);
+        this.__send('disable', service);
         return this;
     };
     this.service = function (name) {
-        this.__send(p.service, name);
+        this.__send('service', name);
         return this;
     };
     this.enableEncoding = function () {
@@ -282,24 +263,74 @@ var HazaarWarlock = function (options) {
         return this;
     };
     this.status = function () {
-        this.__send(p.status);
+        this.__send('status');
         return this;
     };
     this.spawn = function (service, params) {
-        this.__send(p.spawn, { 'name': service, 'params': params });
+        this.__send('spawn', { 'name': service, 'params': params });
         return this;
     };
     this.kill = function (service) {
-        this.__send(p.kill, { name: service });
+        this.__send('kill', { name: service });
         return this;
     };
     this.signal = function (service, event_id, data) {
-        this.__send(p.signal, {
+        this.__send('signal', {
             'service': service,
             'id': event_id,
             'data': data
         }, true);
         return this;
+    };
+    this.__kv_send = function (msg, payload, callback) {
+        if (!(msg in this.__callbacks)) this.__callbacks[msg] = [];
+        this.__callbacks[msg].push(callback);
+        this.__send(msg, payload);
+    };
+    this.get = function (key, c) {
+        this.__kv_send('kvget', { k: key }, c);
+    };
+    this.set = function (key, value, c) {
+        this.__kv_send('kvset', { k: key, v: value }, c);
+    };
+    this.has = function (key, c) {
+        this.__kv_send('kvhas', { k: key }, c);
+    };
+    this.del = function (key, c) {
+        this.__kv_send('kvdel', { k: key }, c);
+    };
+    this.list = function (key, c) {
+        this.__kv_send('kvlist', { k: key }, c);
+    };
+    this.clear = function (c) {
+        this.__kv_send('kvclear', {}, c);
+    };
+    this.pull = function (key, c) {
+        this.__kv_send('kvpull', { k: key }, c);
+    };
+    this.push = function (key, value, c) {
+        this.__kv_send('kvpush', { k: key, v: value }, c);
+    };
+    this.pop = function (key, c) {
+        this.__kv_send('kvpop', { k: key }, c);
+    };
+    this.shift = function (key, c) {
+        this.__kv_send('kvshift', { k: key }, c);
+    };
+    this.unshift = function (key, value, c) {
+        this.__kv_send('kvclear', { k: key, v: value }, c);
+    };
+    this.incr = function (key, c) {
+        this.__kv_send('kvincr', { k: key }, c);
+    };
+    this.decr = function (key, c) {
+        this.__kv_send('kvclear', { k: key }, c);
+    };
+    this.keys = function (key, c) {
+        this.__kv_send('kvclear', { k: key }, c);
+    };
+    this.values = function (key, c) {
+        this.__kv_send('kvclear', { k: key }, c);
     };
     this.guid = this.__getGUID();
     this.__log('GUID=' + this.guid);

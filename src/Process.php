@@ -82,6 +82,7 @@ abstract class Process extends Protocol\WebSockets {
         }
 
         $headers = array(
+            'X-WARLOCK-PHP' => 'true',
             'X-WARLOCK-USER' => base64_encode(get_current_user())
         );
 
