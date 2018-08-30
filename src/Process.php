@@ -34,7 +34,7 @@ abstract class Process extends Protocol\WebSockets {
 
     public    $socket_last_error = null;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
+    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
 
         parent::__construct(array('warlock'));
 
@@ -44,7 +44,7 @@ abstract class Process extends Protocol\WebSockets {
 
         $this->protocol = $protocol;
 
-        $this->id = guid();
+        $this->id = ($guid === null ? guid() : $guid);
 
         $this->key = uniqid();
 

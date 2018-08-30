@@ -21,18 +21,15 @@ class Control extends Process {
 
     private $cmd;
 
-    private $outputfile;
-
     private $pidfile;
 
     private $server_pid;
 
-    static private $instance;
+    static private $guid;
 
-    function __construct($autostart = NULL, $config = null) {
+    static private $instance = array();
 
-        if(Control::$instance instanceof Control)
-            throw new \Exception('You can only have one instance of Warlock Control.  Please use \Hazaar\Warlock\Control::getInstance().');
+    function __construct($autostart = NULL, $config = null, $instance_key = null) {
 
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
@@ -41,19 +38,6 @@ class Control extends Process {
 
         Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
 
-        $app = \Hazaar\Application::getInstance();
-
-        $guid_file = $app->runtimePath('warlock.guid');
-
-        if(!file_exists($guid_file)
-            || ($this->id = file_get_contents($guid_file)) == FALSE) {
-
-            $this->id = guid();
-
-            file_put_contents($guid_file, $this->id);
-
-        }
-
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
         if(!$this->config->loaded())
@@ -61,30 +45,6 @@ class Control extends Process {
 
         if($config)
             $this->config->extend($config);
-
-        if(!$this->config->sys['php_binary'])
-            $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
-
-        $this->outputfile = $app->runtimePath($this->config->log->file);
-
-        $this->pidfile = $app->runtimePath($this->config->sys->pid);
-
-        $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
-
-        parent::__construct($app, $protocol);
-
-        /**
-         * First we check to see if we need to start the Warlock server process
-         */
-        if($autostart === NULL)
-            $autostart = (boolean)$this->config->sys->autostart;
-
-        if($autostart === true){
-
-            if(!$this->start())
-                throw new \Exception('Autostart of Warlock server has failed!');
-
-        }
 
         if($this->config->client['port'] === null)
             $this->config->client['port'] = $this->config->server['port'];
@@ -95,6 +55,52 @@ class Control extends Process {
                 $this->config->client['server'] = '127.0.0.1';
             else
                 $this->config->client['server'] = $this->config->server['listen'];
+
+        }
+
+        if(!$instance_key)
+            $instance_key = hash('crc32b', $this->config->client['server'] . $this->config->client['port']);
+
+        if(array_key_exists($instance_key, Control::$instance))
+            throw new \Exception('There is already a control instance for this server:host.  Please use ' . __CLASS__ . '::getInstance()');
+
+        Control::$instance[$instance_key] = $this;
+
+        $app = \Hazaar\Application::getInstance();
+
+        $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
+
+        parent::__construct($app, $protocol, Control::$guid);
+
+        if(!Control::$guid){
+
+            $guid_file = $app->runtimePath('warlock.guid');
+
+            if(!file_exists($guid_file) || (Control::$guid = file_get_contents($guid_file)) == FALSE) {
+
+                Control::$guid = guid();
+
+                file_put_contents($guid_file, Control::$guid);
+
+            }
+
+            /**
+             * First we check to see if we need to start the Warlock server process
+             */
+            if($autostart === NULL)
+                $autostart = (boolean)$this->config->sys->autostart;
+
+            if($autostart === true){
+
+                if(!$this->config->sys['php_binary'])
+                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+
+                $this->pidfile = $app->runtimePath($this->config->sys->pid);
+
+                if(!$this->start())
+                    throw new \Exception('Autostart of Warlock server has failed!');
+
+            }
 
         }
 
@@ -114,20 +120,23 @@ class Control extends Process {
 
         }
 
-        Control::$instance = $this;
-
     }
 
     static public function getInstance($autostart = null, $config = null){
 
-        if(!Control::$instance instanceof Control)
-            new Control($autostart, $config);
+        $instance_key = hash('crc32b', $config['client']['server'] . $config['client']['port']);
 
-        return Control::$instance;
+        if(!(array_key_exists($instance_key, Control::$instance) && Control::$instance[$instance_key] instanceof Control))
+            Control::$instance[$instance_key] = new Control($autostart, $config, $instance_key);
+
+        return Control::$instance[$instance_key];
 
     }
 
     public function isRunning() {
+
+        if(!$this->pidfile)
+            throw new \Exception('Can not check for running Warlock instance without PID file!');
 
         if(!file_exists($this->pidfile))
             return false;
@@ -160,6 +169,9 @@ class Control extends Process {
     }
 
     public function start($timeout = NULL) {
+
+        if(!$this->pidfile)
+            return false;
 
         if($this->isRunning())
             return true;
