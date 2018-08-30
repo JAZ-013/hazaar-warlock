@@ -11,6 +11,8 @@ abstract class Process extends Protocol\WebSockets {
 
     protected $id;
 
+    protected $job_id;
+
     protected $key;
 
     protected $socket;
@@ -55,6 +57,9 @@ abstract class Process extends Protocol\WebSockets {
     }
 
     public function connect($application_name, $host, $port, $extra_headers = null){
+
+        if(array_key_exists('X-WARLOCK-JOB-ID', $extra_headers))
+            $this->job_id = $extra_headers['X-WARLOCK-JOB-ID'];
 
         if (!extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
@@ -487,6 +492,9 @@ abstract class Process extends Protocol\WebSockets {
 
     public function log($level, $message, $name = null){
 
+        if($name === null)
+            $name = $this->job_id;
+
         if(!(is_int($level) && is_string($message)))
             return false;
 
@@ -494,9 +502,9 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function debug($data){
+    public function debug($data, $name = null){
 
-        return $this->send('DEBUG', array('data' => $data, 'service' => $this->name));
+        return $this->send('DEBUG', array('data' => $data, 'name' => $name));
 
     }
 

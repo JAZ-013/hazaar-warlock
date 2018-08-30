@@ -24,8 +24,6 @@ define('W_LOCAL', -1);
  */
 abstract class Service extends Process {
 
-    protected $job_id;
-
     protected $name;
 
     protected $config;
@@ -120,15 +118,6 @@ abstract class Service extends Process {
 
     }
 
-    public function connect($application_name, $host, $port, $extra_headers = null){
-
-        if(array_key_exists('X-WARLOCK-JOB-ID', $extra_headers))
-            $this->job_id = $extra_headers['X-WARLOCK-JOB-ID'];
-
-        return parent::connect($application_name, $host, $port, $extra_headers);
-
-    }
-
     public function log($level, $message, $name = null){
 
         if($name === null)
@@ -146,7 +135,23 @@ abstract class Service extends Process {
 
     }
 
+    public function debug($message, $name = null){
+
+        if($name === null)
+            $name = $this->name;
+
+        if(parent::debug($message, $name) === true){
+
+            echo date('Y-m-d H:i:s') . ' - DEBUG - ' . $message . "\n";
+
+            flush();
+
+        }
+
+    }
+
     private function invokeMethod($method, $params = null){
+
 
         $args = array();
 
