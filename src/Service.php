@@ -76,7 +76,7 @@ abstract class Service extends Process {
         $defaults = array(
             $this->name => array(
                 'enabled'   => false,
-                'heartbeat' => 10,
+                'heartbeat' => 60,
                 'checkfile' => 1
             )
         );
