@@ -157,7 +157,12 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         if($result === false || $result !== $bytes)
             return false;
 
-        $init_frame = $this->frame(json_encode(\Hazaar\Application\Protocol::$typeCodes), 'text', false);
+        $init_packet = json_encode(\Hazaar\Application\Protocol::$typeCodes);
+
+        if(Master::$protocol->encoded())
+            $init_packet = base64_encode($init_packet);
+
+        $init_frame = $this->frame($init_packet, 'text', false);
 
         //If this is NOT a Warlock process request (ie: it's a browser) send the protocol init frame!
         if(!(array_key_exists('x-warlock-php', $headers) && $headers['x-warlock-php'] === 'true')){
