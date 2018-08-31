@@ -104,7 +104,7 @@ var HazaarWarlock = function (options) {
                 }
                 this.__messageQueue = [];
             }
-        } else if (packet.TYP in this.op) {
+        } else if (packet.TYP in this.op && this.op[packet.TYP].substr(0, 2) === 'kv') {
             var type = this.op[packet.TYP].toLowerCase();
             if (type in this.__callbacks && Array.isArray(this.__callbacks[type])) {
                 let callback = this.__callbacks[type].shift();
