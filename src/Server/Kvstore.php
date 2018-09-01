@@ -131,6 +131,10 @@ class Kvstore {
 
                 return $this->unshift($client, $payload, $namespace);
 
+            case 'KVCOUNT':
+
+                return $this->count($client, $payload, $namespace);
+
             case 'KVINCR':
 
                 return $this->incr($client, $payload, $namespace);
@@ -391,6 +395,27 @@ class Kvstore {
         }
 
         return $client->send('KVUNSHIFT', $result);
+
+    }
+
+    public function count(Client $client, $payload, $namespace){
+
+        $result = null;
+
+        if(property_exists($payload, 'k')){
+
+            $slot =& $this->touch($namespace, $payload->k);
+
+            if(is_array($slot['v']))
+                $result = count($slot['v']);
+
+        }else{
+
+            $this->log->write(W_ERR, 'KVCOUNT requires \'k\'');
+
+        }
+
+        return $client->send('KVCOUNT', $result);
 
     }
 

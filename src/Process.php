@@ -703,4 +703,15 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
+    public function kvCount($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVCOUNT', $data);
+
+    }
+
 }
