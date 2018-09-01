@@ -535,7 +535,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvGet($key, $namespace = null) {
+    public function get($key, $namespace = null) {
 
         $data = array('k' => $key);
 
@@ -546,7 +546,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvSet($key, $value, $timeout = NULL, $namespace = null) {
+    public function set($key, $value, $timeout = NULL, $namespace = null) {
 
         $data = array('k' => $key, 'v' => $value);
 
@@ -560,7 +560,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvHas($key, $namespace = null) {
+    public function has($key, $namespace = null) {
 
         $data = array('k' => $key);
 
@@ -571,7 +571,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvDel($key, $namespace = null) {
+    public function del($key, $namespace = null) {
 
         $data = array('k' => $key);
 
@@ -582,7 +582,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvClear($namespace = null) {
+    public function clear($namespace = null) {
 
         $data = ($namespace ? array('n' => $namespace) : null);
 
@@ -590,7 +590,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvList($namespace = null){
+    public function list($namespace = null){
 
         $data = ($namespace ? array('n' => $namespace) : null);
 
@@ -598,7 +598,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvPull($key, $namespace = null){
+    public function pull($key, $namespace = null){
 
         $data = array('k' => $key);
 
@@ -609,7 +609,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvPush($key, $value, $namespace = null){
+    public function push($key, $value, $namespace = null){
 
         $data = array('k' => $key, 'v' => $value);
 
@@ -620,7 +620,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvPop($key, $namespace = null){
+    public function pop($key, $namespace = null){
 
         $data = array('k' => $key);
 
@@ -631,7 +631,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvShift($key, $namespace = null){
+    public function shift($key, $namespace = null){
 
         $data = array('k' => $key);
 
@@ -642,7 +642,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvUnshift($key, $value, $namespace = null){
+    public function unshift($key, $value, $namespace = null){
 
         $data = array('k' => $key, 'v' => $value);
 
@@ -653,7 +653,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvIncr($key, $step = null, $namespace = null){
+    public function incr($key, $step = null, $namespace = null){
 
         $data = array('k' => $key);
 
@@ -667,7 +667,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvDecr($key, $step = null, $namespace = null){
+    public function decr($key, $step = null, $namespace = null){
 
         $data = array('k' => $key);
 
@@ -681,7 +681,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvKeys($namespace = null){
+    public function keys($namespace = null){
 
         $data = array();
 
@@ -692,7 +692,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvVals($namespace = null){
+    public function vals($namespace = null){
 
         $data = array();
 
@@ -703,7 +703,7 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    public function kvCount($key, $namespace = null){
+    public function count($key, $namespace = null){
 
         $data = array('k' => $key);
 
