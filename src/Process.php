@@ -521,4 +521,186 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
+    private function __kv_send_recv($command, $data){
+
+        if(!$this->send($command, $data))
+            return false;
+
+        $payload = null;
+
+        if(($ret = $this->recv($payload)) !== $command)
+            throw new \Exception('Invalid response from server: ' . $ret . (property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+
+        return $payload;
+
+    }
+
+    public function kvGet($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVGET', $data);
+
+    }
+
+    public function kvSet($key, $value, $timeout = NULL, $namespace = null) {
+
+        $data = array('k' => $key, 'v' => $value);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        if($timeout !== null)
+            $data['t'] = $timeout;
+
+        return $this->__kv_send_recv('KVSET', $data);
+
+    }
+
+    public function kvHas($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVHAS', $data);
+
+    }
+
+    public function kvDel($key, $namespace = null) {
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVDEL', $data);
+
+    }
+
+    public function kvClear($namespace = null) {
+
+        $data = ($namespace ? array('n' => $namespace) : null);
+
+        return $this->__kv_send_recv('KVCLEAR', $data);
+
+    }
+
+    public function kvList($namespace = null){
+
+        $data = ($namespace ? array('n' => $namespace) : null);
+
+        return $this->__kv_send_recv('KVLIST', $data);
+
+    }
+
+    public function kvPull($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVPULL', $data);
+
+    }
+
+    public function kvPush($key, $value, $namespace = null){
+
+        $data = array('k' => $key, 'v' => $value);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVPUSH', $data);
+
+    }
+
+    public function kvPop($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVPOP', $data);
+
+    }
+
+    public function kvShift($key, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVSHIFT', $data);
+
+    }
+
+    public function kvUnshift($key, $value, $namespace = null){
+
+        $data = array('k' => $key, 'v' => $value);
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVUNSHIFT', $data);
+
+    }
+
+    public function kvIncr($key, $step = null, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($step > 0)
+            $data['s'] = $step;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVINCR', $data);
+
+    }
+
+    public function kvDecr($key, $step = null, $namespace = null){
+
+        $data = array('k' => $key);
+
+        if($step > 0)
+            $data['s'] = $step;
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVDECR', $data);
+
+    }
+
+    public function kvKeys($namespace = null){
+
+        $data = array();
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVKEYS', $data);
+
+    }
+
+    public function kvVals($namespace = null){
+
+        $data = array();
+
+        if($namespace)
+            $data['n'] = $namespace;
+
+        return $this->__kv_send_recv('KVVALS', $data);
+
+    }
+
 }
