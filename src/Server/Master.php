@@ -1512,6 +1512,16 @@ class Master {
 
             }elseif($job->status === STATUS_RUNNING){
 
+                if(!is_object($job->process)){
+
+                    $this->log->write(W_ERR, 'Service has running status, but no process linked!');
+
+                    $job->status = STATUS_ERROR;
+
+                    continue;
+
+                }
+
                 $status = $job->process->status;
 
                 if ($status['running'] === false) {
