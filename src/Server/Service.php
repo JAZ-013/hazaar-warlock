@@ -19,7 +19,7 @@ class Service extends \Hazaar\Model\Strict {
                 'default' => HAZAAR_SERVICE_INIT
             ),
             'job' => array(
-                'type' => 'Job\Service'
+                'type' => 'Hazaar\Warlock\Server\Job\Service'
             ),
             'restarts' => array(
                 'type' => 'integer',
