@@ -6,7 +6,7 @@ class Console extends \Hazaar\Console\Module {
 
     private $config;
 
-    public function init(){
+    public function load(){
 
         $this->addMenuGroup('Warlock', 'magic');
 
@@ -24,7 +24,7 @@ class Console extends \Hazaar\Console\Module {
 
     }
 
-    public function prepare(){
+    public function init(){
 
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
