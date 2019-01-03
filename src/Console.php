@@ -10,17 +10,17 @@ class Console extends \Hazaar\Console\Module {
 
         $group = $this->addMenuItem('Warlock', 'magic');
 
-        $group->addMenuItem('Processes', 'processes');
+        $group->addMenuItem('Processes', 'processes', 'tasks');
 
-        $group->addMenuItem('Services', 'services');
+        $group->addMenuItem('Services', 'services', 'cogs');
 
-        $group->addMenuItem('Jobs', 'jobs');
+        $group->addMenuItem('Jobs', 'jobs', 'list-ol');
 
-        $group->addMenuItem('Connections', 'connections');
+        $group->addMenuItem('Connections', 'connections', 'plug');
 
-        $group->addMenuItem('Events', 'events');
+        $group->addMenuItem('Events', 'events', 'calendar');
 
-        $group->addMenuItem('Log File', 'log');
+        $group->addMenuItem('Log File', 'log', 'history');
 
     }
 

@@ -1,9 +1,4 @@
 .main {
-    position: absolute;
-    top: 48px;
-    right: 0px;
-    bottom: 0px;
-    left: 0px;
     background: url(../images/warlock_bg.png) no-repeat center;
     background-size: contain;
 }
