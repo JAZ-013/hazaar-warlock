@@ -391,17 +391,15 @@ abstract class Service extends Process {
                 switch($exec['type']) {
                     case HAZAAR_SCHEDULE_INTERVAL:
 
-                        $exec['when'] = $exec['when'] + $exec['interval'];
-
-                        $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
+                        if($exec['when'] = $exec['when'] + $exec['interval'])
+                            $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
                     case HAZAAR_SCHEDULE_CRON:
 
-                        $exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60);
-
-                        $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
+                        if($exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60))
+                            $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
@@ -417,12 +415,12 @@ abstract class Service extends Process {
 
             }
 
-            if($this->next === NULL || $exec['when'] < $this->next)
+            if($this->next === NULL || ($exec['when'] && $exec['when'] < $this->next))
                 $this->next = $exec['when'];
 
         }
 
-        if($this->next !== NULL)
+        if($this->next)
             $this->log(W_INFO, 'Next scheduled action is at ' . date('Y-m-d H:i:s', $this->next));
 
     }
