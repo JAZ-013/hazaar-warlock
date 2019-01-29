@@ -150,7 +150,7 @@ abstract class Service extends Process {
 
     }
 
-    private function invokeMethod($method, $params = null){
+    private function invokeMethod($method, $arguments = null){
 
 
         $args = array();
@@ -159,7 +159,7 @@ abstract class Service extends Process {
 
         foreach($initMethod->getParameters() as $parameter){
 
-            if(!($value = ake($params, $parameter->getName())))
+            if(!($value = ake($arguments, $parameter->getName())))
                 $value = $parameter->getDefaultValue();
 
             $args[$parameter->getPosition()] = $value;
@@ -379,7 +379,7 @@ abstract class Service extends Process {
                 try{
 
                     if(is_callable($exec['callback']))
-                        call_user_func_array($exec['callback'], $exec['params']);
+                        call_user_func_array($exec['callback'], $exec['args']);
 
                 }
                 catch(\Exception $e){
@@ -515,13 +515,13 @@ abstract class Service extends Process {
                     continue;
 
                 if($item->has('interval'))
-                    $this->interval(ake($item, 'interval'), ake($item, 'action'), ake($item, 'params'));
+                    $this->interval(ake($item, 'interval'), ake($item, 'action'), ake($item, 'args'));
 
                 if($item->has('delay'))
-                    $this->delay(ake($item, 'delay'), ake($item, 'action'), ake($item, 'params'));
+                    $this->delay(ake($item, 'delay'), ake($item, 'action'), ake($item, 'args'));
 
                 if($item->has('when'))
-                    $this->cron(ake($item, 'when'), ake($item, 'action'), ake($item, 'params'));
+                    $this->cron(ake($item, 'when'), ake($item, 'action'), ake($item, 'args'));
 
             }
 
@@ -625,7 +625,7 @@ abstract class Service extends Process {
     /*
      * Command scheduling
      */
-    final public function delay($seconds, $callback, $params = array()) {
+    final public function delay($seconds, $callback, $arguments = array()) {
 
         if(!is_int($seconds))
             return false;
@@ -633,8 +633,8 @@ abstract class Service extends Process {
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
 
-        if(!is_array($params))
-            $params = array($params);
+        if(!is_array($arguments))
+            $arguments = ($arguments instanceof \Hazaar\Map) ? $arguments->toArray() : array($arguments);
 
         $id = uniqid();
 
@@ -647,7 +647,7 @@ abstract class Service extends Process {
             'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
-            'params'   => $params
+            'args'   => $arguments
         );
 
         if($this->next === NULL || $when < $this->next)
@@ -659,7 +659,7 @@ abstract class Service extends Process {
 
     }
 
-    final public function interval($seconds, $callback, $params = array()) {
+    final public function interval($seconds, $callback, $arguments = array()) {
 
         if(!is_int($seconds))
             return false;
@@ -667,8 +667,8 @@ abstract class Service extends Process {
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
 
-        if(!is_array($params))
-            $params = array($params);
+        if(!is_array($arguments))
+            $arguments = ($arguments instanceof \Hazaar\Map) ? $arguments->toArray() : array($arguments);
 
         $id = uniqid();
 
@@ -683,7 +683,7 @@ abstract class Service extends Process {
             'when'     => $when,
             'interval' => $seconds,
             'callback' => $callback,
-            'params'   => $params
+            'args'   => $arguments
         );
 
         if($this->next === NULL || $when < $this->next)
@@ -695,13 +695,13 @@ abstract class Service extends Process {
 
     }
 
-    final public function schedule($date, $callback, $params = array()) {
+    final public function schedule($date, $callback, $arguments = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
 
-        if(!is_array($params))
-            $params = array($params);
+        if(!is_array($arguments))
+            $arguments = ($arguments instanceof \Hazaar\Map) ? $arguments->toArray() : array($arguments);
 
         if(! $date instanceof \Hazaar\Date)
             $date = new \Hazaar\Date($date);
@@ -720,7 +720,7 @@ abstract class Service extends Process {
             'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
-            'params'   => $params
+            'args'   => $arguments
         );
 
         if($this->next === NULL || $when < $this->next)
@@ -732,13 +732,13 @@ abstract class Service extends Process {
 
     }
 
-    final public function cron($format, $callback, $params = array()) {
+    final public function cron($format, $callback, $arguments = array()) {
 
         if(!is_callable($callback) && !method_exists($this, $callback))
             return false;
 
-        if(!is_array($params))
-            $params = array($params);
+        if(!is_array($arguments))
+            $arguments = ($arguments instanceof \Hazaar\Map) ? $arguments->toArray() : array($arguments);
 
         $id = uniqid();
 
@@ -753,7 +753,7 @@ abstract class Service extends Process {
             'label'    => $label,
             'when'     => $when,
             'callback' => $callback,
-            'params'   => $params,
+            'args'   => $arguments,
             'cron'     => $cron
         );
 
