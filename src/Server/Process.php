@@ -43,18 +43,20 @@ class Process extends \Hazaar\Model\Strict {
             'pid' => array(
                 'type' => 'int',
                 'read' => function(){
-                    return $this->status['pid'];
+                    return ake($this->status, 'pid');
                 }
             ),
             'exitcode' => array(
                 'type' => 'int',
                 'read' => function(){
-                    return $this->status['exitcode'];
+                    return ake($this->status, 'exitcode');
                 }
             ),
             'status' => array(
                 'type' => 'array',
                 'read' => function(){
+                    if(!is_resource($this->process))
+                        return false;
                     return proc_get_status($this->process);
                 }
             ),
