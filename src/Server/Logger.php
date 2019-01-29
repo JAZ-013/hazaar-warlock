@@ -60,4 +60,10 @@ class Logger {
 
     }
 
+    public function getLevel(){
+
+        return $this->__log_level;
+
+    }
+
 }

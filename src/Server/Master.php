@@ -272,11 +272,21 @@ class Master {
 
     final public function __exceptionHandler($e){
 
-        echo str_repeat('-', 40) . "\n";
+        $this->log(W_ERR, "EXCEPTION #{$e->getCode()} - {$e->getMessage()}");
 
-        echo "EXCEPTION #{$e->getCode()}\nFile: {$e->getFile()}\nLine: {$e->getLine()}\n\n{$e->getMessage()}\n";
+        $this->log(W_DEBUG, "EXCEPTION File: {$e->getFile()}");
 
-        echo str_repeat('-', 40) . "\n";
+        $this->log(W_DEBUG, "EXCEPTION Line: {$e->getLine()}");
+
+        if($this->log->getLevel() >= W_DEBUG){
+
+            echo str_repeat('-', 40) . "\n";
+
+            debug_print_backtrace();
+
+            echo str_repeat('-', 40) . "\n";
+
+        }
 
     }
 
