@@ -21,9 +21,15 @@ class Logger {
 
     }
 
+    static public function get_default_log_level() {
+
+        return Logger::$log_level;
+
+    }
+
     function __construct($level = null){
 
-        $this->__log_level = ($level === null) ? Logger::$log_level : $level;
+        $this->setLevel($level);
 
         $consts = get_defined_constants(TRUE);
 
@@ -60,9 +66,27 @@ class Logger {
 
     }
 
+    public function setLevel($level){
+
+        if($level === null)
+            $level =  Logger::$log_level;
+
+        if (is_string($level))
+            $level = constant($level);
+
+        $this->__log_level = $level;
+
+    }
+
     public function getLevel(){
 
         return $this->__log_level;
+
+    }
+
+    public function getLevelName(){
+
+        return ake($this->__levels, $this->__log_level, 'NONE');
 
     }
 

@@ -658,13 +658,8 @@ class Master {
             if($job->access_key !== $key)
                 return false;
 
-            $job->registerClient($client);
-
-            $client->type = $job->type;
-
-            $client->jobs[$job->id] = $job;
-
-            $this->log->write(W_NOTICE, ucfirst($client->type) . ' registered successfully', $job_id);
+            if($job->registerClient($client))
+                $this->log->write(W_NOTICE, ucfirst($client->type) . ' registered successfully', $job_id);
 
         }else{
 
@@ -1135,7 +1130,8 @@ class Master {
             'detach' => ake($options, 'detach', false),
             'respawn' => false,
             'parent' => $client,
-            'params' => ake($options, 'params')
+            'params' => ake($options, 'params'),
+            'loglevel' => $service->loglevel
         ));
 
         $this->log->write(W_NOTICE, 'Spawning dynamic service: ' . $name, $job->id);
@@ -2025,7 +2021,8 @@ Restarting.');
                 'env' => APPLICATION_ENV
             ),
             'tag' => $name,
-            'respawn' => false
+            'respawn' => false,
+            'loglevel' => $service->loglevel
         ));
 
         if($service->delay > 0)
