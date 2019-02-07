@@ -417,6 +417,14 @@ abstract class Service extends Process {
 
                 }
 
+                if($exec['when'] === null || $exec['when'] === 0){
+
+                    unset($this->schedule[$id]);
+
+                    $this->log(W_NOTICE, "UNSCHEDULED: ACTION=$exec[label]");
+
+                }
+
             }
 
             if($this->next === NULL || ($exec['when'] && $exec['when'] < $this->next))
