@@ -496,7 +496,7 @@ abstract class Process extends Protocol\WebSockets {
         if($name === null)
             $name = $this->job_id;
 
-        if(!(is_int($level) && is_string($message)))
+        if(!is_int($level))
             return false;
 
         return $this->send('LOG', array('level' => $level, 'msg' => $message, 'name' => $name));
