@@ -186,6 +186,10 @@ abstract class Job extends \Hazaar\Model\Strict {
 
         $this->log->write(W_NOTICE, 'Client ' . $client->id . ' registered as control channel.', $this->id);
 
+        $client->type = $this->type;
+
+        $client->jobs[$this->id] = $this;
+
         $this->client = $client;
 
     }

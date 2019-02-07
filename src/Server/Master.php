@@ -658,12 +658,7 @@ class Master {
             if($job->access_key !== $key)
                 return false;
 
-            $job->registerClient($client);
-
-            $client->type = $job->type;
-
-            $client->jobs[$job->id] = $job;
-
+            if($job->registerClient($client))
             $this->log->write(W_NOTICE, ucfirst($client->type) . ' registered successfully', $job_id);
 
         }else{
