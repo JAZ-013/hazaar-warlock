@@ -39,7 +39,8 @@ class Service extends \Hazaar\Model\Strict {
             'delay' => array(
                 'type' => 'int',
                 'default' => 0
-            )
+            ),
+            'loglevel' => array()
         );
 
     }

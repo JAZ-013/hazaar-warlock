@@ -123,7 +123,8 @@ abstract class Job extends \Hazaar\Model\Strict {
             'heartbeats' => array(
                 'type' => 'int',
                 'default' => 0
-            )
+            ),
+            'loglevel' => array()
         );
 
     }
@@ -190,7 +191,11 @@ abstract class Job extends \Hazaar\Model\Strict {
 
         $client->jobs[$this->id] = $this;
 
+        $client->log->setLevel($this->loglevel);
+
         $this->client = $client;
+
+        return true;
 
     }
 
