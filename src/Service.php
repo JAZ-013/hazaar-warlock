@@ -573,6 +573,9 @@ abstract class Service extends Process {
      */
     final protected function sleep($timeout = 0) {
 
+        if(!is_resource($this->socket))
+            return sleep($timeout);
+
         $start = microtime(true);
 
         $slept = FALSE;
