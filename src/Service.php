@@ -417,7 +417,7 @@ abstract class Service extends Process {
 
                 }
 
-                if($exec['when'] === null || $exec['when'] === 0){
+                if($exec['when'] === null || $exec['when'] === 0 || $exec['when'] < time()){
 
                     unset($this->schedule[$id]);
 
