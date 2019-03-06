@@ -32,7 +32,7 @@ var HazaarWarlock = function (options) {
         if (!guid) {
             this.__log('Generating new GUID');
             guid = window.name = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : r & 0x3 | 0x8;
                 return v.toString(16);
             });
         }
@@ -77,26 +77,23 @@ var HazaarWarlock = function (options) {
     };
     this.__encode = function (packet) {
         packet = JSON.stringify(packet);
-        return (this.__options.encoded ? btoa(packet) : packet);
+        return this.__options.encoded ? btoa(packet) : packet;
     };
     this.__decode = function (packet) {
         if (packet.length === 0)
             return false;
-        return JSON.parse((this.__options.encoded ? atob(packet) : packet));
+        return JSON.parse(this.__options.encoded ? atob(packet) : packet);
     };
     this.__connectHandler = function (event) {
         if (this.__callbacks.connect) this.__callbacks.connect(event);
     };
     this.__messageHandler = function (packet) {
-        if (!this.p && typeof packet === 'object') {
+        if (typeof packet === 'object' && '0' in packet && packet['0'] === 'NOOP') { //Initial packet
             this.op = packet;
             this.p = {};
             for (x in packet) this.p[packet[x].toLowerCase()] = parseInt(x);
-            if (Object.keys(o.__subscribeQueue).length > 0) {
-                for (event_id in o.__subscribeQueue) {
-                    o.__subscribe(event_id, o.__subscribeQueue[event_id].filter);
-                }
-            }
+            if (Object.keys(o.__subscribeQueue).length > 0)
+                for (event_id in o.__subscribeQueue) o.__subscribe(event_id, o.__subscribeQueue[event_id].filter);
             if (this.__messageQueue.length > 0) {
                 for (i in this.__messageQueue) {
                     var msg = this.__messageQueue[i];
@@ -187,7 +184,7 @@ var HazaarWarlock = function (options) {
         console.log('Warlock: ' + msg);
     };
     this.connected = function () {
-        return (this.__socket && this.__socket.readyState === 1);
+        return this.__socket && this.__socket.readyState === 1;
     };
     this.onconnect = function (callback) {
         this.__callbacks.connect = callback;
@@ -237,13 +234,13 @@ var HazaarWarlock = function (options) {
         this.__send('trigger', {
             'id': event_id,
             'data': data,
-            'echo': (echo_self === true)
+            'echo': echo_self === true
         }, true);
         return this;
     };
     /* Admin Commands (These require sync with admin key) */
     this.stop = function (delay_sec) {
-        this.__send('shutdown', (delay_sec > 0 ? { delay: delay_sec } : null));
+        this.__send('shutdown', delay_sec > 0 ? { delay: delay_sec } : null);
         return this;
     };
     this.enable = function (service) {
