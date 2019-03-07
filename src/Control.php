@@ -202,6 +202,9 @@ class Control extends Process {
 
         $env['WARLOCK_EXEC'] = 1;
 
+        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active())
+            $env['XDEBUG_CONFIG'] = 'profiler_enable=1';
+
         if(substr(PHP_OS, 0, 3) !== 'WIN')
             $env['WARLOCK_OUTPUT'] = 'file';
 
