@@ -200,6 +200,8 @@ class Control extends Process {
 
         $env['APPLICATION_ENV'] = APPLICATION_ENV;
 
+        $env['APPLICATION_ROOT'] = $this->application->config->app['root'];
+
         $env['WARLOCK_EXEC'] = 1;
 
         if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active())
