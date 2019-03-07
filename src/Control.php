@@ -200,7 +200,7 @@ class Control extends Process {
 
         $env['APPLICATION_ENV'] = APPLICATION_ENV;
 
-        $env['APPLICATION_ROOT'] = $this->application->config->app['root'];
+        $env['APPLICATION_ROOT'] = \Hazaar\Application::getRoot();
 
         $env['WARLOCK_EXEC'] = 1;
 
