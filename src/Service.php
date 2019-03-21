@@ -302,13 +302,14 @@ abstract class Service extends Process {
 
         $msg = "#$errno on line $errline in file $errfile\n" . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40);
 
-        $this->send('ERROR', $msg);
-
         $this->log(W_LOCAL, 'ERROR ' . $msg);
 
         debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         echo str_repeat('-', 40) . "\n";
+
+        if($this->connected)
+            $this->send('ERROR', $msg);
 
         return true;
 

@@ -263,7 +263,7 @@ class Master {
 
         echo str_repeat('-', 40) . "\n";
 
-        echo "ERROR #$errno\nFile: $errfile\nLine: $errline\n\n$errstr\n";
+        echo "MASTER ERROR #$errno\nFile: $errfile\nLine: $errline\n\n$errstr\n";
 
         echo str_repeat('-', 40) . "\n";
 
@@ -272,7 +272,7 @@ class Master {
 
     final public function __exceptionHandler($e){
 
-        $this->log(W_ERR, "EXCEPTION #{$e->getCode()} - {$e->getMessage()}");
+        $this->log(W_ERR, "MASTER EXCEPTION #{$e->getCode()} - {$e->getMessage()}");
 
         $this->log(W_DEBUG, "EXCEPTION File: {$e->getFile()}");
 
@@ -1555,8 +1555,8 @@ class Master {
 
                             if ($status['exitcode'] == 4) {
 
-                                $this->log->write(W_WARN, 'Service exited because it lost the control channel.
-Restarting.');
+                                $this->log->write(W_WARN, 'Service exited because it lost the control channel. Restarting.');
+
                             } elseif ($status['exitcode'] == 6) {
 
                                 $job->retries = 0;

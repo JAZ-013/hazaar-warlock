@@ -17,6 +17,8 @@ abstract class Process extends Protocol\WebSockets {
 
     protected $socket;
 
+    protected $connected = false;
+
     protected $application;
 
     protected $protocol;
@@ -64,12 +66,12 @@ abstract class Process extends Protocol\WebSockets {
         if (!extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
 
-        $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        $this->socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
 
         if(!is_resource($this->socket))
             throw new \Exception('Unable to create TCP socket!');
 
-        if(!@socket_connect($this->socket, $host, $port)){
+        if(!($this->connected = @socket_connect($this->socket, $host, $port))){
 
             $this->socket_last_error = socket_last_error($this->socket);
 
@@ -294,7 +296,7 @@ abstract class Process extends Protocol\WebSockets {
 
             $attempts++;
 
-            @$bytes_sent = socket_write($this->socket, $frame, $len);
+            $bytes_sent = @socket_write($this->socket, $frame, $len);
 
             if($bytes_sent === -1 || $bytes_sent === false)
                 throw new \Exception('An error occured while sending to the socket');
