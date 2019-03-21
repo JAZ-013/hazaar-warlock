@@ -105,7 +105,7 @@ class Process extends \Hazaar\Model\Strict {
 
         $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
 
-        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd);
+        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->tag);
 
         $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
 
@@ -115,7 +115,7 @@ class Process extends \Hazaar\Model\Strict {
 
             $this->status = proc_get_status($this->process);
 
-            $this->log->write(W_NOTICE, 'PID: ' . $this->pid, $this->id);
+            $this->log->write(W_NOTICE, 'PID: ' . $this->pid, $this->tag);
 
         }
 
@@ -129,7 +129,7 @@ class Process extends \Hazaar\Model\Strict {
 
     public function start($output){
 
-        $this->log->write(W_DECODE, 'OUT -> ' . $output);
+        $this->log->write(W_DECODE, 'OUT -> ' . $output, $this->tag);
 
         fwrite($this->pipes[0], $output);
 
@@ -139,7 +139,7 @@ class Process extends \Hazaar\Model\Strict {
 
     public function terminate(){
 
-        $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid);
+        $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid, $this->tag);
 
         if(substr(PHP_OS, 0, 3) == 'WIN')
             $result = exec('taskkill /F /T /PID ' . $this->pid);
@@ -158,8 +158,13 @@ class Process extends \Hazaar\Model\Strict {
             if($sid === 0)
                 continue;
 
-            if($input = stream_get_contents($pipe))
+            if($input = stream_get_contents($pipe)){
+
+                $this->log->write(W_WARN, 'Excess output content on closing process', $this->tag);
+
                 echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30) . "\n";
+
+            }
 
             fclose($pipe);
 
