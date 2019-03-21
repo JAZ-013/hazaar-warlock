@@ -418,14 +418,14 @@ abstract class Service extends Process {
                     case HAZAAR_SCHEDULE_INTERVAL:
 
                         if($exec['when'] = $exec['when'] + $exec['interval'])
-                            $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
+                            $this->log(W_DEBUG, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
                     case HAZAAR_SCHEDULE_CRON:
 
                         if($exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60))
-                            $this->log(W_NOTICE, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
+                            $this->log(W_DEBUG, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
@@ -443,7 +443,7 @@ abstract class Service extends Process {
 
                     unset($this->schedule[$id]);
 
-                    $this->log(W_NOTICE, "UNSCHEDULED: ACTION=$exec[label]");
+                    $this->log(W_DEBUG, "UNSCHEDULED: ACTION=$exec[label]");
 
                 }
 
@@ -690,7 +690,7 @@ abstract class Service extends Process {
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
 
-        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label DELAY=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
+        $this->log(W_DEBUG, "SCHEDULED: ACTION=$label DELAY=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -726,7 +726,7 @@ abstract class Service extends Process {
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
 
-        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label INTERVAL=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
+        $this->log(W_DEBUG, "SCHEDULED: ACTION=$label INTERVAL=$seconds NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -763,7 +763,7 @@ abstract class Service extends Process {
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
 
-        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label SCHEDULE=$date NEXT=" . date('Y-m-d H:i:s', $when));
+        $this->log(W_DEBUG, "SCHEDULED: ACTION=$label SCHEDULE=$date NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
@@ -797,7 +797,7 @@ abstract class Service extends Process {
         if($this->next === NULL || $when < $this->next)
             $this->next = $when;
 
-        $this->log(W_NOTICE, "SCHEDULED: ACTION=$label CRON=\"$format\" NEXT=" . date('Y-m-d H:i:s', $when));
+        $this->log(W_DEBUG, "SCHEDULED: ACTION=$label CRON=\"$format\" NEXT=" . date('Y-m-d H:i:s', $when));
 
         return $id;
 
