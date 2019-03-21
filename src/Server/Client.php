@@ -30,6 +30,8 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     public $type = 'client';  //Possible types are 'client', 'service' or 'admin'.
 
+    public $name;
+
     public $username;
 
     public $since;
@@ -82,7 +84,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
             if ($resource_type == 'Socket')
                 socket_getpeername($this->socket, $this->address, $this->port);
 
-            $this->log->write(W_NOTICE, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->socket");
+            $this->log->write(W_NOTICE, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->socket", $this->name);
 
             $this->lastContact = time();
 
@@ -105,7 +107,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if(!($headers = $this->parseHeaders($request))){
 
-            $this->log->write(W_WARN, 'Unable to parse request while initiating WebSocket handshake!');
+            $this->log->write(W_WARN, 'Unable to parse request while initiating WebSocket handshake!', $this->name);
 
             return false;
 
@@ -126,7 +128,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $response = $this->httpResponse($responseCode, $body, $responseHeaders);
 
-            $this->log->write(W_WARN, "Handshake failed with code $body");
+            $this->log->write(W_WARN, "Handshake failed with code $body", $this->name);
 
             @socket_write($this->socket, $response, strlen($response));
 
@@ -134,7 +136,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->log->write(W_NOTICE, "Initiating WebSockets handshake");
+        $this->log->write(W_NOTICE, "Initiating WebSockets handshake", $this->name);
 
         if (!($this->id = $results['url']['CID']))
             return false;
@@ -144,7 +146,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
             $this->username = base64_decode($results['url']['UID']);
 
             if ($this->username != NULL)
-                $this->log->write(W_NOTICE, "USER: $this->username");
+                $this->log->write(W_NOTICE, "USER: $this->username", $this->name);
 
         }
 
@@ -167,7 +169,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         //If this is NOT a Warlock process request (ie: it's a browser) send the protocol init frame!
         if(!(array_key_exists('x-warlock-php', $headers) && $headers['x-warlock-php'] === 'true')){
 
-            $this->log->write(W_DEBUG, 'Sending Hazaar\Application\Protocol initialisation frame');
+            $this->log->write(W_DEBUG, 'Sending Hazaar\Application\Protocol initialisation frame', $this->name);
 
             $this->write($init_frame);
 
@@ -193,7 +195,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->log->write(W_NOTICE, 'WebSockets handshake successful!');
+        $this->log->write(W_NOTICE, 'WebSockets handshake successful!', $this->name);
 
         return true;
 
@@ -279,7 +281,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
          */
         while($frame = $this->processFrame($buf)) {
 
-            $this->log->write(W_DECODE, "CLIENT<-PACKET: " . $frame);
+            $this->log->write(W_DECODE, "CLIENT<-PACKET: " . $frame, $this->name);
 
             $payload = null;
 
@@ -299,7 +301,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
                 }
                 catch(\Exception $e){
 
-                    $this->log->write(W_ERR, 'An error occurred processing the command TYPE: ' . $type);
+                    $this->log->write(W_ERR, 'An error occurred processing the command TYPE: ' . $type, $this->name);
 
                     $this->send('error', array(
                         'reason' => $e->getMessage(),
@@ -312,7 +314,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 $reason = Master::$protocol->getLastError();
 
-                $this->log->write(W_ERR, "Protocol error: $reason");
+                $this->log->write(W_ERR, "Protocol error: $reason", $this->name);
 
                 $this->send('error', array(
                     'reason' => $reason
@@ -331,7 +333,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $packet = Master::$protocol->encode($command, $payload); //Override the timestamp.
 
-        $this->log->write(W_DECODE, "CLIENT->PACKET: $packet");
+        $this->log->write(W_DECODE, "CLIENT->PACKET: $packet", $this->name);
 
         $frame = $this->frame($packet, 'text', false);
 
@@ -346,21 +348,21 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $len = strlen($frame);
 
-        $this->log->write(W_DEBUG, "CLIENT->SOCKET: BYTES=$len SOCKET=$this->socket");
+        $this->log->write(W_DEBUG, "CLIENT->SOCKET: BYTES=$len SOCKET=$this->socket", $this->name);
 
-        $this->log->write(W_DECODE2, "CLIENT->FRAME: " . implode(' ', $this->hexString($frame)));
+        $this->log->write(W_DECODE2, "CLIENT->FRAME: " . implode(' ', $this->hexString($frame)), $this->name);
 
         $bytes_sent = @socket_write($this->socket, $frame, $len);
 
         if ($bytes_sent === false) {
 
-            $this->log->write(W_WARN, 'An error occured while sending to the client. Could be disconnected.');
+            $this->log->write(W_WARN, 'An error occured while sending to the client. Could be disconnected.', $this->name);
 
             return false;
 
         } elseif ($bytes_sent != $len) {
 
-            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected');
+            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected', $this->name);
 
             return false;
 
@@ -377,11 +379,11 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
      */
     public function disconnect() {
 
-        $this->log->write(W_DEBUG, 'DISCONNECT: CLIENT=' . $this->id . ' SOCKET=' . $this->socket);
+        $this->log->write(W_DEBUG, 'DISCONNECT: CLIENT=' . $this->id . ' SOCKET=' . $this->socket, $this->name);
 
         $this->subscriptions = array();
 
-        $this->log->write(W_DEBUG, "CLIENT_SOCKET_CLOSE: SOCKET=" . $this->socket);
+        $this->log->write(W_DEBUG, "CLIENT_SOCKET_CLOSE: SOCKET=" . $this->socket, $this->name);
 
         Master::$instance->removeClient($this->socket);
 
@@ -411,7 +413,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         if (!$frameBuffer)
             return false;
 
-        $this->log->write(W_DECODE2, "CLIENT<-FRAME: " . implode(' ', $this->hexString($frameBuffer)));
+        $this->log->write(W_DECODE2, "CLIENT<-FRAME: " . implode(' ', $this->hexString($frameBuffer)), $this->name);
 
         $opcode = $this->getFrame($frameBuffer, $payload);
 
@@ -427,7 +429,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
          */
         if ($opcode === false) {
 
-            $this->log->write(W_ERR, 'Bad frame received from client. Disconnecting.');
+            $this->log->write(W_ERR, 'Bad frame received from client. Disconnecting.', $this->name);
 
             $this->disconnect($this->socket);
 
@@ -435,7 +437,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         } elseif ($opcode === true) {
 
-            $this->log->write(W_WARN, 'Fragment frame received.');
+            $this->log->write(W_WARN, 'Fragment frame received.', $this->name);
 
             $this->payloadBuffer .= $payload;
 
@@ -449,7 +451,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->log->write(W_DECODE2, "OPCODE: $opcode");
+        $this->log->write(W_DECODE2, "OPCODE: $opcode", $this->name);
 
         //Save any leftover frame data in the client framebuffer because we got more than a whole frame)
         if (strlen($frameBuffer) > 0) {
@@ -486,7 +488,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 if($this->closing === false){
 
-                    $this->log->write(W_DEBUG, "WEBSOCKET_CLOSE: HOST=$this->address:$this->port");
+                    $this->log->write(W_DEBUG, "WEBSOCKET_CLOSE: HOST=$this->address:$this->port", $this->name);
 
                     $this->closing = true;
 
@@ -497,7 +499,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
                     if($this->type === 'client' && ($count = count($this->jobs)) > 0){
 
                         $this->log->write(W_NOTICE, 'Disconnected WebSocket client has '
-                            . $count . ' running/pending child jobs');
+                            . $count . ' running/pending child jobs', $this->name);
 
                         foreach($this->jobs as $job){
 
@@ -516,7 +518,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             case 9 : //Ping
 
-                $this->log->write(W_DEBUG, "WEBSOCKET_PING: HOST=$this->address:$this->port");
+                $this->log->write(W_DEBUG, "WEBSOCKET_PING: HOST=$this->address:$this->port", $this->name);
 
                 $frame = $this->frame('', 'pong', false);
 
@@ -526,7 +528,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             case 10 : //Pong
 
-                $this->log->write(W_DEBUG, "WEBSOCKET_PONG: HOST=$this->address:$this->port");
+                $this->log->write(W_DEBUG, "WEBSOCKET_PONG: HOST=$this->address:$this->port", $this->name);
 
                 $this->pong($payload);
 
@@ -534,7 +536,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             default : //Unknown!
 
-                $this->log->write(W_DEBUG, "DISCONNECT: REASON=unknown opcode HOST=$this->address:$this->port");
+                $this->log->write(W_DEBUG, "DISCONNECT: REASON=unknown opcode HOST=$this->address:$this->port", $this->name);
 
                 $this->disconnect();
 
@@ -551,26 +553,26 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         if (!$command)
             return false;
 
-        $this->log->write(W_DEBUG, "CLIENT<-COMMAND: $command CLIENT=$this->id");
+        $this->log->write(W_DEBUG, "CLIENT<-COMMAND: $command CLIENT=$this->id", $this->name);
 
         switch($command){
 
             case 'NOOP':
 
-                $this->log->write(W_INFO, 'NOOP: ' . print_r($payload, true));
+                $this->log->write(W_INFO, 'NOOP: ' . print_r($payload, true), $this->name);
 
                 return true;
 
             case 'OK':
 
                 if($payload)
-                    $this->log->write(W_INFO, $payload);
+                    $this->log->write(W_INFO, $payload, $this->name);
 
                 return true;
 
             case 'ERROR':
 
-                $this->log->write(W_ERR, $payload);
+                $this->log->write(W_ERR, $payload, $this->name);
 
                 return true;
 
@@ -602,11 +604,11 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                     $trip_ms = (microtime(true) - $payload) * 1000;
 
-                    $this->log->write(W_INFO, 'PONG received in ' . $trip_ms . 'ms');
+                    $this->log->write(W_INFO, 'PONG received in ' . $trip_ms . 'ms', $this->name);
 
                 }else{
 
-                    $this->log->write(W_WARN, 'PONG received with invalid payload!');
+                    $this->log->write(W_WARN, 'PONG received with invalid payload!', $this->name);
 
                 }
 
@@ -618,7 +620,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             case 'DEBUG':
 
-                $this->log->write(W_DEBUG, ake($payload, 'data'));
+                $this->log->write(W_DEBUG, ake($payload, 'data'), $this->name);
 
                 return true;
 
@@ -639,13 +641,13 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     private function commandSync(\stdClass $payload, $acknowledge = true){
 
-        $this->log->write(W_DEBUG, "SYNC: CLIENT_ID=$this->id OFFSET=$this->offset");
+        $this->log->write(W_DEBUG, "SYNC: CLIENT_ID=$this->id OFFSET=$this->offset", $this->name);
 
         if (property_exists($payload, 'admin_key')){
 
             if(!Master::$instance->authorise($this, $payload->admin_key) && $acknowledge === true) {
 
-                $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id);
+                $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id, $this->name);
 
                 $this->send('ERROR');
 
@@ -672,7 +674,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->log->write(W_ERR, 'Client requested bad sync!');
+        $this->log->write(W_ERR, 'Client requested bad sync!', $this->name);
 
         if($acknowledge) $this->send('ERROR');
 
@@ -694,7 +696,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if(!$job){
 
-            $this->log->write(W_WARN, 'Service status received for client with no job ID');
+            $this->log->write(W_WARN, 'Service status received for client with no job ID', $this->name);
 
             throw new \Exception('Service has no running job!');
 
@@ -706,7 +708,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     private function commandSubscribe($event_id, $filter = NULL) {
 
-        $this->log->write(W_NOTICE, "CLIENT->SUBSCRIBE: EVENT=$event_id CLIENT=$this->id");
+        $this->log->write(W_NOTICE, "CLIENT->SUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
 
         $this->subscriptions[] = $event_id;
 
@@ -718,7 +720,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     public function commandUnsubscribe($event_id) {
 
-        $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id");
+        $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
 
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
             unset($this->subscriptions[$index]);
@@ -732,7 +734,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     public function commandTrigger($event_id, $data, $echo_client = true) {
 
-        $this->log->write(W_NOTICE, "CLIENT->TRIGGER: NAME=$event_id CLIENT=$this->id ECHO=" . strbool($echo_client));
+        $this->log->write(W_NOTICE, "CLIENT->TRIGGER: NAME=$event_id CLIENT=$this->id ECHO=" . strbool($echo_client), $this->name);
 
         Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
 
@@ -747,7 +749,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $level = ake($payload, 'level', W_INFO);
 
-        $name = ake($payload, 'name');
+        $name = ake($payload, 'name', $this->name);
 
         if(is_array($payload->msg)){
 
@@ -768,7 +770,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if (!in_array($event_id, $this->subscriptions)) {
 
-            $this->log->write(W_WARN, "Client $this->id is not subscribe to event $event_id");
+            $this->log->write(W_WARN, "Client $this->id is not subscribe to event $event_id", $this->name);
 
             return false;
 
@@ -794,7 +796,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if($this->ping['attempts'] > $this->ping['pings']){
 
-            $this->log->write(W_WARN, 'Disconnecting client due to lack of PONG!');
+            $this->log->write(W_WARN, 'Disconnecting client due to lack of PONG!', $this->name);
 
             $this->disconnect();
 
@@ -804,7 +806,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->ping['last'] = time();
 
-        $this->log->write(W_DEBUG, 'CLIENT->PING: ATTEMPTS=' . $this->ping['attempts'] . ' LAST=' . date('c', $this->ping['last']));
+        $this->log->write(W_DEBUG, 'CLIENT->PING: ATTEMPTS=' . $this->ping['attempts'] . ' LAST=' . date('c', $this->ping['last']), $this->name);
 
         return $this->write($this->frame('', 'ping', false));
 
