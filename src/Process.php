@@ -531,7 +531,7 @@ abstract class Process extends Protocol\WebSockets {
         $payload = null;
 
         if(($ret = $this->recv($payload)) !== $command)
-            throw new \Exception('Invalid response from server: ' . $ret . (property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+            throw new \Exception('Invalid response from server: ' . $ret . (is_object($payload) && property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
 
         return $payload;
 
