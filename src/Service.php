@@ -404,8 +404,13 @@ abstract class Service extends Process {
 
                 try{
 
-                    if(is_callable($exec['callback']))
+                    if(is_callable($exec['callback'])){
+
+                        $this->log(W_DEBUG, "RUN: ACTION=$exec[label]");
+
                         call_user_func_array($exec['callback'], $exec['args']);
+
+                    }else $this->log(W_ERR, "Scheduled action $exec[label] is not callable!");
 
                 }
                 catch(\Exception $e){
