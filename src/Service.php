@@ -77,7 +77,9 @@ abstract class Service extends Process {
             $this->name => array(
                 'enabled'   => false,
                 'heartbeat' => 60,
-                'checkfile' => 1
+                'checkfile' => 1,
+                'connect_retries' => 3,        //When establishing a control channel, make no more than this number of attempts before giving up
+                'connect_retry_delay' => 100   //When making multiple attempts to establish the control channel, wait this long between each
             )
         );
 
@@ -115,6 +117,25 @@ abstract class Service extends Process {
             }
 
         }
+
+    }
+
+    public function connect($application_name, $host, $port, $extra_headers = null){
+
+        $count = 0;
+
+        while(!parent::connect($application_name, $host, $port, $extra_headers)){
+
+            $this->log(W_WARN, 'Connection failed.  Trying again.  (count=' . $count . ')');
+
+            usleep($this->config->connect_retry_delay);
+
+            if(++$count >= $this->config->connect_retries)
+                return false;
+
+        }
+
+        return true;
 
     }
 
@@ -434,7 +455,7 @@ abstract class Service extends Process {
         }
 
         if($this->next)
-            $this->log(W_INFO, 'Next scheduled action is at ' . date('Y-m-d H:i:s', $this->next));
+            $this->log(W_NOTICE, 'Next scheduled action is at ' . date('Y-m-d H:i:s', $this->next));
 
     }
 
