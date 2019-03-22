@@ -429,7 +429,7 @@ abstract class Service extends Process {
 
                     case HAZAAR_SCHEDULE_CRON:
 
-                        if($exec['when'] = $exec['cron']->getNextOccurrence($exec['when'] + 60))
+                        if($exec['when'] = $exec['cron']->getNextOccurrence())
                             $this->log(W_DEBUG, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
