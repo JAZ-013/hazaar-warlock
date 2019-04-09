@@ -33,7 +33,7 @@ Returns the job ID on success, false otherwise.
 Consider the following example code:
 
 ```php
-$control = new Hazaar\Schedular\Control();
+$control = new Hazaar\Warlock\Control();
     
 $code = function(){
     echo "APPLICATION_PATH = " . APPLICATION_PATH . "\n";        
@@ -52,7 +52,7 @@ The above is a very simple example of how to use the runDelay() method to execut
 ### 1 - Instantiate the schedular control object
 
 ```php
-$control = new Hazaar\Schedular\Control();
+$control = new Hazaar\Warlock\Control();
 ```
 
 This will set up the schedular control object. This object handles all communication between the application and the schedular. It will also start up a new schedular instance if one is not already running.
@@ -103,11 +103,11 @@ To help keep track of jobs we have added a feature called tags. Tags are just st
 
 The benefits of tagging are that you can ensure that a particular function will never attempt to be executed if it already exists.
 
-## Running the schedular from the command-line
+## Running Warlock from the command-line
 
-It's not suggested that a developer ever do this, but during testing it is sometimes handy to have control over when the schedular runs.
+It's not suggested that a developer ever do this, but during testing it is sometimes handy to have control over when Warlock runs.
 
-To run the schedular from the command line do the following:
+To run Warlock from the command line do the following:
 
 * *cd* into your Hazaar MVC application path
 * Run the following command:
