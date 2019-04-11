@@ -227,23 +227,23 @@ class Master {
 
         }
 
-        $this->log->write(W_INFO, 'PHP Version = ' . PHP_VERSION);
+        $this->log->write(W_NOTICE, 'PHP Version = ' . PHP_VERSION);
 
-        $this->log->write(W_INFO, 'PHP Binary = ' . $this->config->sys['php_binary']);
+        $this->log->write(W_NOTICE, 'PHP Binary = ' . $this->config->sys['php_binary']);
 
-        $this->log->write(W_INFO, 'Application path = ' . APPLICATION_PATH);
+        $this->log->write(W_NOTICE, 'Application path = ' . APPLICATION_PATH);
 
-        $this->log->write(W_INFO, 'Application name = ' . APPLICATION_NAME);
+        $this->log->write(W_NOTICE, 'Application name = ' . APPLICATION_NAME);
 
-        $this->log->write(W_INFO, 'Library path = ' . LIBRAY_PATH);
+        $this->log->write(W_NOTICE, 'Library path = ' . LIBRAY_PATH);
 
-        $this->log->write(W_INFO, 'Application environment = ' . APPLICATION_ENV);
+        $this->log->write(W_NOTICE, 'Application environment = ' . APPLICATION_ENV);
 
-        $this->log->write(W_INFO, 'PID = ' . $this->pid);
+        $this->log->write(W_NOTICE, 'PID = ' . $this->pid);
 
-        $this->log->write(W_INFO, 'PID file = ' . $this->pidfile);
+        $this->log->write(W_NOTICE, 'PID file = ' . $this->pidfile);
 
-        $this->log->write(W_INFO, 'Server ID = ' . $this->config->sys->id);
+        $this->log->write(W_NOTICE, 'Server ID = ' . $this->config->sys->id);
 
         $this->log->write(W_NOTICE, 'Listen address = ' . $this->config->server->listen);
 
@@ -439,7 +439,7 @@ class Master {
 
         if($this->config->server['kvstore'] === true){
 
-            $this->log->write(W_INFO, 'Initialising KV Store');
+            $this->log->write(W_NOTICE, 'Initialising KV Store');
 
             $this->kv_store = new Kvstore($this->log);
 
@@ -470,7 +470,7 @@ class Master {
 
         $this->running = true;
 
-        $this->log->write(W_INFO, "Ready for connections...");
+        $this->log->write(W_INFO, "Ready...");
 
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
@@ -1407,11 +1407,11 @@ class Master {
 
                     $this->rrd->setValue('jobs', 1);
 
-                    $this->log->write(W_INFO, "Starting job execution", $id);
+                    $this->log->write(W_NOTICE, "Starting job execution", $id);
 
-                    $this->log->write(W_NOTICE, 'NOW:  ' . date('c', $now), $id);
+                    $this->log->write(W_DEBUG, 'NOW:  ' . date('c', $now), $id);
 
-                    $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $job->start), $id);
+                    $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $id);
 
                     if ($job->retries > 0)
                         $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
@@ -1675,7 +1675,7 @@ class Master {
 
                         } else {
 
-                            $this->log->write(W_INFO, 'Execution completed successfully.', $id);
+                            $this->log->write(W_NOTICE, 'Execution completed successfully.', $id);
 
                             $this->stats['execs']++;
 
