@@ -1400,6 +1400,16 @@ class Master {
 
                 $now = time();
 
+                if (count($this->processes) >= $this->config->exec->limit) {
+
+                    $this->stats['limitHits']++;
+
+                    $this->log->write(W_WARN, 'Process limit of ' . $this->config->exec->limit . ' processes reached!');
+
+                    break;
+
+                }
+
                 if ($job instanceof Job\Runner){
 
                     if ($job->retries > 0)
@@ -1534,9 +1544,13 @@ class Master {
 
                 if ($status['running'] === false) {
 
-                    $this->stats['processes']--;
+                    unset($this->processes[$job->process->id]);
 
                     $job->process->close();
+
+                    $job->process = null;
+
+                    $this->stats['processes']--;
 
                     /**
                      * Process a Service shutdown.
@@ -1687,8 +1701,6 @@ class Master {
                         }
 
                     }
-
-                    $job->process = null;
 
                 } elseif ($job->status === STATUS_CANCELLED) {
 
