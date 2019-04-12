@@ -470,8 +470,6 @@ class Master {
 
         $this->running = true;
 
-        $this->log->write(W_INFO, "Ready...");
-
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
         if ($services->loaded()) {
@@ -492,6 +490,33 @@ class Master {
             }
 
         }
+
+        if($this->config->has('schedule')){
+
+            $this->log->write(W_NOTICE, 'Scheduling ' . $this->config->schedule->count() . ' jobs');
+
+            foreach($this->config->schedule as $job){
+
+                if(!$job->has('exec'))
+                    continue;
+
+                $application = (object)array(
+                    'path' => APPLICATION_PATH,
+                    'env'  => APPLICATION_ENV
+                );
+
+                $exec = (object)array('callable' => $job->exec->toArray());
+
+                if($job->has('args'))
+                    $exec->params = $job->args->toArray();
+
+                $this->scheduleJob($job->when, $exec, $application, $job->get('tag'), $job->get('overwrite'));
+
+            }
+
+        }
+
+        $this->log->write(W_INFO, "Ready...");
 
         return $this;
 
@@ -1273,8 +1298,40 @@ class Master {
 
         }
 
+        if($tag === null && is_array($exec->callable)){
+
+            $tag = md5(implode('-', $exec->callable));
+
+            $overwrite = true;
+
+        }
+
+        if ($tag && array_key_exists($tag, $this->tags)) {
+
+            $job = $this->tags[$tag];
+
+            $this->log->write(W_NOTICE, "Job already scheduled with tag $tag", $job->id);
+
+            if ($overwrite === false){
+
+                $this->log->write(W_NOTICE, 'Skipping', $job->id);
+
+                return false;
+
+            }
+
+            $this->log->write(W_NOTICE, 'Overwriting', $job->id);
+
+            $job->cancel();
+
+            unset($this->tags[$tag]);
+
+            unset($this->jobQueue[$job->id]);
+
+        }
+
         $job = new Job\Runner(array(
-            'start' => $when,
+            'when' => $when,
             'application' => array(
                 'path' => $application->path,
                 'env' => $application->env
@@ -1284,19 +1341,13 @@ class Master {
             'timeout' => $this->config->exec->timeout
         ));
 
+        $when = $job->touch();
+
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
-
-        if (!is_numeric($when)) {
-
-            $this->log->write(W_DEBUG, 'Parsing string time', $job->id);
-
-            $when = strtotime($when);
-
-        }
 
         $this->log->write(W_NOTICE, 'NOW:  ' . date('c'), $job->id);
 
-        $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $when), $job->id);
+        $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $job->start), $job->id);
 
         $this->log->write(W_NOTICE, 'APPLICATION_PATH: ' . $application->path, $job->id);
 
@@ -1312,35 +1363,17 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date('c', $when), $job->id);
 
-        if ($tag) {
+        $this->queueAddJob($job);
+
+        $this->stats['queue']++;
+
+        if($tag){
 
             $this->log->write(W_NOTICE, 'TAG: ' . $tag, $job->id);
-
-            if (array_key_exists($tag, $this->tags)) {
-
-                $this->log->write(W_NOTICE, "Job already scheduled with tag $tag", $job->id);
-
-                if ($overwrite === false){
-
-                    $this->log->write(W_NOTICE, 'Skipping', $job->id);
-
-                    return false;
-
-                }
-
-                $this->log->write(W_NOTICE, 'Overwriting', $job->id);
-
-                $this->tags[$tag]->cancel();
-
-            }
 
             $this->tags[$tag] = $job;
 
         }
-
-        $this->queueAddJob($job);
-
-        $this->stats['queue']++;
 
         return $job->id;
 
@@ -1694,10 +1727,22 @@ class Master {
 
                             $this->stats['execs']++;
 
-                            $job->status = STATUS_COMPLETE;
+                            if(($next = $job->touch()) > time()){
 
-                            // Expire the job in 30 seconds
-                            $job->expire = time() + $this->config->job->expire;
+                                $job->status = STATUS_QUEUED;
+
+                                $job->retries = 0;
+
+                                $this->log->write(W_NOTICE, 'Next execution at: ' . date('c', $next), $id);
+
+                            }else{
+
+                                $job->status = STATUS_COMPLETE;
+
+                                // Expire the job in 30 seconds
+                                $job->expire = time() + $this->config->job->expire;
+
+                            }
 
                         }
 

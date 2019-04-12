@@ -297,9 +297,15 @@ class Control extends Process {
 
     }
 
+    public function interval($value, $callable, $params = null, $tag = null, $overwrite = false) {
+
+        return $this->sendExec('interval', array('value' => $value), $callable, $params, $tag, $overwrite);
+
+    }
+
     public function schedule($when, $callable, $params = null, $tag = null, $overwrite = false) {
 
-        return $this->sendExec('schedule', array('when' => strtotime($when)), $callable, $params, $tag, $overwrite);
+        return $this->sendExec('schedule', array('when' => $when), $callable, $params, $tag, $overwrite);
 
     }
 
