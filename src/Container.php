@@ -6,33 +6,43 @@ class Container extends Process {
 
     public function exec($function, $params){
 
-        $code = 1;
+        $exitcode = 1;
+
+        $code = null;
 
         if(is_array($function)){
 
-            $r = new \ReflectionMethod($function[0], $function[1]);
+            $class = new \ReflectionClass($function[0]);
 
-            if(!$r->isPublic())
+            $method = $class->getMethod($function[1]);
+
+            if(!$method->isPublic())
                 throw new \Exception('Method is not public!');
 
-            $f = file($r->getFileName());
+            $file = file($method->getFileName());
 
-            $start_line = $r->getStartLine() - 1;
+            $start_line = $method->getStartLine() - 1;
 
-            $end_line = $r->getEndLine();
+            $end_line = $method->getEndLine();
 
-            if(preg_match('/function\s+\w+(\(.*)/', $f[$r->getStartLine()-1], $matches))
-                $f[$start_line] = 'function' . $matches[1];
+            if(preg_match('/function\s+\w+(\(.*)/', $file[$start_line], $matches))
+                $file[$start_line] = 'function' . $matches[1];
 
-            $function = implode("\n", array_splice($f, $start_line, $end_line - $start_line));
+            if($namespace = $class->getNamespaceName())
+                $code = "namespace $namespace;\n\n";
 
-        }
+            $code .= '$_function = ' . implode("\n", array_splice($file, $start_line, $end_line - $start_line)) . ';';
 
-        eval('$_function = ' . $function . ';');
+        }else $code = '$_function = ' . $function . ';';
 
         try{
 
-            if(!(isset($_function) && is_callable($_function)))
+            if($code === null)
+                throw new \Exception('Unable to evaulate container code.');
+
+            eval($code);
+
+            if(!(isset($_function) && $_function instanceof \Closure))
                 throw new \Exception('Function is not callable!');
 
             if(!$params)
@@ -45,11 +55,11 @@ class Container extends Process {
             || $result === TRUE
             || $result == 0){
 
-                $code = 0;
+                $exitcode = 0;
 
             } else { //Anything else is an error and we display it.
 
-                $code = $result;
+                $exitcode = $result;
 
             }
 
@@ -58,11 +68,11 @@ class Container extends Process {
 
             $this->log(W_ERR, $e->getMessage());
 
-            $code = 2;
+            $exitcode = 2;
 
         }
 
-        return $code;
+        return $exitcode;
 
     }
 
