@@ -133,6 +133,32 @@ class Control extends Process {
 
     }
 
+    private function makeCallable($callable){
+
+        if(!is_callable($callable))
+            throw new \Exception('Function must be callable!');
+
+        if($callable instanceof \Closure){
+
+            $callable = (string)new \Hazaar\Closure($callable);
+
+        }elseif(is_array($callable) && is_object($callable[0])){
+
+            $reflectionMethod = new \ReflectionMethod($callable[0], $callable[1]);
+
+            $classname = get_class($callable[0]);
+
+            if(!$reflectionMethod->isStatic())
+                throw new \Exception('Method ' . $callable[1] . ' of class ' . $classname . ' must be static');
+
+            $callable[0] = $classname;
+
+        }
+
+        return array('callable' => $callable);
+
+    }
+
     public function isRunning() {
 
         if(!$this->pidfile)
@@ -265,57 +291,26 @@ class Control extends Process {
 
     }
 
-    public function runDelay($delay, \Closure $code, $params = NULL, $tag = NULL, $overwrite = FALSE) {
+    public function runDelay($delay, $callable, $params = null, $tag = null, $overwrite = false) {
 
-        $function = new \Hazaar\Closure($code);
-
-        $data = array(
-            'application' => array(
-                'path' => APPLICATION_PATH,
-                'env'  => APPLICATION_ENV
-            ),
-            'value'       => $delay,
-            'function'    => array(
-                'code' => (string)$function
-            )
-        );
-
-        if($tag) {
-
-            $data['tag'] = $tag;
-
-            $data['overwrite'] = strbool($overwrite);
-
-        }
-
-        if(! is_array($params))
-            $params = array($params);
-
-        $data['function']['params'] = $params;
-
-        $this->send('delay', $data);
-
-        if($this->recv($payload) == 'OK')
-            return $payload->job_id;
-
-        return FALSE;
+        return $this->sendExec('delay', array('value' => $delay), $callable, $params, $tag, $overwrite);
 
     }
 
-    public function schedule($when, \Closure $code, $params = NULL, $tag = NULL, $overwrite = FALSE) {
+    public function schedule($when, $callable, $params = null, $tag = null, $overwrite = false) {
 
-        $function = new \Hazaar\Closure($code);
+        return $this->sendExec('schedule', array('when' => strtotime($when)), $callable, $params, $tag, $overwrite);
 
-        $data = array(
-            'application' => array(
-                'path' => APPLICATION_PATH,
-                'env'  => APPLICATION_ENV
-            ),
-            'when'        => strtotime($when),
-            'function'    => array(
-                'code' => (string)$function
-            )
+    }
+
+    private function sendExec($command, $data, $callable, $params = null, $tag = null, $overwrite = false){
+
+        $data['application'] = array(
+            'path' => APPLICATION_PATH,
+            'env'  => APPLICATION_ENV
         );
+
+        $data['exec'] = $this->makeCallable($callable);
 
         if($tag) {
 
@@ -325,18 +320,17 @@ class Control extends Process {
 
         }
 
-        if(is_array($params)) {
+        if($params !== null && !is_array($params))
+            $params = array($params);
 
-            $data['function']['params'] = $params;
+        $data['exec']['params'] = $params;
 
-        }
-
-        $this->send('schedule', $data);
+        $this->send($command, $data);
 
         if($this->recv($payload) == 'OK')
             return $payload->job_id;
 
-        return FALSE;
+        return false;
 
     }
 

@@ -965,8 +965,9 @@ class Master {
                 if(!property_exists($payload, 'when'))
                     throw new \Exception('Unable schedule code execution without an execution time!');
 
-                if(!($id = $this->scheduleJob($payload->when,
-                    $payload->function,
+                if(!($id = $this->scheduleJob(
+                    $payload->when,
+                    $payload->exec,
                     $payload->application,
                     ake($command, 'tag'),
                     ake($command, 'overwrite', false)
@@ -1262,11 +1263,11 @@ class Master {
 
     }
 
-    private function scheduleJob($when, $function, $application, $tag = NULL, $overwrite = false) {
+    private function scheduleJob($when, $exec, $application, $tag = NULL, $overwrite = false) {
 
-        if(!property_exists($function, 'code')){
+        if(!property_exists($exec, 'callable')){
 
-            $this->log->write(W_ERR, 'Unable to schedule job without function code!');
+            $this->log->write(W_ERR, 'Unable to schedule job without function callable!');
 
             return false;
 
@@ -1278,8 +1279,8 @@ class Master {
                 'path' => $application->path,
                 'env' => $application->env
             ),
-            'function' => $function->code,
-            'params' => ake($function, 'params', array()),
+            'exec' => $exec->callable,
+            'params' => ake($exec, 'params', array()),
             'timeout' => $this->config->exec->timeout
         ));
 
@@ -1495,7 +1496,7 @@ class Master {
 
                     } elseif ($job instanceof Job\Runner) {
 
-                        $payload['function'] = $job->function;
+                        $payload['exec'] = $job->exec;
 
                         if ($job->has('params') && is_array($job->params) && count($job->params) > 0)
                             $payload['params'] = $job->params;

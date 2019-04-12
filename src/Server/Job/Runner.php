@@ -12,9 +12,7 @@ class Runner extends \Hazaar\Warlock\Server\Job {
                 'type' => 'int',
                 'default' => 60
             ),
-            'function' => array(
-                'type' => 'string'
-            )
+            'exec' => 'mixed'
         );
 
     }
