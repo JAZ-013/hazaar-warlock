@@ -153,6 +153,10 @@ class Control extends Process {
 
             $callable[0] = $classname;
 
+        }elseif(is_string($callable) && strpos($callable, '::')){
+
+            $callable = explode('::', $callable);
+
         }
 
         return array('callable' => $callable);
