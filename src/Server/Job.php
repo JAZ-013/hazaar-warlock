@@ -112,7 +112,8 @@ abstract class Job extends \Hazaar\Model\Strict {
                 'default' => 0
             ),
             'params' => array(
-                'type' => 'array'
+                'type' => 'array',
+                'default' => array()
             ),
             'process' => array(
                 'type' => 'Hazaar\Warlock\Server\Process'
