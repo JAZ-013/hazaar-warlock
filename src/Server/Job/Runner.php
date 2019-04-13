@@ -10,7 +10,9 @@ class Runner extends \Hazaar\Warlock\Server\Job {
             'when' => array(
                 'type' => 'Hazaar\Cron',
                 'prepare' => function($value){
-                    if(($start = strtotime($value)) === false)
+                    if(is_numeric($value))
+                        $start = intval($value);
+                    elseif(($start = strtotime($value)) === false)
                         return $value;
                     $this->start = $start;
                     return null;
