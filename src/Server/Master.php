@@ -272,11 +272,11 @@ class Master {
 
     final public function __exceptionHandler($e){
 
-        $this->log(W_ERR, "MASTER EXCEPTION #{$e->getCode()} - {$e->getMessage()}");
+        $this->log->write(W_ERR, "MASTER EXCEPTION #{$e->getCode()} - {$e->getMessage()}");
 
-        $this->log(W_DEBUG, "EXCEPTION File: {$e->getFile()}");
+        $this->log->write(W_DEBUG, "EXCEPTION File: {$e->getFile()}");
 
-        $this->log(W_DEBUG, "EXCEPTION Line: {$e->getLine()}");
+        $this->log->write(W_DEBUG, "EXCEPTION Line: {$e->getLine()}");
 
         if($this->log->getLevel() >= W_DEBUG){
 
@@ -289,7 +289,6 @@ class Master {
         }
 
     }
-
 
     /**
      * Initiate a server shutdown.
@@ -500,17 +499,33 @@ class Master {
                 if(!$job->has('exec'))
                     continue;
 
+                $job = $job->toArray();
+
                 $application = (object)array(
                     'path' => APPLICATION_PATH,
                     'env'  => APPLICATION_ENV
                 );
 
-                $exec = (object)array('callable' => $job->exec->toArray());
+                if(!is_array($job['exec'])){
 
-                if($job->has('args'))
-                    $exec->params = $job->args->toArray();
+                    if(strpos($job['exec'], '::') === false){
 
-                $this->scheduleJob($job->when, $exec, $application, $job->get('tag'), $job->get('overwrite'));
+                        $this->log->write(W_ERR, 'Invalid callable specified in warlock schedule config.');
+
+                        continue;
+
+                    }
+
+                    $job['exec'] = explode('::', $job['exec'], 2);
+
+                }
+
+                $exec = (object)array('callable' => $job['exec']);
+
+                if($args = ake($job, 'args'))
+                    $exec->params = $args;
+
+                $this->scheduleJob(ake($job, 'when'), $exec, $application, ake($job, 'tag'), ake($job, 'overwrite'));
 
             }
 
