@@ -105,7 +105,7 @@ class Process extends \Hazaar\Model\Strict {
 
         $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
 
-        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->tag);
+        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->id);
 
         $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
 
@@ -115,7 +115,7 @@ class Process extends \Hazaar\Model\Strict {
 
             $this->status = proc_get_status($this->process);
 
-            $this->log->write(W_NOTICE, 'PID: ' . $this->pid, $this->tag);
+            $this->log->write(W_NOTICE, 'PID: ' . $this->pid, $this->id);
 
         }
 

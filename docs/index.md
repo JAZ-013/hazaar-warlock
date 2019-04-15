@@ -6,4 +6,4 @@ This manual is currently under development.  The following sections are availabl
 * [Real-Time Signalling](realtime-signalling.md)
 * [Services](services.md)
 * [Key/Value Storage](kvstore.md)
-
+* [Global Events](global-events.md)

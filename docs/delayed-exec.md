@@ -8,7 +8,7 @@ The schedular itself runs in a single thread that will never block and there is 
 
 ## Methods
 
-There are currently two methods for scheduling function execution.
+There are currently two methods for scheduling function execution.  In both methods, `$function` is something that the PHP function `is_callable()` considers to be a callable object.  Support for static method function references are also such as `Application\Model\MyModel::doTheThing`.
 
 ### delay($seconds, $function, $tag = null, $overwrite = false)
 
@@ -114,5 +114,60 @@ To run Warlock from the command line do the following:
 ```shell
 # sudo -u www-data php vendor/hazaarlabs/hazaar-warlock/src/Server.php
 ```
+Logging data will then be output to your terminal.
 
-That's it. Logging data will then be output to your terminal.
+## Calling static class methods
+
+A new feature in Warlock 2.2 is the ability to call static class methods instead of having to use a closure.  Using a static class
+method works almost exactly the same as using a closure except that the code can be defined anywhere in your project.
+
+For example:
+
+```php
+namespace Application\Model;
+
+class MyTestClass {
+
+    static public function doTheThing(){
+    
+        $this->log(W_INFO, 'The thing is done!');
+
+    }
+
+}
+```
+
+If you use an IDE that attempts to resolve variable references you may get an error/warning about the use of `$this` in a static method.  Rest assured
+this is normal and the code is actually executed in the context of a Warlock process and `$this` references that process object.  The process object
+allows the use of `trigger`, `substribe`, `log` and any other methods normally available.
+
+To execute this method in the background you can pass the callable in one of the following ways:
+
+```php
+$this->runDelay(30, array('Application\\Model\\MyTestClass', 'doTheThing'));
+$this->runDelay(30, 'Application\\Model\\MyTestClass::doTheThing');
+```
+
+## Globally Scheduled Jobs
+
+With Warlock 2.2 it is now possible to schedule jobs to execute without a service, and without being triggered by application code.  This allows
+you to set up static method and have it executed on a specified schedule.
+
+Using the above example class `myTestClass`, if we wanted this method to run every hour on business days between 9am and 5pm we can simply
+add the following to the main Warlock config file `warlock.json`.
+
+```json
+{
+    "{{APPLICATION_ENV}}":{
+        "schedule": [
+            {
+                "when": "0 9-17 * * 1-5",
+                "exec": "Application\\Model\\myTestClass::handleTestEvent"
+            }
+        ]
+    }
+}
+```
+
+When the scheduled time rolls around, a new *Runner* process will be started up and the `Application\\Model\\myTestClass::handleTestEvent` method
+will be executed.  

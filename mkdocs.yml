@@ -6,5 +6,6 @@ pages:
   - Real-Time Signalling: realtime-signalling.md
   - Services: services.md
   - Key/Value Storage: kvstore.md
+  - Global Events: global-events.md
 markdown_extensions:
     - admonition
