@@ -84,7 +84,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
             if ($resource_type == 'Socket')
                 socket_getpeername($this->socket, $this->address, $this->port);
 
-            $this->log->write(W_NOTICE, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->socket", $this->name);
+            $this->log->write(W_DEBUG, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->socket", $this->name);
 
             $this->lastContact = time();
 

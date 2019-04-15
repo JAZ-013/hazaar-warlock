@@ -64,7 +64,7 @@ abstract class Job extends \Hazaar\Model\Strict {
                 'default' => STATUS_INIT,
                 'update' => array(
                     'post' => function(){
-                        $this->log->write(W_NOTICE, 'STATUS: ' . strtoupper($this->status()), $this->id);
+                        $this->log->write(W_DEBUG, 'STATUS: ' . strtoupper($this->status()), $this->id);
                     }
                 )
             ),

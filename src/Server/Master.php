@@ -1345,13 +1345,11 @@ class Master {
 
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
 
-        $this->log->write(W_NOTICE, 'NOW:  ' . date('c'), $job->id);
+        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $job->id);
 
-        $this->log->write(W_NOTICE, 'WHEN: ' . date('c', $job->start), $job->id);
+        $this->log->write(W_DEBUG, 'APPLICATION_PATH: ' . $application->path, $job->id);
 
-        $this->log->write(W_NOTICE, 'APPLICATION_PATH: ' . $application->path, $job->id);
-
-        $this->log->write(W_NOTICE, 'APPLICATION_ENV:  ' . $application->env, $job->id);
+        $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . $application->env, $job->id);
 
         if (!$when || $when < time()) {
 
@@ -1361,19 +1359,19 @@ class Master {
 
         }
 
+        if($tag){
+
+            $this->log->write(W_DEBUG, 'TAG: ' . $tag, $job->id);
+
+            $this->tags[$tag] = $job;
+
+        }
+
         $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date('c', $when), $job->id);
 
         $this->queueAddJob($job);
 
         $this->stats['queue']++;
-
-        if($tag){
-
-            $this->log->write(W_NOTICE, 'TAG: ' . $tag, $job->id);
-
-            $this->tags[$tag] = $job;
-
-        }
 
         return $job->id;
 
