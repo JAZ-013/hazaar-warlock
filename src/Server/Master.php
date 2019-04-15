@@ -97,6 +97,9 @@ class Master {
     // The Event queue. Holds active events waiting to be seen.
     private $eventQueue = array();
 
+    // The global event queue.  Holds details about jobs that need to start up to process global events.
+    private $globalQueue = array();
+
     /**
      * SOCKETS & STREAMS
      */
@@ -499,28 +502,20 @@ class Master {
                 if(!$job->has('exec'))
                     continue;
 
-                $job = $job->toArray();
-
                 $application = (object)array(
                     'path' => APPLICATION_PATH,
                     'env'  => APPLICATION_ENV
                 );
 
-                if(!is_array($job['exec'])){
+                if(!($callable = $this->callable(ake($job, 'exec')))){
 
-                    if(strpos($job['exec'], '::') === false){
+                    $this->log->write(W_ERR, 'Warlock schedule config contains invalid callable.');
 
-                        $this->log->write(W_ERR, 'Invalid callable specified in warlock schedule config.');
-
-                        continue;
-
-                    }
-
-                    $job['exec'] = explode('::', $job['exec'], 2);
+                    continue;
 
                 }
 
-                $exec = (object)array('callable' => $job['exec']);
+                $exec = (object)array('callable' => $callable);
 
                 if($args = ake($job, 'args'))
                     $exec->params = $args;
@@ -531,9 +526,46 @@ class Master {
 
         }
 
+        if($this->config->has('subscribe')){
+
+            $this->log->write(W_NOTICE, 'Found ' . $this->config->subscribe->count() . ' global events');
+
+            foreach($this->config->subscribe as $event_name => $event_func){
+
+                if(!($callable = $this->callable($event_func))){
+
+                    $this->log->write(W_ERR, 'Global event config contains invalid callable for event: ' . $event_name);
+
+                    continue;
+
+                }
+
+                $this->log->write(W_DEBUG, 'SUBSCRIBE: ' . $event_name);
+
+                $this->globalQueue[$event_name] = $callable;
+
+            }
+
+        }
+
         $this->log->write(W_INFO, "Ready...");
 
         return $this;
+
+    }
+
+    private function callable($value){
+
+        if($value instanceof \Hazaar\Map)
+            $value = $value->toArray();
+
+        if(is_array($value))
+            return $value;
+
+        if(strpos($value, '::') === false)
+            return null;
+
+        return explode('::', $value, 2);
 
     }
 
@@ -1136,13 +1168,40 @@ class Master {
         if($client_id > 0)
             $seen[] = $client_id;
 
-        $this->eventQueue[$event_id][$trigger_id] = array(
+        $this->eventQueue[$event_id][$trigger_id] = $payload = array(
             'id' => $event_id,
             'trigger' => $trigger_id,
             'when' => time(),
             'data' => $data,
             'seen' => $seen
         );
+
+        if(array_key_exists($event_id, $this->globalQueue)){
+
+            $this->log->write(W_NOTICE, 'Global event triggered', $event_id);
+
+            $job = new Job\Runner(array(
+                'application' => array(
+                    'path' => APPLICATION_PATH,
+                    'env' => APPLICATION_ENV
+                ),
+                'exec' => $this->globalQueue[$event_id],
+                'params' => array($data, $payload),
+                'timeout' => $this->config->exec->timeout,
+                'event' => true
+            ));
+
+            $this->log->write(W_DEBUG, "JOB: ID=$job->id");
+
+            $this->log->write(W_DEBUG, 'APPLICATION_PATH: ' . APPLICATION_PATH, $job->id);
+
+            $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . APPLICATION_ENV, $job->id);
+
+            $this->queueAddJob($job);
+
+            $this->processJobs();
+
+        }
 
         // Check to see if there are any clients waiting for this event and send notifications to them all.
         $this->processSubscriptionQueue($event_id, $trigger_id);
@@ -1464,14 +1523,18 @@ class Master {
 
                     $this->rrd->setValue('jobs', 1);
 
-                    $this->log->write(W_NOTICE, "Starting job execution", $id);
+                    if($job->event === false){
 
-                    $this->log->write(W_DEBUG, 'NOW:  ' . date('c', $now), $id);
+                        $this->log->write(W_NOTICE, "Starting job execution", $id);
 
-                    $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $id);
+                        $this->log->write(W_DEBUG, 'NOW:  ' . date('c', $now), $id);
 
-                    if ($job->retries > 0)
-                        $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
+                        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $id);
+
+                        if ($job->retries > 0)
+                            $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
+
+                    }
 
                     $late = $now - $job->start;
 
@@ -1482,17 +1545,6 @@ class Master {
                         $this->log->write(W_DEBUG, "LATE: $late seconds", $id);
 
                         $this->stats['lateExecs']++;
-
-                    }
-
-                    if (is_array($job->params) && count($job->params) > 0){
-
-                        $pout = 'PARAMS: ';
-
-                        foreach($job->params as $param)
-                            $pout .= var_export($param, true);
-
-                        $this->log->write(W_NOTICE, $pout, $id);
 
                     }
 
@@ -1714,7 +1766,11 @@ class Master {
 
                             $this->log->write(W_WARN, 'Execution completed with error.', $id);
 
-                            if ($job->retries >= $this->config->job->retries) {
+                            if($job->event === true) {
+
+                                $job->status = STATUS_ERROR;
+
+                            }elseif ($job->retries >= $this->config->job->retries) {
 
                                 $this->log->write(W_ERR, 'Cancelling job due to too many retries.', $id);
 
@@ -1722,7 +1778,7 @@ class Master {
 
                                 $this->stats['failed']++;
 
-                            } else {
+                            }else{
 
                                 $this->log->write(W_NOTICE, 'Re-queuing job for execution.', $id);
 
