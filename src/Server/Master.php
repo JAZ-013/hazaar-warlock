@@ -518,7 +518,7 @@ class Master {
                 $exec = (object)array('callable' => $callable);
 
                 if($args = ake($job, 'args'))
-                    $exec->params = $args;
+                    $exec->params = $args->toArray();
 
                 $this->scheduleJob(ake($job, 'when'), $exec, $application, ake($job, 'tag'), ake($job, 'overwrite'));
 
