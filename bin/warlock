@@ -1,2 +1,3 @@
 #!/bin/sh
-php vendor/hazaarlabs/hazaar-warlock/src/Server.php
+BASEDIR=$(dirname "$0")/..
+php $BASEDIR/src/Server.php

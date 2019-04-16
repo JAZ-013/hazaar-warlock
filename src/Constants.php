@@ -41,3 +41,31 @@ define('HAZAAR_SCHEDULE_INTERVAL', 1);
 define('HAZAAR_SCHEDULE_NORM', 2);
 
 define('HAZAAR_SCHEDULE_CRON', 3);
+
+function getApplicationPath(){
+
+    if($path = getenv('APPLICATION_PATH'))
+        return $path;
+
+    $path = getcwd();
+
+    $count = 0;
+
+    do{
+
+        if(substr($path, 1, 1) === ':')
+            $path = substr($path, 2);
+
+        if(file_exists($path . DIRECTORY_SEPARATOR . 'application')
+            && file_exists($path . DIRECTORY_SEPARATOR . 'public')
+            && file_exists($path . DIRECTORY_SEPARATOR . 'vendor'))
+            return realpath($path . DIRECTORY_SEPARATOR . 'application');
+
+        if($path === DIRECTORY_SEPARATOR || ++$count >= 16)
+            break;
+
+    }while($path = dirname($path));
+
+    die('Unable to determine application path!');
+
+}

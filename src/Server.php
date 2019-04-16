@@ -7,10 +7,7 @@ if (!extension_loaded('sockets'))
 
 require_once('Constants.php');
 
-if (!defined('APPLICATION_PATH')){
-    $path = getenv('APPLICATION_PATH');
-    define('APPLICATION_PATH', realpath($path) . ($path ? null : DIRECTORY_SEPARATOR . 'application'));
-}
+if (!defined('APPLICATION_PATH')) define('APPLICATION_PATH', getApplicationPath());
 
 if (!APPLICATION_PATH)
     die("Warlock can not start without an application path.  Make sure APPLICATION_PATH environment variable is set.\n");
@@ -19,6 +16,8 @@ if (!(is_dir(APPLICATION_PATH)
     && file_exists(APPLICATION_PATH . DIRECTORY_SEPARATOR . 'configs')
     && file_exists(APPLICATION_PATH . DIRECTORY_SEPARATOR . 'controllers')))
     die("Application path '" . APPLICATION_PATH . "' is not a valid application directory!\n");
+
+chdir(APPLICATION_PATH);
 
 define('APPLICATION_ENV', (getenv('APPLICATION_ENV') ? getenv('APPLICATION_ENV') : 'development'));
 
