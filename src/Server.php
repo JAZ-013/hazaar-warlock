@@ -7,8 +7,10 @@ if (!extension_loaded('sockets'))
 
 require_once('Constants.php');
 
-if (!defined('APPLICATION_PATH'))
-    define('APPLICATION_PATH', realpath(getenv('APPLICATION_PATH')));
+if (!defined('APPLICATION_PATH')){
+    $path = getenv('APPLICATION_PATH');
+    define('APPLICATION_PATH', realpath($path) . ($path ? null : DIRECTORY_SEPARATOR . 'application'));
+}
 
 if (!APPLICATION_PATH)
     die("Warlock can not start without an application path.  Make sure APPLICATION_PATH environment variable is set.\n");
