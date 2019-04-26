@@ -439,11 +439,11 @@ class Master {
         if ($this->isRunning())
             throw new \Exception("Warlock is already running.");
 
-        if($this->config->server['kvstore'] === true){
+        if($this->config->kvstore['enabled'] === true){
 
             $this->log->write(W_NOTICE, 'Initialising KV Store');
 
-            $this->kv_store = new Kvstore($this->log);
+            $this->kv_store = new Kvstore($this->log, $this->config->kvstore['persist'], $this->config->kvstore['compact']);
 
         }
 
