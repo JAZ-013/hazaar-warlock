@@ -220,7 +220,7 @@ class Control extends Process {
             throw new \Exception('Warlock server script could not be found!');
 
         if(substr(PHP_OS, 0, 3) == 'WIN')
-            $this->cmd = 'start ' . ($this->config->server['win_bg']?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
+            $this->cmd = 'start ' . (($this->config->server['win_bg'] === true)?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
         else
             $this->cmd = $php_binary . ' ' . $server;
 

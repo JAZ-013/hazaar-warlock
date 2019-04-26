@@ -10,9 +10,33 @@ class Kvstore {
 
     private $kv_expire = array();
 
-    function __construct(Logger $log) {
+    private $db;
+
+    private $compact_time = 0;
+
+    private $last_compact = 0;
+
+    function __construct(Logger $log, $persistent = false, $compact_time = null) {
 
         $this->log = $log;
+
+        if($persistent === true){
+
+            $db_file = new \Hazaar\File(\Hazaar\Warlock\Server\Master::$instance->runtimePath('kvstore.db'));
+
+            $this->db = new \Hazaar\Btree($db_file);
+
+            if($compact_time > 0){
+
+                $this->log->write(W_NOTICE, 'KV Store persistent storage compaction enabled');
+
+                $this->compact_time = $compact_time;
+
+                $this->last_compact = $db_file->ctime();
+
+            }
+
+        }
 
     }
 
@@ -46,21 +70,43 @@ class Kvstore {
 
         }
 
+        if($this->db !== null
+            && $this->compact_time > 0
+            && $this->last_compact + $this->compact_time <= ($now = time())){
+
+            $this->log->write(W_INFO, 'Compacting KV Persistent Storage');
+
+            $this->db->compact();
+
+            $this->last_compact = $now;
+
+        }
+
     }
 
     public function & touch($namespace, $key){
 
         if(!(array_key_exists($namespace, $this->kv_store) && array_key_exists($key, $this->kv_store[$namespace]))){
 
-            $this->kv_store[$namespace][$key] = array('v' => null);
+            if($this->db
+                && ($slot = $this->db->get($key))
+                && (array_key_exists('e', $slot) && $slot['e'] > time())){
 
-            return $this->kv_store[$namespace][$key];
+                $this->kv_store[$namespace][$key] =& $slot;
 
-        }
+            }else{
 
-        $slot =& $this->kv_store[$namespace][$key];
+                $this->kv_store[$namespace][$key] = array('v' => null);
+
+                return $this->kv_store[$namespace][$key];
+
+            }
+
+        }else $slot =& $this->kv_store[$namespace][$key];
 
         if(array_key_exists('e', $slot)
+            && array_key_exists($namespace, $this->kv_expire)
+            && array_key_exists($slot['e'], $this->kv_expire[$namespace])
             && ($index = array_search($key, $this->kv_expire[$namespace][$slot['e']])) !== false)
             unset($this->kv_expire[$namespace][$slot['e']][$index]);
 
@@ -69,6 +115,8 @@ class Kvstore {
             $slot['e'] = time() + $slot['t'];
 
             $this->kv_expire[$namespace][$slot['e']][] = $key;
+
+            $this->db->set($key, $slot);
 
         }
 
@@ -163,13 +211,9 @@ class Kvstore {
 
         if(property_exists($payload, 'k')){
 
-            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])){
+            $slot = $this->touch($namespace, $payload->k);
 
-                $slot = $this->touch($namespace, $payload->k);
-
-                $value = $slot['v'];
-
-            }
+            $value = $slot['v'];
 
         }else{
 
@@ -214,6 +258,9 @@ class Kvstore {
 
             $result = true;
 
+            if($this->db)
+                $this->db->set($payload->k, $slot);
+
         }else{
 
             $this->log->write(W_ERR, 'KVSET requires \'k\'');
@@ -230,7 +277,19 @@ class Kvstore {
 
         if(property_exists($payload, 'k')){
 
-            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
+            if(!($result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])))){
+
+                if($this->db
+                    && ($slot = $this->db->get($payload->k))
+                    && (!array_key_exists('e', $slot) || $slot['e'] > time())){
+
+                    $result = true;
+
+                    $this->kv_store[$namespace][$payload->k] =& $slot;
+
+                }
+
+            }
 
         }else{
 
@@ -252,8 +311,14 @@ class Kvstore {
 
             $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
 
-            if($result === true)
+            if($result === true){
+
                 unset($this->kv_store[$namespace][$payload->k]);
+
+                if($this->db)
+                    $this->db->remove($payload->k);
+
+            }
 
         }else{
 
@@ -272,6 +337,10 @@ class Kvstore {
         if(array_key_exists($namespace, $this->kv_store)){
 
             $list = array();
+
+            if($this->db){
+
+            }
 
             foreach($this->kv_store[$namespace] as $key => $data)
                 $list[$key] = $data['v'];
