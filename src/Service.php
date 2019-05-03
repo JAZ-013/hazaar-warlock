@@ -422,8 +422,8 @@ abstract class Service extends Process {
                 switch($exec['type']) {
                     case HAZAAR_SCHEDULE_INTERVAL:
 
-                        if($exec['when'] = $exec['when'] + $exec['interval'])
-                            $this->log(W_DEBUG, "SCHEDULED: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
+                        if($exec['when'] = time() + $exec['interval'])
+                            $this->log(W_DEBUG, "INTERVAL: ACTION=$exec[label] NEXT=" . date('Y-m-d H:i:s', $exec['when']));
 
                         break;
 
@@ -444,7 +444,9 @@ abstract class Service extends Process {
 
                 }
 
-                if($exec['when'] === null || $exec['when'] === 0 || $exec['when'] < time()){
+                if($exec['when'] === null 
+                    || $exec['when'] === 0 
+                    || ($exec['type'] !== HAZAAR_SCHEDULE_INTERVAL && $exec['when'] < time())){
 
                     unset($this->schedule[$id]);
 
