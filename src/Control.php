@@ -206,23 +206,27 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
-        $php_binary = $this->config->sys['php_binary'];
+        if(substr(PHP_OS, 0, 3) == 'WIN'){
 
-        if(! file_exists($php_binary))
-            throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
+            if(PHP_INT_SIZE !== 8)
+                throw new \Exception('Autostart of warlock is only supported on 64-bit environments.');
 
-        if(! is_executable($php_binary))
-            throw new \Exception('The PHP CLI binary exists but is not executable!');
+            $server = str_replace(DIRECTORY_SEPARATOR, '/', '..'
+                . str_replace(realpath(getcwd() . DIRECTORY_SEPARATOR . '..'), '', dirname(__FILE__) . '/Server.php'));
 
-        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+            $this->cmd = 'start ' . (($this->config->server['win_bg'] === true)?'/B ':'')
+            . '"Hazaar Warlock" "wsl" "php" "' . $server . '"';
 
-        if(!file_exists($server))
-            throw new \Exception('Warlock server script could not be found!');
+        }else{
 
-        if(substr(PHP_OS, 0, 3) == 'WIN')
-            $this->cmd = 'start ' . (($this->config->server['win_bg'] === true)?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
-        else
-            $this->cmd = $php_binary . ' ' . $server;
+            $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+
+            if(!file_exists($server))
+                throw new \Exception('Warlock server script could not be found!');
+
+            $this->cmd = $this->config->sys['php_binary'] . ' ' . $server;
+
+        }
 
         $env = $_SERVER;
 
