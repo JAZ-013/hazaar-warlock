@@ -90,9 +90,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         }
 
-        $this->ping['wait'] = ake($options, 'wait', 15);
+        $this->ping['wait'] = ake($options, 'pingWait', 15);
 
-        $this->ping['pings'] = ake($options, 'pings', 5);
+        $this->ping['pings'] = ake($options, 'pingCount', 5);
 
     }
 
