@@ -23,8 +23,6 @@ class Control extends Process {
 
     private $pidfile;
 
-    private $server_pid;
-
     static private $guid;
 
     static private $instance = array();
@@ -176,25 +174,37 @@ class Control extends Process {
 
         if(substr(PHP_OS, 0, 3) == 'WIN'){
 
-            //Uses windows "tasklist" command to look for $pid (FI PID eq) and output in CSV format (FO CSV) with no header (NH).
-            exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH', $tasklist, $return_var);
+            $descriptorspec = array(
+                0 => array("pipe", "r"),
+                1 => array("pipe", "w"),
+                2 => array("pipe", "w")
+            );
 
-            if($return_var !== 0 || count($tasklist) < 1)
+            //We have to use proc_open because WSL dies without a STDIN pipe.
+            $process = proc_open('wsl cat /proc/' . $pid . '/stat', $descriptorspec, $pipes);
+
+            if(!is_resource($process))
+                throw new \Exception('Unable to inspect processes in WSL.');
+
+            if($error = stream_get_contents($pipes[2]))
+                throw new \Exception($error);
+
+            $proc = stream_get_contents($pipes[1]);
+
+            proc_close($process);
+
+        }else{
+
+            $proc_file = '/proc/' . $pid . '/stat';
+
+            if(!file_exists($proc_file))
                 return false;
 
-            $parts = str_getcsv($tasklist[0]);
-
-            if(count($parts) <= 1) //A non-CSV response was probably returned.  like a "not found" info line
-                return false;
-
-            return ($parts[1] == $pid && strpos(strtolower($parts[0]), 'php') !== false);
+            $proc = file_get_contents($proc_file);
 
         }
 
-        if(file_exists('/proc/' . $pid))
-            return (($this->server_pid = $pid) > 0);
-
-        return false;
+        return ($proc !== '' && preg_match('/^' . preg_quote($pid) . '\s+\(php\)/', $proc));
 
     }
 
