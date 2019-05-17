@@ -91,7 +91,7 @@ class Control extends Process {
             if($autostart === true){
 
                 if(!$this->config->sys['php_binary'])
-                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ($this->isWindowsOS()?'.exe':'');
 
                 $this->pidfile = $app->runtimePath($this->config->sys->pid);
 
@@ -161,6 +161,19 @@ class Control extends Process {
 
     }
 
+    private function isWindowsOS($except_on_wsl_missing = false){
+
+        if(substr(PHP_OS, 0, 3) !== 'WIN')
+            return false;
+
+        if($except_on_wsl_missing === true
+            && !file_exists(dirname(getenv('ComSpec')) . DIRECTORY_SEPARATOR . 'wsl.exe'))
+            throw new \Exception('Hazaar Warlock requires Windows Subsystem for Linux (WSL) in order to run on Windows.');
+
+        return true;
+
+    }
+
     public function isRunning() {
 
         if(!$this->pidfile)
@@ -172,7 +185,7 @@ class Control extends Process {
         if(!($pid = (int)file_get_contents($this->pidfile)))
             return false;
 
-        if(substr(PHP_OS, 0, 3) == 'WIN'){
+        if($this->isWindowsOS(true)){
 
             $descriptorspec = array(
                 0 => array("pipe", "r"),
@@ -181,10 +194,16 @@ class Control extends Process {
             );
 
             //We have to use proc_open because WSL dies without a STDIN pipe.
-            $process = proc_open('wsl cat /proc/' . $pid . '/stat', $descriptorspec, $pipes);
+            $process = proc_open('wsl FILE=/proc/' . $pid . '/stat; if [ -e $FILE ] ; then cat $FILE; fi;', $descriptorspec, $pipes);
 
             if(!is_resource($process))
                 throw new \Exception('Unable to inspect processes in WSL.');
+
+            do{
+
+                $status = proc_get_status($process);
+
+            }while($status['running'] === true);
 
             if($error = stream_get_contents($pipes[2]))
                 throw new \Exception($error);
@@ -216,7 +235,7 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
-        if(substr(PHP_OS, 0, 3) == 'WIN'){
+        if($this->isWindowsOS(true)){
 
             if(PHP_INT_SIZE !== 8)
                 throw new \Exception('Autostart of warlock is only supported on 64-bit environments.');
@@ -251,7 +270,7 @@ class Control extends Process {
         if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active())
             $env['XDEBUG_CONFIG'] = 'profiler_enable=1';
 
-        if(substr(PHP_OS, 0, 3) !== 'WIN')
+        if(!$this->isWindowsOS())
             $env['WARLOCK_OUTPUT'] = 'file';
 
         foreach($env as $name => $value)
