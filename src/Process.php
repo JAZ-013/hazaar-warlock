@@ -358,11 +358,11 @@ abstract class Process extends Protocol\WebSockets {
 
                 return $this->protocol->decode($frame, $payload);
 
-            }elseif($bytes_received == -1) {
+            }elseif($bytes_received === -1) {
 
                 throw new \Exception('An error occured while receiving from the socket');
 
-            } elseif($bytes_received == 0) {
+            } elseif($bytes_received === 0) {
 
                 return $this->disconnect();
 
@@ -530,8 +530,16 @@ abstract class Process extends Protocol\WebSockets {
 
         $payload = null;
 
-        if(($ret = $this->recv($payload)) !== $command)
-            throw new \Exception('Invalid response from server: ' . $ret . (is_object($payload) && property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+        if(($ret = $this->recv($payload)) !== $command){
+
+            $msg = "KVSTORE: Invalid response to command $command from server: " . var_export($ret, true);
+
+            if(is_object($payload) && property_exists($payload, 'reason'))
+                $msg .= "\nError: $payload->reason";
+
+            throw new \Exception($msg);
+
+        }
 
         return $payload;
 
