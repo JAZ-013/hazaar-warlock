@@ -412,11 +412,13 @@ class Master {
 
             $pid = (int) file_get_contents($this->pidfile);
 
-            if (file_exists('/proc/' . $pid)) {
+            $proc_file = '/proc/' . $pid . '/stat';
 
-                $this->pid = $pid;
+            if(file_exists($proc_file)){
 
-                return true;
+                $proc = file_get_contents($proc_file);
+
+                return ($proc !== '' && preg_match('/^' . preg_quote($pid) . '\s+\(php\)/', $proc));
 
             }
 
@@ -688,7 +690,7 @@ class Master {
 
                 $this->processJobs();
 
-                if (count($this->procs) == 0)
+                if (count($this->processes) == 0)
                     break;
 
                 sleep(1);
@@ -1001,7 +1003,7 @@ class Master {
      *
      * @return mixed
      */
-    public function processCommand(Client $client, $command, &$payload) {
+    public function processCommand($client, $command, &$payload) {
 
         if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
             return $this->kv_store->process($client, $command, $payload);
@@ -1314,7 +1316,7 @@ class Master {
      * @param mixed $event_id The event ID to subscribe to
      * @param mixed $filter Any event filters
      */
-    public function subscribe(Client $client, $event_id, $filter) {
+    public function subscribe($client, $event_id, $filter) {
 
         $this->waitQueue[$event_id][$client->id] = array(
             'client' => $client,
@@ -1331,6 +1333,8 @@ class Master {
          * Check to see if this subscribe request has any active and unseen events waiting for it.
          */
         $this->processEventQueue($client, $event_id, $filter);
+
+        return true;
 
     }
 
@@ -1574,9 +1578,6 @@ class Master {
 
                     $payload = array(
                         'application_name' => APPLICATION_NAME,
-                        'server_port' => $this->config->server['port'] ,
-                        'job_id' => $id,
-                        'access_key' => $job->access_key,
                         'timezone' => date_default_timezone_get(),
                         'config' => array('app' => array('root' => $root))
                     );
@@ -1834,6 +1835,23 @@ class Master {
                     } else {
 
                         $this->log->write(W_ERR, 'Failed to send terminate signal.', $id);
+
+                    }
+
+                } elseif ($status['running'] === TRUE) {
+
+                    try{
+
+                        $job->recv();
+
+                    }
+                    catch(\Throwable $e){
+
+                        $this->log->write(W_ERR, 'EXCEPTION #'
+                            . $e->getCode()
+                            . ' on line ' . $e->getLine()
+                            . ' in file ' . $e->getFile()
+                            . ': ' . $e->getMessage());
 
                     }
 

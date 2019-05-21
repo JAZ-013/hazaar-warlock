@@ -131,9 +131,11 @@ class Process extends \Hazaar\Model\Strict {
 
         $this->log->write(W_DECODE, 'OUT -> ' . $output, $this->tag);
 
-        fwrite($this->pipes[0], $output);
+        fwrite($this->pipes[0], $output . "\n");
 
-        fclose($this->pipes[0]);
+        stream_set_blocking($this->pipes[1], false);
+
+        stream_set_blocking($this->pipes[2], false);
 
     }
 
@@ -150,7 +152,66 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
-    function close(){
+    public function recv(){
+
+        $read = array(
+            $this->pipes[1],
+            $this->pipes[2]
+        );
+
+        $write = null;
+
+        $except = null;
+
+        if(!(stream_select($read, $write, $except, 0) > 0))
+            return null;
+
+        $packet = null;
+
+        foreach($read as $stream) {
+
+            //Process the input stream
+            if ($stream == $this->pipes[2])
+                throw new \Exception(fgets($stream, 65535));
+
+            if($packet = fgets($stream))
+                $this->log->write(W_DECODE2, "PROCESS<-RECV: " . trim($packet));
+
+        }
+
+        return $packet;
+
+    }
+
+    public function write($packet){
+
+        $len = strlen($packet .= "\n");
+
+        $this->log->write(W_DEBUG, "PROCESS->PIPE: BYTES=$len ID=$this->id", $this->name);
+
+        $this->log->write(W_DECODE2, "PROCESS->PACKET: " . trim($packet), $this->name);
+
+        $bytes_sent = @fwrite($this->pipes[0], $packet, $len);
+
+        if ($bytes_sent === false) {
+
+            $this->log->write(W_WARN, 'An error occured while sending to the client. Pipe has disappeared!?', $this->name);
+
+            return false;
+
+        } elseif ($bytes_sent !== $len) {
+
+            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected', $this->name);
+
+            return false;
+
+        }
+
+        return true;
+
+    }
+
+    public function close(){
 
         //Make sure we close all the pipes
         foreach($this->pipes as $sid => $pipe) {

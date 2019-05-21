@@ -301,7 +301,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
                 }
                 catch(\Exception $e){
 
-                    $this->log->write(W_ERR, 'An error occurred processing the command TYPE: ' . $type, $this->name);
+                    $this->log->write(W_ERR, 'An error occurred processing the command: ' . $type, $this->name);
 
                     $this->send('error', array(
                         'reason' => $e->getMessage(),
@@ -725,10 +725,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
             unset($this->subscriptions[$index]);
 
-        if(!Master::$instance->unsubscribe($this, $event_id))
-            throw new \Exception('Unable to subscribe');
-
-        return true;
+        return Master::$instance->unsubscribe($this, $event_id);
 
     }
 
@@ -736,9 +733,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->log->write(W_NOTICE, "CLIENT->TRIGGER: NAME=$event_id CLIENT=$this->id ECHO=" . strbool($echo_client), $this->name);
 
-        Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
-
-        return true;
+        return Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
 
     }
 

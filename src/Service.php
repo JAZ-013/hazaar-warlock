@@ -36,8 +36,6 @@ abstract class Service extends Process {
 
     protected $slept    = false;
 
-    private   $ob_file;
-
     private   $last_heartbeat;
 
     private   $last_checkfile;
@@ -64,8 +62,6 @@ abstract class Service extends Process {
         $this->name = strtolower($name);
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
-
-            $this->redirectOutput($this->name);
 
             $this->setErrorHandler('__errorHandler');
 
@@ -120,25 +116,6 @@ abstract class Service extends Process {
 
     }
 
-    public function connect($application_name, $host, $port, $extra_headers = null){
-
-        $count = 0;
-
-        while(!parent::connect($application_name, $host, $port, $extra_headers)){
-
-            $this->log(W_WARN, 'Connection failed.  Trying again.  (count=' . $count . ')');
-
-            usleep($this->config->connect_retry_delay);
-
-            if(++$count >= $this->config->connect_retries)
-                return false;
-
-        }
-
-        return true;
-
-    }
-
     public function log($level, $message, $name = null){
 
         if($name === null)
@@ -151,8 +128,8 @@ abstract class Service extends Process {
             if(!is_array($message))
                 $message = array($message);
 
-            foreach($message as $m)
-                echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+            //foreach($message as $m)
+            //    echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
 
             flush();
 
@@ -167,7 +144,7 @@ abstract class Service extends Process {
 
         if(parent::debug($message, $name) === true){
 
-            echo date('Y-m-d H:i:s') . ' - DEBUG - ' . $message . "\n";
+            //echo date('Y-m-d H:i:s') . ' - DEBUG - ' . $message . "\n";
 
             flush();
 
@@ -176,7 +153,6 @@ abstract class Service extends Process {
     }
 
     private function invokeMethod($method, $arguments = null){
-
 
         $args = array();
 
@@ -288,34 +264,9 @@ abstract class Service extends Process {
 
         $this->shutdown();
 
-        //Do a sleep so that we can correctly flush any output that may have been sent before we exit.
-        while(ob_get_length() > 0)
-            $this->sleep();
-
         $this->state = HAZAAR_SERVICE_STOPPED;
 
         return $code;
-
-    }
-
-    /**
-     * This method turns off output to STDOUT and STDERR and redirects them to a file.
-     *
-     * @param mixed $name The name to use in the file.
-     */
-    final protected function redirectOutput($name){
-
-        $this->ob_file = fopen($this->application->runtimePath($name . '.log'), 'at');
-
-        ob_start(array($this, 'writeOutput'));
-
-    }
-
-    final protected function writeOutput($buffer){
-
-        fwrite($this->ob_file, $buffer);
-
-        return '';
 
     }
 
@@ -325,12 +276,9 @@ abstract class Service extends Process {
 
         $this->log(W_LOCAL, 'ERROR ' . $msg);
 
-        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
+        //debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
-        echo str_repeat('-', 40) . "\n";
-
-        if($this->connected)
-            $this->send('ERROR', $msg);
+        $this->send('ERROR', $msg);
 
         return true;
 
@@ -344,9 +292,7 @@ abstract class Service extends Process {
 
         $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
 
-        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
-
-        echo str_repeat('-', 40) . "\n";
+        //debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         return true;
 
@@ -444,8 +390,8 @@ abstract class Service extends Process {
 
                 }
 
-                if($exec['when'] === null 
-                    || $exec['when'] === 0 
+                if($exec['when'] === null
+                    || $exec['when'] === 0
                     || ($exec['type'] !== HAZAAR_SCHEDULE_INTERVAL && $exec['when'] < time())){
 
                     unset($this->schedule[$id]);
@@ -602,9 +548,6 @@ abstract class Service extends Process {
      */
     final protected function sleep($timeout = 0) {
 
-        if(!is_resource($this->socket))
-            return sleep($timeout);
-
         $start = microtime(true);
 
         $slept = FALSE;
@@ -655,8 +598,6 @@ abstract class Service extends Process {
                 $this->__sendHeartbeat();
 
             $slept = true;
-
-            ob_flush();
 
         }
 
@@ -824,24 +765,6 @@ abstract class Service extends Process {
     final public function signal($event_id, $data){
 
         return $this->send('SIGNAL', array('service' => $this->name, 'id' => $event_id, 'data' => $data));
-
-    }
-
-    final protected function send($command, $payload = null) {
-
-        try{
-
-            return parent::send($command, $payload);
-
-        }
-        catch(\Exception $e){
-
-            echo "SOCKET ERROR!\n";
-
-            //We have lost the control channel so we must die!
-            exit(4);
-
-        }
 
     }
 

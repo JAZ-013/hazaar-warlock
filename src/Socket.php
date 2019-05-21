@@ -7,7 +7,7 @@ namespace Hazaar\Warlock;
 
 require_once('Constants.php');
 
-abstract class Process {
+abstract class Socket extends Protocol\WebSockets {
 
     protected $id;
 
@@ -15,19 +15,30 @@ abstract class Process {
 
     protected $key;
 
+    protected $socket;
+
+    protected $connected = false;
+
     protected $application;
 
     protected $protocol;
 
     protected $subscriptions = array();
 
-    protected $buffer;
+    //WebSocket Buffers
+    protected $frameBuffer;
+
+    protected $payloadBuffer;
+
+    protected $closing            = false;
 
     public    $bytes_received = 0;
 
-    private $closing = false;
+    public    $socket_last_error = null;
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
+
+        parent::__construct(array('warlock'));
 
         $this->start = time();
 
@@ -38,6 +49,120 @@ abstract class Process {
         $this->id = ($guid === null ? guid() : $guid);
 
         $this->key = uniqid();
+
+    }
+
+    final function __destruct(){
+
+        $this->disconnect(true);
+
+    }
+
+    public function connect($application_name, $host, $port, $extra_headers = null){
+
+        if(array_key_exists('X-WARLOCK-JOB-ID', $extra_headers))
+            $this->job_id = $extra_headers['X-WARLOCK-JOB-ID'];
+
+        if (!extension_loaded('sockets'))
+            throw new \Exception('The sockets extension is not loaded.');
+
+        $this->socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+
+        if(!is_resource($this->socket))
+            throw new \Exception('Unable to create TCP socket!');
+
+        if(!($this->connected = @socket_connect($this->socket, $host, $port))){
+
+            $this->socket_last_error = socket_last_error($this->socket);
+
+            socket_close($this->socket);
+
+            $this->socket = null;
+
+            return false;
+
+        }
+
+        $headers = array(
+            'X-WARLOCK-PHP' => 'true',
+            'X-WARLOCK-USER' => base64_encode(get_current_user())
+        );
+
+        if(is_array($extra_headers))
+            $headers = array_merge($headers, $extra_headers);
+
+        /**
+         * Initiate a WebSockets connection
+         */
+        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key, $headers);
+
+        @socket_write($this->socket, $handshake, strlen($handshake));
+
+        /**
+         * Wait for the response header
+         */
+        $read = array($this->socket);
+
+        $write = $except = null;
+
+        $sockets = socket_select($read, $write, $except, 3000);
+
+        if($sockets == 0) return false;
+
+        socket_recv($this->socket, $buf, 65536, 0);
+
+        $response = $this->parseHeaders($buf);
+
+        if($response['code'] != 101)
+            throw new \Exception('Walock server returned status: ' . $response['code'] . ' ' . $response['status']);
+
+        if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
+            throw new \Exception('Warlock server denied our connection attempt!');
+
+        return true;
+
+    }
+
+    public function getLastSocketError($as_string = false){
+
+        return ($as_string ? socket_strerror($this->socket_last_error) : $this->socket_last_error);
+
+    }
+
+    public function disconnect() {
+
+        $this->frameBuffer = '';
+
+        if($this->socket) {
+
+            if($this->closing === false) {
+
+                $this->closing = true;
+
+                $frame = $this->frame('', 'close');
+
+                @socket_write($this->socket, $frame, strlen($frame));
+
+                $this->recv($payload);
+
+            }
+
+            if($this->socket)
+                socket_close($this->socket);
+
+            $this->socket = null;
+
+            return true;
+
+        }
+
+        return false;
+
+    }
+
+    public function connected() {
+
+        return is_resource($this->socket);
 
     }
 
@@ -59,22 +184,119 @@ abstract class Process {
 
     }
 
-    public function send($command, $payload = null) {
+    protected function processFrame(&$frameBuffer = null) {
+
+        if ($this->frameBuffer) {
+
+            $frameBuffer = $this->frameBuffer . $frameBuffer;
+
+            $this->frameBuffer = null;
+
+            return $this->processFrame($frameBuffer);
+
+        }
+
+        if (!$frameBuffer)
+            return false;
+
+        $opcode = $this->getFrame($frameBuffer, $payload);
+
+        /**
+         * If we get an opcode that equals false then we got a bad frame.
+         *
+         * If we get a opcode of -1 there are more frames to come for this payload. So, we return false if there are no
+         * more frames to process, or true if there are already more frames in the buffer to process.
+         */
+        if ($opcode === false) {
+
+            $this->disconnect(true);
+
+            return false;
+
+        } elseif ($opcode === -1) {
+
+            $this->frameBuffer .= $frameBuffer;
+
+            return (strlen($this->frameBuffer) > 0);
+
+        }
+
+        switch ($opcode) {
+
+            case 0 :
+            case 1 :
+            case 2 :
+
+                break;
+
+            case 8 :
+
+                if($this->closing === false)
+                    $this->disconnect();
+
+                return false;
+
+            case 9 :
+
+                $frame = $this->frame('', 'pong', false);
+
+                @socket_write($this->socket, $frame, strlen($frame));
+
+                return false;
+
+            case 10 :
+
+                return false;
+
+            default :
+
+                $this->disconnect();
+
+                return false;
+
+        }
+
+        if (strlen($frameBuffer) > 0) {
+
+            $this->frameBuffer = $frameBuffer;
+
+            $frameBuffer = '';
+
+        }
+
+        if ($this->payloadBuffer) {
+
+            $payload = $this->payloadBuffer . $payload;
+
+            $this->payloadBuffer = '';
+
+        }
+
+        return $payload;
+
+    }
+
+    protected function send($command, $payload = null) {
+
+        if(! $this->socket)
+            return false;
 
         if(!($packet = $this->protocol->encode($command, $payload)))
             return false;
 
-        $len = strlen($packet .= "\n");
+        $frame = $this->frame($packet, 'text');
+
+        $len = strlen($frame);
 
         $attempts = 0;
 
         $total_sent = 0;
 
-        while($packet){
+        while($frame){
 
             $attempts++;
 
-            $bytes_sent = @fwrite(STDOUT, $packet, $len);
+            $bytes_sent = @socket_write($this->socket, $frame, $len);
 
             if($bytes_sent === -1 || $bytes_sent === false)
                 throw new \Exception('An error occured while sending to the socket');
@@ -87,7 +309,7 @@ abstract class Process {
             if($attempts >= 100)
                 throw new \Exception('Unable to write to socket.  Socket appears to be stuck.');
 
-            $packet = substr($packet, $bytes_sent);
+            $frame = substr($frame, $bytes_sent);
 
         }
 
@@ -95,83 +317,59 @@ abstract class Process {
 
     }
 
-    private function processPacket(&$buffer = null){
-
-        echo $buffer;
-
-        exit;
-
-        if ($this->buffer) {
-
-            $buffer = $this->buffer . $buffer;
-
-            $this->buffer = null;
-
-            return $this->processPacket($buffer);
-
-        }
-
-        if (!$buffer)
-            return false;
-
-        if(($pos = strpos($this->buffer, "\n")) === false)
-            return true;
-
-        $packet = substr($buffer, 0, $pos);
-
-        echo $packet;
-
-        exit;
-
-        if (strlen($buffer) > $pos) {
-
-            $this->buffer = substr($buffer, $pos);
-
-            $buffer = '';
-
-        }
-
-        return $packet;
-
-    }
-
     protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
-        while($packet = $this->processPacket()){
+        //Process any frames sitting in the local frame buffer first.
+        while($frame = $this->processFrame()){
 
-            if($packet === true)
+            if($frame === true)
                 break;
 
-            return $this->protocol->decode($packet, $payload);
+            return $this->protocol->decode($frame, $payload);
 
         }
 
-        $read = array(STDIN);
+        if(!$this->socket)
+            exit(4);
+
+        if(socket_get_option($this->socket, SOL_SOCKET, SO_ERROR) > 0)
+            exit(4);
+
+        $read = array(
+            $this->socket
+        );
 
         $write = $except = null;
 
-        while(stream_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
+        $start = 0;//time();
+
+        while(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
 
             // will block to wait server response
-            $buffer = fread(STDIN, 65536);
-
-            $this->bytes_received += ($bytes_received = strlen($buffer));
+            $this->bytes_received += $bytes_received = socket_recv($this->socket, $buffer, 65536, 0);
 
             if($bytes_received > 0) {
 
-                if(($packet = $this->processPacket($buffer)) === true)
+                if(($frame = $this->processFrame($buffer)) === true)
                     continue;
 
-                if($packet === false)
+                if($frame === false)
                     break;
 
-                return $this->protocol->decode($packet, $payload);
+                return $this->protocol->decode($frame, $payload);
 
-            }elseif($bytes_received === -1) {
+            }elseif($bytes_received == -1) {
 
-                throw new \Exception('An error occured while receiving from the stream');
+                throw new \Exception('An error occured while receiving from the socket');
+
+            } elseif($bytes_received == 0) {
+
+                return $this->disconnect();
 
             }
+
+            if(($start++) > 5)
+                return false;
 
         }
 
