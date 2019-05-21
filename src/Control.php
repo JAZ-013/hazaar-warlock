@@ -15,7 +15,7 @@ namespace Hazaar\Warlock;
  *
  * @module      warlock
  */
-class Control extends Process {
+class Control extends Socket {
 
     public  $config;
 
@@ -235,43 +235,52 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
+        $env = array(
+            'APPLICATION_PATH'  => APPLICATION_PATH,
+            'APPLICATION_ENV'   => APPLICATION_ENV,
+            'APPLICATION_ROOT'  => \Hazaar\Application::getRoot(),
+            'WARLOCK_EXEC'      => 1
+        );
+
+        $php_options = array();
+
+        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active()){
+
+            $env['XDEBUG_CONFIG'] = 'profiler_enable=1'
+                . ' remote_enable='             . ini_get('xdebug.remote_enable')
+                . ' remote_handler='            . ini_get('xdebug.remote_handler')
+                . ' remote_mode='               . ini_get('xdebug.remote_mode')
+                . ' remote_port='               . ini_get('xdebug.remote_port')
+                . ' remote_host='               . ini_get('xdebug.remote_host')
+                . ' remote_cookie_expire_time=' . ini_get('xdebug.remote_cookie_expire_time');
+
+        }
+
         if($this->isWindowsOS(true)){
 
             if(PHP_INT_SIZE !== 8)
                 throw new \Exception('Autostart of warlock is only supported on 64-bit environments.');
 
-            $server = str_replace(DIRECTORY_SEPARATOR, '/', '..'
+            $php_options[] = str_replace(DIRECTORY_SEPARATOR, '/', '..'
                 . str_replace(realpath(getcwd() . DIRECTORY_SEPARATOR . '..'), '', dirname(__FILE__) . '/Server.php'));
 
-            $this->cmd = 'start ' . (($this->config->server['win_bg'] === true)?'/B ':'')
-            . '"Hazaar Warlock" "wsl" "php" "' . $server . '"';
+            $this->cmd = 'start /I /MAX /WAIT ' . (($this->config->server['win_bg'] === true)?'/B ':'') . '"Hazaar Warlock" "cmd" "/K wsl php'
+                . ' ' . implode(' ', $php_options);
+
+            $env['WSLENV'] = 'APPLICATION_PATH/p:APPLICATION_ENV:APPLICATION_ROOT:WARLOCK_EXEC:WARLOCK_OUTPUT:XDEBUG_CONFIG';
 
         }else{
 
-            $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+            $php_options[] = $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
 
             if(!file_exists($server))
                 throw new \Exception('Warlock server script could not be found!');
 
-            $this->cmd = $this->config->sys['php_binary'] . ' ' . $server;
+            $this->cmd = $this->config->sys['php_binary'] . ' ' .  implode(' ', $php_options);
+
+            $env['WARLOCK_OUTPUT'] = 'file';
 
         }
-
-        $env = $_SERVER;
-
-        $env['APPLICATION_PATH'] = APPLICATION_PATH;
-
-        $env['APPLICATION_ENV'] = APPLICATION_ENV;
-
-        $env['APPLICATION_ROOT'] = \Hazaar\Application::getRoot();
-
-        $env['WARLOCK_EXEC'] = 1;
-
-        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active())
-            $env['XDEBUG_CONFIG'] = 'profiler_enable=1';
-
-        if(!$this->isWindowsOS())
-            $env['WARLOCK_OUTPUT'] = 'file';
 
         foreach($env as $name => $value)
             putenv($name . '=' . $value);
