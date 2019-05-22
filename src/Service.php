@@ -285,7 +285,7 @@ abstract class Service extends Process {
         $msg = "#$errno on line $errline in file $errfile\n"
             . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40) . "\n";
 
-        debug_print_backtrace() . "\n";
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         $msg .= ob_get_clean();
 
@@ -304,7 +304,7 @@ abstract class Service extends Process {
         $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n"
             . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40) . "\n";
 
-        debug_print_backtrace() . "\n";
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         $msg .= ob_get_clean();
 

@@ -60,17 +60,26 @@ abstract class Process {
 
     protected function connected(){
 
+        if(!$this->conn)
+            return false;
+
         return $this->conn->connected();
 
     }
 
     public function send($command, $payload = null) {
 
+        if(!$this->conn)
+            return false;
+
         return $this->conn->send($command, $payload);
 
     }
 
     public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
+
+        if(!$this->conn)
+            return false;
 
         return $this->conn->recv($payload, $tv_sec, $tv_usec);
 

@@ -129,7 +129,7 @@ class Process extends \Hazaar\Model\Strict {
 
     public function start($output){
 
-        $this->log->write(W_DECODE, 'OUT -> ' . $output, $this->tag);
+        $this->log->write(W_DECODE, 'PROCESS->INIT: ' . $output, $this->tag);
 
         fwrite($this->pipes[0], $output . "\n");
 
