@@ -34,6 +34,12 @@ abstract class Process {
 
     }
 
+    function __destruct(){
+        
+        $this->conn->disconnect();
+
+    }
+
     protected function setErrorHandler($methodName) {
 
         if(! method_exists($this, $methodName))

@@ -1644,6 +1644,8 @@ class Master {
 
                 if ($status['running'] === false) {
 
+                    $job->recv();
+
                     unset($this->processes[$job->process->id]);
 
                     $job->process->close();

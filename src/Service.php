@@ -61,7 +61,7 @@ abstract class Service extends Process {
 
         $this->name = strtolower($name);
 
-        $this->__log_file = fopen($application->runtimePath($name . '.log'), 'a');
+        $this->__log_file = fopen($application->runtimePath($this->name . '.log'), 'a');
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
 
@@ -123,6 +123,8 @@ abstract class Service extends Process {
     function __destruct(){
 
         fclose($this->__log_file);
+
+        parent::__destruct();
 
     }
 

@@ -14,6 +14,8 @@ class Process extends \Hazaar\Model\Strict {
 
     private $pipes;
 
+    private $buffer;
+
     public function init(){
 
         return array(
@@ -152,7 +154,41 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
+    private function processPacket(&$buffer = null){
+
+        if ($this->buffer) {
+
+            $buffer = $this->buffer . $buffer;
+
+            $this->buffer = null;
+
+            return $this->processPacket($buffer);
+
+        }
+
+        if (!$buffer || ($pos = strpos($buffer, "\n")) === false)
+            return false;
+
+        $packet = substr($buffer, 0, $pos);
+
+        if (strlen($buffer) > ($pos += 1)) {
+
+            $this->buffer = substr($buffer, $pos);
+
+            $buffer = '';
+
+        }
+
+        $this->log->write(W_DECODE, "PROCESS<-RECV: " . trim($packet));
+
+        return $packet;
+
+    }
+
     public function recv(){
+
+        if($packet = $this->processPacket())
+            return $packet;
 
         $read = array(
             $this->pipes[1],
@@ -166,20 +202,28 @@ class Process extends \Hazaar\Model\Strict {
         if(!(stream_select($read, $write, $except, 0) > 0))
             return null;
 
-        $packet = null;
-
         foreach($read as $stream) {
 
-            //Process the input stream
-            if ($stream == $this->pipes[2])
-                throw new \Exception(fgets($stream, 65535));
+            $buffer =  stream_get_contents($stream);
 
-            if($packet = fgets($stream))
-                $this->log->write(W_DECODE2, "PROCESS<-RECV: " . trim($packet));
+            if(strlen($buffer) === 0)
+                return false;
+
+            //Process the input stream
+            if ($stream === $this->pipes[2]){
+
+                $this->log->write(W_ERR, $buffer);
+
+            }elseif ($stream === $this->pipes[1]){
+
+                if($packet = $this->processPacket($buffer))
+                    return $packet;
+
+            }
 
         }
 
-        return $packet;
+        return null;
 
     }
 
