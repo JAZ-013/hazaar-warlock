@@ -29,9 +29,6 @@ class Control extends Process {
 
     function __construct($autostart = NULL, $config = null, $instance_key = null, $require_connect = true) {
 
-        if(! extension_loaded('sockets'))
-            throw new \Exception('The sockets extension is not loaded.');
-
         Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
         Config::$default_config['sys']['application_name'] = APPLICATION_NAME;

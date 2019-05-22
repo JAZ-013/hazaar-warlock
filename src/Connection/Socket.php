@@ -32,6 +32,9 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
 
+        if(! extension_loaded('sockets'))
+            throw new \Exception('The sockets extension is not loaded.');
+
         parent::__construct(array('warlock'));
 
         $this->start = time();
@@ -53,9 +56,6 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
     }
 
     public function connect($application_name, $host, $port, $extra_headers = null){
-
-        if (!extension_loaded('sockets'))
-            throw new \Exception('The sockets extension is not loaded.');
 
         $this->socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
 
