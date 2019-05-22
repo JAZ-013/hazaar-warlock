@@ -37,6 +37,8 @@ class Pipe implements _Interface {
 
     public function disconnect(){
 
+        flush();
+
         return false;
 
     }
@@ -103,7 +105,7 @@ class Pipe implements _Interface {
 
         $packet = substr($buffer, 0, $pos);
 
-        if (strlen($buffer) > ($pos + 1)) {
+        if (strlen($buffer) > ($pos += 1)) {
 
             $this->buffer = substr($buffer, $pos);
 
