@@ -48,9 +48,9 @@ abstract class Service extends Process {
 
     private   $__str_pad = 0;
 
-    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
+    private   $__log_file;
 
-        parent::__construct($application, $protocol);
+    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         $this->start = time();
 
@@ -60,6 +60,8 @@ abstract class Service extends Process {
             throw new \Exception('Invalid service name ' . get_class($this));
 
         $this->name = strtolower($name);
+
+        $this->__log_file = fopen($application->runtimePath($name . '.log'), 'a');
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
 
@@ -114,6 +116,20 @@ abstract class Service extends Process {
 
         }
 
+        parent::__construct($application, $protocol);
+
+    }
+
+    function __destruct(){
+
+        fclose($this->__log_file);
+
+    }
+
+    protected function connect($application, $protocol, $guid = null){
+
+        return new Connection\Pipe($application, $protocol);
+
     }
 
     public function log($level, $message, $name = null){
@@ -121,19 +137,17 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        if($level === W_LOCAL || parent::log($level, $message, $name) === true){
+        $label = ake($this->__log_levels, $level, 'NONE');
 
-            $label = ake($this->__log_levels, $level, 'NONE');
+        if(!is_array($message))
+            $message = array($message);
 
-            if(!is_array($message))
-                $message = array($message);
+        foreach($message as $m)
+            fwrite($this->__log_file, date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n");
 
-            //foreach($message as $m)
-            //    echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+        fflush($this->__log_file);
 
-            flush();
-
-        }
+        return ($level === W_LOCAL) ? true : parent::log($level, $message, $name);
 
     }
 
@@ -142,13 +156,7 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        if(parent::debug($message, $name) === true){
-
-            //echo date('Y-m-d H:i:s') . ' - DEBUG - ' . $message . "\n";
-
-            flush();
-
-        }
+        return $this->conn->send('DEBUG', $message, $name);
 
     }
 
@@ -272,11 +280,16 @@ abstract class Service extends Process {
 
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
 
-        $msg = "#$errno on line $errline in file $errfile\n" . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40);
+        ob_start();
+
+        $msg = "#$errno on line $errline in file $errfile\n"
+            . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40) . "\n";
+
+        debug_print_backtrace() . "\n";
+
+        $msg .= ob_get_clean();
 
         $this->log(W_LOCAL, 'ERROR ' . $msg);
-
-        //debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
         $this->send('ERROR', $msg);
 
@@ -286,13 +299,18 @@ abstract class Service extends Process {
 
     final public function __exceptionHandler($e){
 
-        $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n" . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40);
+        ob_start();
 
-        $this->send('ERROR', $msg);
+        $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n"
+            . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40) . "\n";
+
+        debug_print_backtrace() . "\n";
+
+        $msg .= ob_get_clean();
 
         $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
 
-        //debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
+        $this->send('ERROR', $msg);
 
         return true;
 
@@ -416,7 +434,6 @@ abstract class Service extends Process {
 
         $status = array(
             'pid'        => getmypid(),
-            'job_id'     => $this->job_id,
             'name'       => $this->name,
             'start'      => $this->start,
             'state_code' => $this->state,

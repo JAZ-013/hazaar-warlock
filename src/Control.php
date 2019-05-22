@@ -15,7 +15,7 @@ namespace Hazaar\Warlock;
  *
  * @module      warlock
  */
-class Control extends Socket {
+class Control extends Process {
 
     public  $config;
 
@@ -44,18 +44,6 @@ class Control extends Socket {
         if($config)
             $this->config->extend($config);
 
-        if($this->config->client['port'] === null)
-            $this->config->client['port'] = $this->config->server['port'];
-
-        if($this->config->client['server'] === null){
-
-            if(trim($this->config->server['listen']) == '0.0.0.0')
-                $this->config->client['server'] = '127.0.0.1';
-            else
-                $this->config->client['server'] = $this->config->server['listen'];
-
-        }
-
         if(!$instance_key)
             $instance_key = hash('crc32b', $this->config->client['server'] . $this->config->client['port']);
 
@@ -64,15 +52,13 @@ class Control extends Socket {
 
         Control::$instance[$instance_key] = $this;
 
-        $app = \Hazaar\Application::getInstance();
+        $application = \Hazaar\Application::getInstance();
 
         $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
 
-        parent::__construct($app, $protocol, Control::$guid);
-
         if(!Control::$guid){
 
-            $guid_file = $app->runtimePath('warlock.guid');
+            $guid_file = $application->runtimePath('warlock.guid');
 
             if(!file_exists($guid_file) || (Control::$guid = file_get_contents($guid_file)) == FALSE) {
 
@@ -93,7 +79,7 @@ class Control extends Socket {
                 if(!$this->config->sys['php_binary'])
                     $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ($this->isWindowsOS()?'.exe':'');
 
-                $this->pidfile = $app->runtimePath($this->config->sys->pid);
+                $this->pidfile = $application->runtimePath($this->config->sys->pid);
 
                 if(!$this->start())
                     throw new \Exception('Autostart of Warlock server has failed!');
@@ -102,14 +88,9 @@ class Control extends Socket {
 
         }
 
-        $headers = array();
+        parent::__construct($application, $protocol, Control::$guid);
 
-        if($this->config->admin->key !== null)
-            $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
-
-        if(!$this->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers)) {
-
-            $this->disconnect(FALSE);
+        if(!$this->connected()){
 
             if($autostart)
                 throw new \Exception('Warlock was started, but we were unable to communicate with it.');
@@ -117,6 +98,34 @@ class Control extends Socket {
                 throw new \Exception('Unable to communicate with Warlock.  Is it running?');
 
         }
+
+    }
+
+    protected function connect($application, $protocol, $guid = null){
+        
+        $headers = array();
+
+        if($this->config->admin->key !== null)
+            $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
+
+        if($this->config->client['port'] === null)
+            $this->config->client['port'] = $this->config->server['port'];
+
+        if($this->config->client['server'] === null){
+
+            if(trim($this->config->server['listen']) == '0.0.0.0')
+                $this->config->client['server'] = '127.0.0.1';
+            else
+                $this->config->client['server'] = $this->config->server['listen'];
+
+        }
+
+        $conn = new Connection\Socket($application, $protocol, Control::$guid);
+
+        if(!$conn->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers))
+            $conn->disconnect(FALSE);
+
+        return $conn;
 
     }
 

@@ -25,9 +25,11 @@
     <Compile Include="src\Constants.php" />
     <Compile Include="src\Controller.php" />
     <Compile Include="src\Container.php" />
-    <Compile Include="src\Socket.php" />
-    <Compile Include="src\Runner.php" />
+    <Compile Include="src\Connection\_Interface.php" />
+    <Compile Include="src\Connection\Socket.php" />
     <Compile Include="src\Process.php" />
+    <Compile Include="src\Runner.php" />
+    <Compile Include="src\Connection\Pipe.php" />
     <Compile Include="src\Server.php" />
     <Compile Include="src\Server\Job.php" />
     <Compile Include="src\Server\Kvstore.php" />
@@ -51,6 +53,7 @@
     <Folder Include="libs\console\css\" />
     <Folder Include="libs\console\images\" />
     <Folder Include="libs\console\js\" />
+    <Folder Include="src\Connection\" />
     <Folder Include="src\Protocol\" />
     <Folder Include="src\Server\" />
     <Folder Include="src\Server\Job\" />

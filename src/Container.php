@@ -4,6 +4,12 @@ namespace Hazaar\Warlock;
 
 class Container extends Process {
 
+    protected function connect($application, $protocol, $guid = null){
+
+        return new Connection\Process($application, $protocol);
+
+    }
+
     public function exec($function, $params){
 
         $exitcode = 1;

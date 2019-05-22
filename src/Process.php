@@ -5,27 +5,19 @@
  */
 namespace Hazaar\Warlock;
 
-require_once('Constants.php');
-
 abstract class Process {
 
+    /**
+     * The connection object
+     * @var \Hazaar\Warlock\Connection\_Interface
+     */
+    protected $conn;
+
     protected $id;
-
-    protected $job_id;
-
-    protected $key;
 
     protected $application;
 
     protected $protocol;
-
-    protected $subscriptions = array();
-
-    protected $buffer;
-
-    public    $bytes_received = 0;
-
-    private $closing = false;
 
     function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
 
@@ -37,7 +29,8 @@ abstract class Process {
 
         $this->id = ($guid === null ? guid() : $guid);
 
-        $this->key = uniqid();
+        if(!($this->conn = $this->connect($application, $protocol, $guid)) instanceof Connection\_Interface)
+            throw new \Exception('Process initialisation failed!');
 
     }
 
@@ -59,123 +52,27 @@ abstract class Process {
 
     }
 
-    public function send($command, $payload = null) {
-
-        if(!($packet = $this->protocol->encode($command, $payload)))
-            return false;
-
-        $len = strlen($packet .= "\n");
-
-        $attempts = 0;
-
-        $total_sent = 0;
-
-        while($packet){
-
-            $attempts++;
-
-            $bytes_sent = @fwrite(STDOUT, $packet, $len);
-
-            if($bytes_sent === -1 || $bytes_sent === false)
-                throw new \Exception('An error occured while sending to the socket');
-
-            $total_sent += $bytes_sent;
-
-            if($total_sent === $len) //If all the bytes sent then don't waste time processing the leftover frame
-                break;
-
-            if($attempts >= 100)
-                throw new \Exception('Unable to write to socket.  Socket appears to be stuck.');
-
-            $packet = substr($packet, $bytes_sent);
-
-        }
-
-        return true;
-
-    }
-
-    private function processPacket(&$buffer = null){
-
-        echo $buffer;
-
-        exit;
-
-        if ($this->buffer) {
-
-            $buffer = $this->buffer . $buffer;
-
-            $this->buffer = null;
-
-            return $this->processPacket($buffer);
-
-        }
-
-        if (!$buffer)
-            return false;
-
-        if(($pos = strpos($this->buffer, "\n")) === false)
-            return true;
-
-        $packet = substr($buffer, 0, $pos);
-
-        echo $packet;
-
-        exit;
-
-        if (strlen($buffer) > $pos) {
-
-            $this->buffer = substr($buffer, $pos);
-
-            $buffer = '';
-
-        }
-
-        return $packet;
-
-    }
-
-    protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
-
-        while($packet = $this->processPacket()){
-
-            if($packet === true)
-                break;
-
-            return $this->protocol->decode($packet, $payload);
-
-        }
-
-        $read = array(STDIN);
-
-        $write = $except = null;
-
-        while(stream_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
-
-            // will block to wait server response
-            $buffer = fread(STDIN, 65536);
-
-            $this->bytes_received += ($bytes_received = strlen($buffer));
-
-            if($bytes_received > 0) {
-
-                if(($packet = $this->processPacket($buffer)) === true)
-                    continue;
-
-                if($packet === false)
-                    break;
-
-                return $this->protocol->decode($packet, $payload);
-
-            }elseif($bytes_received === -1) {
-
-                throw new \Exception('An error occured while receiving from the stream');
-
-            }
-
-        }
+    protected function connect($application, $protocol, $guid = null){
 
         return null;
+
+    }
+
+    protected function connected(){
+
+        return $this->conn->connected();
+
+    }
+
+    public function send($command, $payload = null) {
+
+        return $this->conn->send($command, $payload);
+
+    }
+
+    public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
+
+        return $this->conn->recv($payload, $tv_sec, $tv_usec);
 
     }
 
@@ -296,9 +193,6 @@ abstract class Process {
     }
 
     public function log($level, $message, $name = null){
-
-        if($name === null)
-            $name = $this->job_id;
 
         if(!is_int($level))
             return false;
