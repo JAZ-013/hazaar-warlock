@@ -1942,7 +1942,9 @@ class Master {
 
                 }
 
-            } elseif ($job instanceof Job\Runner && $job->timeout()) {
+            } elseif ($job instanceof Job\Runner
+                        && $job->status === STATUS_RUNNING
+                        && $job->timeout()) {
 
                 $this->log->write(W_WARN, "Process taking too long to execute - Attempting to kill it.", $id);
 
