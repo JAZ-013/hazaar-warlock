@@ -6,7 +6,7 @@ class Container extends Process {
 
     protected function connect($application, $protocol, $guid = null){
 
-        return new Connection\Process($application, $protocol);
+        return new Connection\Pipe($application, $protocol);
 
     }
 

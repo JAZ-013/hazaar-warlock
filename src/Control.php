@@ -364,7 +364,6 @@ class Control extends Process {
     private function sendExec($command, $data, $callable, $params = null, $tag = null, $overwrite = false){
 
         $data['application'] = array(
-            'path' => APPLICATION_PATH,
             'env'  => APPLICATION_ENV
         );
 

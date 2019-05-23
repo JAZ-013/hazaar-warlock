@@ -1487,7 +1487,6 @@ class Master {
         $job = new Job\Runner(array(
             'when' => $when,
             'application' => array(
-                'path' => $application->path,
                 'env' => $application->env
             ),
             'exec' => $exec->callable,
@@ -1500,8 +1499,6 @@ class Master {
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
 
         $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $job->id);
-
-        $this->log->write(W_DEBUG, 'APPLICATION_PATH: ' . $application->path, $job->id);
 
         $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . $application->env, $job->id);
 

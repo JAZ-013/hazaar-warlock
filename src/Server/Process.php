@@ -85,7 +85,7 @@ class Process extends \Hazaar\Model\Strict {
         );
 
         $env = array_filter(array_merge($_SERVER, array(
-            'APPLICATION_PATH' => $this->application['path'],
+            'APPLICATION_PATH' => APPLICATION_PATH,
             'APPLICATION_ENV' => $this->application['env'],
             'HAZAAR_SID' => $this->config->sys->id,
             'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
