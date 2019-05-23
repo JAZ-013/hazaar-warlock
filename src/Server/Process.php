@@ -149,12 +149,22 @@ class Process extends \Hazaar\Model\Strict {
 
     public function terminate(){
 
+        $pids = preg_split('/\s+/', `ps -o pid --no-heading --ppid $this->pid`);
+
+        foreach($pids as $pid){
+
+            if(!is_numeric($pid))
+                continue;
+
+            $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $pid, $this->tag);
+
+            posix_kill($pid, 15);
+
+        }
+
         $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid, $this->tag);
 
-        if(substr(PHP_OS, 0, 3) == 'WIN')
-            $result = exec('taskkill /F /T /PID ' . $this->pid);
-        else
-            $result = proc_terminate($this->process);
+        $result = proc_terminate($this->process, 15);
 
         return $result;
 
