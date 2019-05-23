@@ -120,6 +120,14 @@ class Master {
 
     private $kv_store;
 
+    // Signals that we will capture
+    public $pcntl_signals = array(
+        SIGINT  => 'SIGINT',
+        SIGHUP  => 'SIGHUP',
+        SIGTERM => 'SIGTERM',
+        SIGQUIT => 'SIGQUIT'
+    );
+
     /**
      * Warlock server constructor
      *
@@ -141,9 +149,7 @@ class Master {
 
         $this->silent = $silent;
 
-        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
-
-        if(!$this->config->loaded())
+        if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
         Logger::set_default_log_level($this->config->log->level);
@@ -264,6 +270,9 @@ class Master {
 
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
 
+        if($errno === 2)
+            return;
+
         echo str_repeat('-', 40) . "\n";
 
         echo "MASTER ERROR #$errno\nFile: $errfile\nLine: $errline\n\n$errstr\n";
@@ -290,6 +299,50 @@ class Master {
             echo str_repeat('-', 40) . "\n";
 
         }
+
+    }
+
+    static private function __signalHandler($signo, $siginfo) {
+
+        if(!($master = Master::$instance) instanceof Master)
+            return false;
+
+        $master->log->write(W_DEBUG, 'Got signal: ' . $master->pcntl_signals[$signo]);
+
+        switch ($signo) {
+            case SIGHUP :
+
+                if($master->loadConfig() === false)
+                    $master->log->write(W_ERR, "Reloading configuration failed!  Config disappeared?");
+
+                break;
+
+            case SIGINT:
+            case SIGTERM:
+            case SIGQUIT:
+
+
+
+                $master->shutdown();
+
+                break;
+
+        }
+
+        return true;
+
+    }
+
+    public function loadConfig(){
+
+        $this->log->write(W_NOTICE, (($this->config instanceof \Hazaar\Application\Config) ? 'Re-l' : 'L' ) . "oading configuration");
+
+        $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
+
+        if(!$config->loaded())
+            return false;
+
+        return $this->config = $config;
 
     }
 
@@ -440,6 +493,9 @@ class Master {
         if ($this->isRunning())
             throw new \Exception("Warlock is already running.");
 
+        foreach($this->pcntl_signals as $sig => $name)
+            pcntl_signal($sig, array($this, '__signalHandler'), true);
+
         if($this->config->kvstore['enabled'] === true){
 
             $this->log->write(W_NOTICE, 'Initialising KV Store');
@@ -575,6 +631,8 @@ class Master {
         file_put_contents($this->pidfile, $this->pid);
 
         while($this->running) {
+
+            pcntl_signal_dispatch();
 
             if ($this->shutdown !== NULL && $this->shutdown <= time())
                 $this->running = false;
