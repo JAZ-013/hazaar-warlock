@@ -272,6 +272,8 @@ abstract class Service extends Process {
 
         $this->state = HAZAAR_SERVICE_STOPPING;
 
+        $this->log(W_INFO, 'Service is shutting down');
+
         $this->shutdown();
 
         $this->state = HAZAAR_SERVICE_STOPPED;

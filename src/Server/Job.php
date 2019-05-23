@@ -35,7 +35,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     private $__status;
 
-    private $__subscriptions = array();
+    public $subscriptions = array();
 
     /*
      * This method simple increments the jids integer but makes sure it is unique before returning it.
@@ -68,9 +68,14 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
             ),
             'type' => 'string',
             'status' => array(
-                'type' => 'int',
+                'type' => 'integer',
                 'default' => STATUS_INIT,
                 'update' => array(
+                    'pre' => function($value){
+                        if($value instanceof \stdClass)
+                            throw new \Exception('WAIT!');
+                        return $value;
+                    },
                     'post' => function(){
                         $this->log->write(W_DEBUG, 'STATUS: ' . strtoupper($this->status()), $this->id);
                     }
@@ -228,7 +233,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function sendEvent($event_id, $trigger_id, $data) {
 
-        if (!in_array($event_id, $this->__subscriptions)) {
+        if (!in_array($event_id, $this->subscriptions)) {
 
             $this->log->write(W_WARN, "Client $this->id is not subscribe to event $event_id", $this->name);
 
@@ -370,15 +375,13 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
         }
 
-        return false;
-
     }
 
     private function commandSubscribe($event_id, $filter = NULL) {
 
         $this->log->write(W_NOTICE, "JOB->SUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
 
-        $this->__subscriptions[] = $event_id;
+        $this->subscriptions[] = $event_id;
 
         return Master::$instance->subscribe($this, $event_id, $filter);
 
@@ -389,7 +392,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
         $this->log->write(W_DEBUG, "JOB->UNSUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
 
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
-            unset($this->__subscriptions[$index]);
+            unset($this->subscriptions[$index]);
 
         return Master::$instance->unsubscribe($this, $event_id);
 

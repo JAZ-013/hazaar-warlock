@@ -36,8 +36,6 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public $since;
 
-    public $status;
-
     public $lastContact = 0;
 
     public $ping = array(
