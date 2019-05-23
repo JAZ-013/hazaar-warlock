@@ -378,6 +378,15 @@ class Master {
      */
     function __destruct() {
 
+        if(count($this->processes) > 0) {
+
+            $this->log->write(W_WARN, 'Killing with processes with extreme prejudice!');
+
+            foreach($this->processes as $process)
+                $process->terminate();
+
+        }
+
         if (file_exists($this->pidfile))
             unlink($this->pidfile);
 
