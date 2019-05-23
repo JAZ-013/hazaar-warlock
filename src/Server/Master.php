@@ -451,24 +451,16 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Creating TCP socket');
 
-        $this->master = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-
-        if (!$this->master)
-            throw new \Exception('Unable to create AF_UNIX socket');
-
-        $this->log->write(W_NOTICE, 'Configuring TCP socket');
-
-        if (!socket_set_option($this->master, SOL_SOCKET, SO_REUSEADDR, 1))
-            throw new \Exception('Failed: socket_option()');
-
         $this->log->write(W_NOTICE, 'Binding to socket on '
             . $this->config->server->listen . ':' . $this->config->server->port);
 
-        if (!socket_bind($this->master, $this->config->server->listen, $this->config->server->port))
-            throw new \Exception('Unable to bind to ' . $this->config->server->listen . ' on port ' . $this->config->server->port);
+        if(!($this->master = stream_socket_server("tcp://0.0.0.0:8000", $errno, $errstr)))
+            throw new \Exception($errstr, $errno);
 
-        if (!socket_listen($this->master))
-            throw new \Exception('Unable to listen on ' . $this->config->server->listen . ':' . $this->config->server->port);
+        $this->log->write(W_NOTICE, 'Configuring TCP socket');
+
+        if (!stream_set_blocking($this->master, 0))
+            throw new \Exception('Failed: socket_option()');
 
         $this->sockets[0] = $this->master;
 
@@ -597,7 +589,7 @@ class Master {
 
             $write = $except = NULL;
 
-            if (@socket_select($read, $write, $except, $this->tv) > 0) {
+            if (@stream_select($read, $write, $except, $this->tv) > 0) {
 
                 $this->tv = 0;
 
@@ -605,7 +597,7 @@ class Master {
 
                     if ($socket == $this->master) {
 
-                        $client_socket = socket_accept($socket);
+                        $client_socket = stream_socket_accept($socket);
 
                         if ($client_socket < 0) {
 
@@ -619,9 +611,9 @@ class Master {
 
                             $this->sockets[$socket_id] = $client_socket;
 
-                            socket_getpeername($client_socket, $address, $port);
+                            $peer = stream_socket_get_name($client_socket, true);
 
-                            $this->log->write(W_NOTICE, "Connection from " . $address . ':' . $port);
+                            $this->log->write(W_NOTICE, "Connection from $peer with socket id #$socket_id");
 
                         }
 
@@ -834,33 +826,42 @@ class Master {
 
     private function processClient($socket) {
 
-        @$bytes_received = socket_recv($socket, $buf, 65536, 0);
+        $bytes_received = strlen($buf = fread($socket, 65535));
 
-        if ($bytes_received == 0) {
+        if(get_resource_type($socket) === 'socket'){
 
-            $this->log->write(W_NOTICE, 'Remote host closed connection');
+            if ($bytes_received === 0) {
 
-            $this->disconnect($socket);
+                $this->log->write(W_NOTICE, 'Remote host closed connection');
 
-            return false;
+                $this->disconnect($socket);
+
+                return false;
+
+            }
+
+            if (!($peer = stream_socket_get_name($socket, true))) {
+
+                $this->disconnect($socket);
+
+                return false;
+
+            }
+
+            $this->log->write(W_DEBUG, "SOCKET_RECV: HOST=$peer BYTES=" . strlen($buf));
+
+        }else{
+
+            if ($bytes_received === 0)
+                return false;
+
+            $this->log->write(W_DEBUG, "STREAM_RECV: BYTES=" . strlen($buf));
 
         }
-
-        @$status = socket_getpeername($socket, $address, $port);
-
-        if ($status == false) {
-
-            $this->disconnect($socket);
-
-            return false;
-
-        }
-
-        $this->log->write(W_DEBUG, "SOCKET_RECV: HOST=$address:$port BYTES=" . strlen($buf));
 
         $client = $this->getClient($socket);
 
-        if ($client instanceof Client) {
+        if ($client instanceof CommInterface) {
 
             $client->recv($buf);
 
@@ -911,6 +912,9 @@ class Master {
         $when = time() - $this->config->client->check;
 
         foreach($this->clients as $client){
+
+            if(!$client instanceof Client)
+                continue;
 
             if($client->lastContact <= $when)
                 $client->ping();
@@ -997,13 +1001,13 @@ class Master {
     /**
      * Process administative commands for a client
      *
-     * @param Client $client
+     * @param CommInterface $client
      * @param mixed $command
      * @param mixed $payload
      *
      * @return mixed
      */
-    public function processCommand($client, $command, &$payload) {
+    public function processCommand(CommInterface $client, $command, &$payload) {
 
         if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
             return $this->kv_store->process($client, $command, $payload);
@@ -1604,6 +1608,14 @@ class Master {
 
                     }
 
+                    $pipe = $process->getReadPipe();
+
+                    $pipe_id = intval($pipe);
+
+                    $this->sockets[$pipe_id] = $pipe;
+
+                    $this->clients[$pipe_id] = $job;
+
                     $process->start($packet);
 
                 } else {
@@ -1644,13 +1656,18 @@ class Master {
 
                 if ($status['running'] === false) {
 
-                    $job->recv();
+                    if(($output = $job->process->readErrorPipe()) !== false)
+                        $this->log->write(W_ERR, "PROCESS ERROR:\n$output");
+
+                    $stream_id = intval($job->process->getReadPipe());
+
+                    unset($this->clients[$stream_id]);
+
+                    unset($this->sockets[$stream_id]);
 
                     unset($this->processes[$job->process->id]);
 
-                    $job->process->close();
-
-                    $job->process = null;
+                    $job->disconnect();
 
                     $this->stats['processes']--;
 
@@ -1844,7 +1861,9 @@ class Master {
 
                     try{
 
-                        $job->recv();
+                        //Receive any error from STDERR
+                        if(($output = $job->process->readErrorPipe()) !== false)
+                            $this->log->write(W_ERR, "PROCESS ERROR:\n$output");
 
                     }
                     catch(\Throwable $e){

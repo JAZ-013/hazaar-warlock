@@ -2,7 +2,7 @@
 
 namespace Hazaar\Warlock\Server;
 
-class Client extends \Hazaar\Warlock\Protocol\WebSockets {
+class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface {
 
     public $log;
 
@@ -79,12 +79,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if (is_resource($this->socket)) {
 
-            $resource_type = get_resource_type($this->socket);
+            $this->peer = stream_socket_get_name($this->socket, true);
 
-            if ($resource_type == 'Socket')
-                socket_getpeername($this->socket, $this->address, $this->port);
-
-            $this->log->write(W_DEBUG, "ADD: TYPE=$resource_type CLIENT=$this->id SOCKET=$this->socket", $this->name);
+            $this->log->write(W_DEBUG, "ADD: PEER=$this->peer CLIENT=$this->id SOCKET=$this->socket", $this->name);
 
             $this->lastContact = time();
 
@@ -130,7 +127,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             $this->log->write(W_WARN, "Handshake failed with code $body", $this->name);
 
-            @socket_write($this->socket, $response, strlen($response));
+            @fwrite($this->socket, $response, strlen($response));
 
             return false;
 
@@ -154,7 +151,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $bytes = strlen($response);
 
-        $result = @socket_write($this->socket, $response, $bytes);
+        $result = @fwrite($this->socket, $response, $bytes);
 
         if($result === false || $result !== $bytes)
             return false;
@@ -269,7 +266,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     }
 
-    public function recv($buf){
+    public function recv(&$buf){
 
         //Record this time as the last time we received data from the client
         $this->lastContact = time();
@@ -352,7 +349,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         $this->log->write(W_DECODE2, "CLIENT->FRAME: " . implode(' ', $this->hexString($frame)), $this->name);
 
-        $bytes_sent = @socket_write($this->socket, $frame, $len);
+        $bytes_sent = @fwrite($this->socket, $frame, $len);
 
         if ($bytes_sent === false) {
 
@@ -387,7 +384,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         Master::$instance->removeClient($this->socket);
 
-        socket_close($this->socket);
+        stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
+
+        fclose($this->socket);
 
     }
 
@@ -488,13 +487,13 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
                 if($this->closing === false){
 
-                    $this->log->write(W_DEBUG, "WEBSOCKET_CLOSE: HOST=$this->address:$this->port", $this->name);
+                    $this->log->write(W_DEBUG, "WEBSOCKET_CLOSE: PEER=$this->peer", $this->name);
 
                     $this->closing = true;
 
                     $frame = $this->frame('', 'close', false);
 
-                    @socket_write($this->socket, $frame, strlen($frame));
+                    @fwrite($this->socket, $frame, strlen($frame));
 
                     if($this->type === 'client' && ($count = count($this->jobs)) > 0){
 
@@ -518,17 +517,17 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             case 9 : //Ping
 
-                $this->log->write(W_DEBUG, "WEBSOCKET_PING: HOST=$this->address:$this->port", $this->name);
+                $this->log->write(W_DEBUG, "WEBSOCKET_PING: PEER=$this->peer", $this->name);
 
                 $frame = $this->frame('', 'pong', false);
 
-                @socket_write($this->socket, $frame, strlen($frame));
+                @fwrite($this->socket, $frame, strlen($frame));
 
                 return false;
 
             case 10 : //Pong
 
-                $this->log->write(W_DEBUG, "WEBSOCKET_PONG: HOST=$this->address:$this->port", $this->name);
+                $this->log->write(W_DEBUG, "WEBSOCKET_PONG: PEER=$this->peer", $this->name);
 
                 $this->pong($payload);
 
@@ -536,7 +535,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
             default : //Unknown!
 
-                $this->log->write(W_DEBUG, "DISCONNECT: REASON=unknown opcode HOST=$this->address:$this->port", $this->name);
+                $this->log->write(W_DEBUG, "DISCONNECT: REASON=unknown opcode PEER=$this->peer", $this->name);
 
                 $this->disconnect();
 
@@ -686,7 +685,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
         if($this->type !== 'service'){
 
-            $this->log->write(W_WARN, 'Client sent status but client is not a service!', $this->address);
+            $this->log->write(W_WARN, 'Client sent status but client is not a service!', $this->peer);
 
             throw new \Exception('Status only allowed for services!');
 
@@ -708,7 +707,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     private function commandSubscribe($event_id, $filter = NULL) {
 
-        $this->log->write(W_NOTICE, "CLIENT->SUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
+        $this->log->write(W_NOTICE, "CLIENT<-SUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
 
         $this->subscriptions[] = $event_id;
 
@@ -720,7 +719,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     public function commandUnsubscribe($event_id) {
 
-        $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, "CLIENT<-UNSUBSCRIBE: EVENT=$event_id CLIENT=$this->id", $this->name);
 
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
             unset($this->subscriptions[$index]);
@@ -731,7 +730,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets {
 
     public function commandTrigger($event_id, $data, $echo_client = true) {
 
-        $this->log->write(W_NOTICE, "CLIENT->TRIGGER: NAME=$event_id CLIENT=$this->id ECHO=" . strbool($echo_client), $this->name);
+        $this->log->write(W_NOTICE, "CLIENT<-TRIGGER: NAME=$event_id CLIENT=$this->id ECHO=" . strbool($echo_client), $this->name);
 
         return Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
 

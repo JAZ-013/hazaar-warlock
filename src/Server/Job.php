@@ -21,13 +21,17 @@ define('STATUS_CANCELLED', 6);
 
 define('STATUS_ERROR', 7);
 
-abstract class Job extends \Hazaar\Model\Strict {
+abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
+
+    public $process;
 
     private $protocol;
 
     protected $log;
 
     static private $job_ids = array();
+
+    private $__buffer;
 
     private $__status;
 
@@ -119,9 +123,6 @@ abstract class Job extends \Hazaar\Model\Strict {
                 'type' => 'array',
                 'default' => array()
             ),
-            'process' => array(
-                'type' => 'Hazaar\Warlock\Server\Process'
-            ),
             'last_heartbeat' => array(
                 'type' => 'int'
             ),
@@ -144,6 +145,14 @@ abstract class Job extends \Hazaar\Model\Strict {
 
         if(($index = array_search($this->id, Job::$job_ids)) !== false)
             unset(Job::$job_ids[$index]);
+
+    }
+
+    public function disconnect(){
+
+        $this->process->close();
+
+        $this->process = null;
 
     }
 
@@ -238,9 +247,35 @@ abstract class Job extends \Hazaar\Model\Strict {
 
     }
 
-    public function recv(){
+    private function processPacket(&$buffer = null){
 
-        while($packet = $this->process->recv()){
+        if ($this->__buffer) {
+
+            $buffer = $this->__buffer . $buffer;
+
+            $this->__buffer = null;
+
+            return $this->processPacket($buffer);
+
+        }
+
+        if (!$buffer || ($pos = strpos($buffer, "\n")) === false)
+            return false;
+
+        $packet = substr($buffer, 0, $pos);
+
+        if (strlen($buffer) > ($pos += 1))
+            $this->__buffer = substr($buffer, $pos);
+
+        $buffer = '';
+
+        return $packet;
+
+    }
+
+    public function recv(&$buf){
+
+        while($packet = $this->processPacket($buf)){
 
             $this->log->write(W_DECODE, "JOB<-PACKET: " . trim($packet, "\n"), $this->name);
 

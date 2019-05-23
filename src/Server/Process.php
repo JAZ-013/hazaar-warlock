@@ -129,6 +129,12 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
+    public function getReadPipe(){
+
+        return $this->pipes[1];
+
+    }
+
     public function start($output){
 
         $this->log->write(W_DECODE, 'PROCESS->INIT: ' . $output, $this->tag);
@@ -154,53 +160,16 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
-    private function processPacket(&$buffer = null){
+    public function readErrorPipe(){
 
-        if ($this->buffer) {
-
-            $buffer = $this->buffer . $buffer;
-
-            $this->buffer = null;
-
-            return $this->processPacket($buffer);
-
-        }
-
-        if (!$buffer || ($pos = strpos($buffer, "\n")) === false)
-            return false;
-
-        $packet = substr($buffer, 0, $pos);
-
-        if (strlen($buffer) > ($pos += 1)) {
-
-            $this->buffer = substr($buffer, $pos);
-
-            $buffer = '';
-
-        }
-
-        $this->log->write(W_DECODE, "PROCESS<-RECV: " . trim($packet));
-
-        return $packet;
-
-    }
-
-    public function recv(){
-
-        if($packet = $this->processPacket())
-            return $packet;
-
-        $read = array(
-            $this->pipes[1],
-            $this->pipes[2]
-        );
+        $read = array($this->pipes[2]);
 
         $write = null;
 
         $except = null;
 
-        if(!(stream_select($read, $write, $except, 0) > 0))
-            return null;
+        if(!(stream_select($read, $write, $except, 0, 0) > 0))
+            return false;
 
         foreach($read as $stream) {
 
@@ -209,21 +178,11 @@ class Process extends \Hazaar\Model\Strict {
             if(strlen($buffer) === 0)
                 return false;
 
-            //Process the input stream
-            if ($stream === $this->pipes[2]){
-
-                $this->log->write(W_ERR, $buffer);
-
-            }elseif ($stream === $this->pipes[1]){
-
-                if($packet = $this->processPacket($buffer))
-                    return $packet;
-
-            }
+            return $buffer;
 
         }
 
-        return null;
+        return false;
 
     }
 
@@ -231,21 +190,21 @@ class Process extends \Hazaar\Model\Strict {
 
         $len = strlen($packet .= "\n");
 
-        $this->log->write(W_DEBUG, "PROCESS->PIPE: BYTES=$len ID=$this->id", $this->name);
+        $this->log->write(W_DEBUG, "PROCESS->PIPE: BYTES=$len ID=$this->id", $this->tag);
 
-        $this->log->write(W_DECODE2, "PROCESS->PACKET: " . trim($packet), $this->name);
+        $this->log->write(W_DECODE, "PROCESS->PACKET: " . trim($packet), $this->tag);
 
         $bytes_sent = @fwrite($this->pipes[0], $packet, $len);
 
         if ($bytes_sent === false) {
 
-            $this->log->write(W_WARN, 'An error occured while sending to the client. Pipe has disappeared!?', $this->name);
+            $this->log->write(W_WARN, 'An error occured while sending to the client. Pipe has disappeared!?', $this->tag);
 
             return false;
 
         } elseif ($bytes_sent !== $len) {
 
-            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected', $this->name);
+            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected', $this->tag);
 
             return false;
 
