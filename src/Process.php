@@ -90,7 +90,6 @@ abstract class Process {
         return $this->conn->recv($payload, $tv_sec, $tv_usec);
 
     }
-
     protected function __processCommand($command, $payload = null) {
 
         switch($command) {
@@ -241,8 +240,16 @@ abstract class Process {
 
         $payload = null;
 
-        if(($ret = $this->recv($payload)) !== $command)
-            throw new \Exception('Invalid response from server: ' . $ret . (is_object($payload) && property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+        if(($ret = $this->recv($payload)) !== $command){
+
+            $msg = "KVSTORE: Invalid response to command $command from server: " . var_export($ret, true);
+
+            if(is_object($payload) && property_exists($payload, 'reason'))
+                $msg .= "\nError: $payload->reason";
+
+            throw new \Exception($msg);
+
+        }
 
         return $payload;
 

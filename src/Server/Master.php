@@ -968,7 +968,7 @@ class Master {
 
     private function checkClients(){
 
-        if(!(is_array($this->clients) && count($this->clients) > 0))
+        if(!($this->config->client->check > 0 && is_array($this->clients) && count($this->clients) > 0))
             return;
 
         //Only ping if we havn't received data from the client for the configured number of seconds (default to 60).
