@@ -90,6 +90,7 @@ abstract class Process {
         return $this->conn->recv($payload, $tv_sec, $tv_usec);
 
     }
+
     protected function __processCommand($command, $payload = null) {
 
         switch($command) {

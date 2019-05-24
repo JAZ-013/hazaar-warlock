@@ -116,7 +116,7 @@ abstract class Service extends Process {
 
         }
 
-        parent::__construct($application, $protocol);
+        parent::__construct($application, $protocol, getmypid());
 
     }
 
@@ -145,7 +145,7 @@ abstract class Service extends Process {
             $message = array($message);
 
         foreach($message as $m)
-            fwrite($this->__log_file, date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n");
+            fwrite($this->__log_file, date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n");
 
         fflush($this->__log_file);
 
@@ -786,6 +786,38 @@ abstract class Service extends Process {
     final public function signal($event_id, $data){
 
         return $this->send('SIGNAL', array('service' => $this->name, 'id' => $event_id, 'data' => $data));
+
+    }
+
+    final public function send($command, $payload = null){
+
+        $result = parent::send($command, $payload);
+
+        if($result === false){
+
+            $this->log(W_LOCAL, 'An error occured while sending data.  Stopping.');
+
+            $this->stop();
+
+        }
+
+        return $result;
+
+    }
+
+    final public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0){
+
+        $result = parent::recv($payload, $tv_sec, $tv_usec);
+
+        if($result === false){
+
+            $this->log(W_LOCAL, 'An error occured while receiving data.  Stopping.');
+
+            $this->stop();
+
+        }
+
+        return $result;
 
     }
 

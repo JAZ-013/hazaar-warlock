@@ -66,8 +66,8 @@ class Pipe implements _Interface {
 
             $bytes_sent = @fwrite(STDOUT, $packet, $len);
 
-            if($bytes_sent === -1 || $bytes_sent === false)
-                throw new \Exception('An error occured while sending to the socket');
+            if($bytes_sent <= 0 || $bytes_sent === false)
+                return false;
 
             $total_sent += $bytes_sent;
 
@@ -75,7 +75,7 @@ class Pipe implements _Interface {
                 break;
 
             if($attempts >= 100)
-                throw new \Exception('Unable to write to socket.  Socket appears to be stuck.');
+                throw new \Exception('Unable to write to pipe.  Pipe appears to be stuck.');
 
             $packet = substr($packet, $bytes_sent);
 
@@ -149,9 +149,9 @@ class Pipe implements _Interface {
 
                 return $this->protocol->decode($packet, $payload);
 
-            }elseif($bytes_received === -1) {
+            }elseif($bytes_received <= 0) {
 
-                throw new \Exception('An error occured while receiving from the stream');
+                return false;
 
             }
 

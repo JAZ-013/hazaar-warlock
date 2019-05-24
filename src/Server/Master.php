@@ -128,6 +128,36 @@ class Master {
         SIGQUIT => 'SIGQUIT'
     );
 
+    private $exit_codes = array(
+        1 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because the application failed to decode the start payload.'
+        ),
+        2 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because the application runner does not understand the start payload type.'
+        ),
+        3 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because service class does not exist.'
+        ),
+        4 => array(
+            'lvl' => W_WARN,
+            'msg' => 'Service exited because it lost the control channel.',
+            'restart' => true,
+        ),
+        5 => array(
+            'lvl' => W_WARN,
+            'msg' => 'Dynamic service failed to start because it has no runOnce() method!'
+        ),
+        6 => array(
+            'lvl' => W_INFO,
+            'msg' => 'Service exited because it\'s source file was modified.',
+            'restart' => true,
+            'reset' => true
+        )
+    );
+
     /**
      * Warlock server constructor
      *
@@ -1735,6 +1765,8 @@ class Master {
 
                 if ($status['running'] === false) {
 
+                    $this->log->write(W_DEBUG, "PROCESS->STOP: PID=$status[pid] ID=" . $job->process->id);
+
                     $pipe = $job->process->getReadPipe();
 
                     //Do any last second processing.  Usually shutdown log messages.
@@ -1765,39 +1797,20 @@ class Master {
 
                         $this->log->write(W_DEBUG, "SERVICE=$name EXIT=$status[exitcode]");
 
-                        if ($status['exitcode'] > 0 && $job->status !== STATUS_CANCELLED) {
+                        if ($status['exitcode'] !== 0 && $job->status !== STATUS_CANCELLED) {
 
-                            $this->log->write(W_ERR, "Service returned status code $status[exitcode]", $name);
+                            $this->log->write(W_NOTICE, "Service returned status code $status[exitcode]", $name);
 
-                            if ($status['exitcode'] === 4) {
+                            if(!($ec = ake($this->exit_codes, $status['exitcode'])))
+                                $ec = array(
+                                    'lvl' => W_WARN,
+                                    'msg' => 'Service exited unexpectedly.',
+                                    'restart' => true
+                                );
 
-                                $this->log->write(W_WARN, 'Service exited because it lost the control channel. Restarting.');
+                            $this->log->write($ec['lvl'], $ec['msg'], $name);
 
-                            } elseif ($status['exitcode'] === 6) {
-
-                                $job->retries = 0;
-
-                                $this->log->write(W_INFO, 'Service exited because it\'s source file was modified.', $name);
-
-                            }else{
-
-                                if ($status['exitcode'] === 1) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because the application failed to decode the start payload.', $name);
-
-                                } elseif ($status['exitcode'] === 2) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because the application runner does not understand the start payload type.', $name);
-
-                                } elseif ($status['exitcode'] === 3) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because service class does not exist.', $name);
-
-                                } elseif ($status['exitcode'] === 5) {
-
-                                    $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!', $name);
-
-                                }
+                            if(ake($ec, 'restart', false) !== true){
 
                                 $this->log->write(W_ERR, 'Disabling the service.', $name);
 
@@ -1806,6 +1819,9 @@ class Master {
                                 continue;
 
                             }
+
+                            if(ake($ec, 'reset', false) === true)
+                                $job->retries = 0;
 
                             if ($job->retries > $this->config->service->restarts) {
 
