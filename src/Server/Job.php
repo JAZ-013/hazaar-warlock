@@ -379,7 +379,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     private function commandSubscribe($event_id, $filter = NULL) {
 
-        $this->log->write(W_NOTICE, "JOB->SUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
+        $this->log->write(W_DEBUG, "JOB<-SUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
 
         $this->subscriptions[] = $event_id;
 
@@ -389,7 +389,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function commandUnsubscribe($event_id) {
 
-        $this->log->write(W_DEBUG, "JOB->UNSUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
+        $this->log->write(W_DEBUG, "JOB<-UNSUBSCRIBE: EVENT=$event_id ID=$this->id", $this->name);
 
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
             unset($this->subscriptions[$index]);
@@ -400,7 +400,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function commandTrigger($event_id, $data, $echo_client = true) {
 
-        $this->log->write(W_NOTICE, "JOB->TRIGGER: NAME=$event_id ID=$this->id ECHO=" . strbool($echo_client), $this->name);
+        $this->log->write(W_DEBUG, "JOB<-TRIGGER: NAME=$event_id ID=$this->id ECHO=" . strbool($echo_client), $this->name);
 
         return Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
 

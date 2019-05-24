@@ -20,7 +20,8 @@ class Config {
              'pid' => 'warlock.pid',                //The name of the warlock process ID file relative to the application runtime directory.  For absolute paths prefix with /.
              'cleanup' => TRUE,                     //Enable/Disable message queue cleanup.
              'timezone' => 'UTC',                   //The timezone of the server.  This is mainly used for scheduled jobs.
-             'php_binary' => NULL                   //Override path to the PHP binary file to use when executing jobs.
+             'php_binary' => NULL,                  //Override path to the PHP binary file to use when executing jobs.
+             'date_format' => 'c'
          ),
          'server' => array(
              'listen' => '127.0.0.1',               //Server IP to listen on.  127.0.0.1 by default which only accept connections from localhost.  Use 0.0.0.0 to listen on all addresses.

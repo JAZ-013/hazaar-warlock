@@ -273,12 +273,20 @@ class Master {
         if($errno === 2)
             return;
 
-        echo str_repeat('-', 40) . "\n";
+        $type_map = array(
+            E_ERROR         => W_ERR,
+            E_WARNING       => W_WARN,
+            E_NOTICE        => W_NOTICE,
+            E_CORE_ERROR    => W_ERR,
+            E_CORE_WARNING  => W_WARN,
+            E_USER_ERROR    => W_ERR,
+            E_USER_WARNING  => W_WARN,
+            E_USER_NOTICE   => W_NOTICE
+        );
 
-        echo "MASTER ERROR #$errno\nFile: $errfile\nLine: $errline\n\n$errstr\n";
+        $type = ake($type_map, $errno, W_ERR);
 
-        echo str_repeat('-', 40) . "\n";
-
+        $this->log->write($type, "ERROR #$errno on line $errline of $errfile - $errstr");
 
     }
 
@@ -800,7 +808,7 @@ class Master {
             if($key !== $this->config->admin->key)
                 return false;
 
-            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id);
+            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
 
             $client->type = 'admin';
 
@@ -873,18 +881,18 @@ class Master {
 
         $client = $this->clients[$stream_id];
 
-        foreach($this->waitQueue as &$queue){
+        foreach($this->waitQueue as $event_id => &$queue){
 
             if(!array_key_exists($client->id, $queue))
                 continue;
 
-            $this->log->write(W_DEBUG, "REMOVE_SUBSCRIPTION: CLIENT=$stream_id");
+            $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
 
             unset($queue[$client->id]);
 
         }
 
-        $this->log->write(W_DEBUG, "REMOVE: CLIENT=$stream_id");
+        $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$client->id", $client->name);
 
         unset($this->clients[$stream_id]);
 
@@ -900,40 +908,32 @@ class Master {
 
         $bytes_received = strlen($buf = fread($stream, 65535));
 
-        if(get_resource_type($stream) === 'socket'){
-
-            if ($bytes_received === 0) {
-
-                $this->log->write(W_NOTICE, 'Remote host closed connection');
-
-                $this->disconnect($stream);
-
-                return false;
-
-            }
-
-            if (!($peer = stream_socket_get_name($stream, true))) {
-
-                $this->disconnect($stream);
-
-                return false;
-
-            }
-
-            $this->log->write(W_DEBUG, "SOCKET_RECV: HOST=$peer BYTES=" . strlen($buf));
-
-        }else{
-
-            if ($bytes_received === 0)
-                return false;
-
-            $this->log->write(W_DEBUG, "STREAM_RECV: BYTES=" . strlen($buf));
-
-        }
-
         $client = $this->getClient($stream);
 
         if ($client instanceof CommInterface) {
+
+            if($client instanceof Client){
+
+                if ($bytes_received === 0) {
+
+                    $this->log->write(W_NOTICE, "Remote host $client->address:$client->port closed connection", $client->name);
+
+                    $this->disconnect($stream);
+
+                    return false;
+
+                }
+
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
+
+            }else{
+
+                if ($bytes_received === 0)
+                    return false;
+
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
+
+            }
 
             $client->recv($buf);
 
@@ -971,7 +971,9 @@ class Master {
 
         $this->log->write(W_DEBUG, "STREAM_CLOSE: STREAM=" . $stream);
 
-        return stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
+        stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
+
+        return fclose($stream);
 
     }
 
@@ -1108,7 +1110,7 @@ class Master {
 
                 $payload->when = time() + ake($payload, 'value', 0);
 
-                $this->log->write(W_NOTICE, "Scheduling delayed job for {$payload->value} seconds");
+                $this->log->write(W_DEBUG, "JOB->DELAY: INTERVAL={$payload->value}");
 
             case 'SCHEDULE' :
 
@@ -1119,11 +1121,9 @@ class Master {
                     $payload->when,
                     $payload->exec,
                     $payload->application,
-                    ake($command, 'tag'),
-                    ake($command, 'overwrite', false)
+                    ake($payload, 'tag'),
+                    ake($payload, 'overwrite', false)
                 ))) throw new \Exception('Could not schedule delayed function');
-
-                $this->log->write(W_NOTICE, 'Job successfully scheduled', $id);
 
                 $client->send('OK', array('command' => $command, 'job_id' => $id));
 
@@ -1394,6 +1394,8 @@ class Master {
      */
     public function subscribe(CommInterface $client, $event_id, $filter) {
 
+        $this->log->write(W_DEBUG, "CLIENT<-QUEUE: EVENT=$event_id CLIENT=$client->id", $client->name);
+
         $this->waitQueue[$event_id][$client->id] = array(
             'client' => $client,
             'since' => time(),
@@ -1401,7 +1403,7 @@ class Master {
         );
 
         if ($event_id === $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN_SUBSCRIBE: CLIENT=$client->id");
+            $this->log->write(W_DEBUG, "ADMIN->SUBSCRIBE: CLIENT=$client->id", $client->name);
         else
             $this->stats['subscriptions']++;
 
@@ -1429,12 +1431,12 @@ class Master {
             && array_key_exists($client->id, $this->waitQueue[$event_id])))
             return false;
 
-        $this->log->write(W_DEBUG, "DEQUEUE: NAME=$event_id CLIENT=$client->id");
+        $this->log->write(W_DEBUG, "CLIENT<-DEQUEUE: NAME=$event_id CLIENT=$client->id", $client->name);
 
         unset($this->waitQueue[$event_id][$client->id]);
 
         if ($event_id === $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN_UNSUBSCRIBE: CLIENT=$client->id");
+            $this->log->write(W_DEBUG, "ADMIN->UNSUBSCRIBE: CLIENT=$client->id", $client->name);
         else
             $this->stats['subscriptions']--;
 
@@ -1498,7 +1500,7 @@ class Master {
 
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
 
-        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $job->id);
+        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $job->id);
 
         $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . $application->env, $job->id);
 
@@ -1518,7 +1520,7 @@ class Master {
 
         }
 
-        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date('c', $when), $job->id);
+        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date($this->config->sys['date_format'], $when), $job->id);
 
         $this->queueAddJob($job);
 
@@ -1604,9 +1606,9 @@ class Master {
 
                         $this->log->write(W_NOTICE, "Starting job execution", $id);
 
-                        $this->log->write(W_DEBUG, 'NOW:  ' . date('c', $now), $id);
+                        $this->log->write(W_DEBUG, 'NOW:  ' . date($this->config->sys['date_format'], $now), $id);
 
-                        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $id);
+                        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $id);
 
                         if ($job->retries > 0)
                             $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
@@ -1903,7 +1905,7 @@ class Master {
 
                                 $job->retries = 0;
 
-                                $this->log->write(W_NOTICE, 'Next execution at: ' . date('c', $next), $id);
+                                $this->log->write(W_NOTICE, 'Next execution at: ' . date($this->config->sys['date_format'], $next), $id);
 
                             }else{
 
@@ -1970,7 +1972,7 @@ class Master {
 
             $this->stats['queue']++;
 
-            $this->log->write(W_NOTICE, 'Job added to queue', $job->id);
+            $this->log->write(W_DEBUG, "JOB->QUEUE: START=" . date($this->config->sys['date_format'], $job->start) . " TAG=$job->tag", $job->id);
 
         }
 
@@ -2140,10 +2142,11 @@ class Master {
     }
 
     /**
-     * @detail This method is executed when a client connects to see if there are any events waiting in the event
-     * queue that the client has not yet seen.
-     * If there are, the first event found is sent to the client,
-     * marked as seen and then processing stops.
+     * Process the event queue for a specified client.
+     *
+     * This method is executed when a client connects to see if there are any events waiting in the event
+     * queue that the client has not yet seen.  If there are, the first event found is sent to the client, marked
+     * as seen and then processing stops.
      *
      * @param CommInterface $client
      *
@@ -2155,32 +2158,35 @@ class Master {
      */
     private function processEventQueue(CommInterface $client, $event_id, $filter = NULL) {
 
-        $this->log->write(W_NOTICE, "PROCESSING EVENT QUEUE: $event_id");
+        if (!(array_key_exists($event_id, $this->eventQueue)
+            && is_array($this->eventQueue[$event_id])
+            && ($count = count($this->eventQueue[$event_id])) > 0))
+            return false;
 
-        if (array_key_exists($event_id, $this->eventQueue)) {
+        $this->log->write(W_DEBUG, "QUEUE: EVENT=$event_id COUNT=$count");
 
-            foreach($this->eventQueue[$event_id] as $trigger_id => &$event) {
+        foreach($this->eventQueue[$event_id] as $trigger_id => &$event) {
 
-                if (!array_key_exists('seen', $event) || !is_array($event['seen']))
-                    $event['seen'] = array();
+            if (!array_key_exists('seen', $event) || !is_array($event['seen']))
+                $event['seen'] = array();
 
-                if (!in_array($client->id, $event['seen'])) {
+            if (!in_array($client->id, $event['seen'])) {
 
-                    if (!array_key_exists($event_id, $client->subscriptions))
-                        continue;
+                if (!array_key_exists($event_id, $client->subscriptions))
+                    continue;
 
-                    if ($this->filterEvent($event, $filter))
-                        continue;
+                if ($this->filterEvent($event, $filter))
+                    continue;
 
-                    $event['seen'][] = $client->id;
+                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client->id");
 
-                    if ($event_id != $this->config->admin->trigger)
-                        $this->log->write(W_NOTICE, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
+                if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
+                    return false;
 
-                    if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
-                        return false;
+                $event['seen'][] = $client->id;
 
-                }
+                if ($event_id != $this->config->admin->trigger)
+                    $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
 
             }
 
@@ -2191,8 +2197,9 @@ class Master {
     }
 
     /**
-     * @detail This method is executed when a event is triggered.
-     * It is responsible for sending events to clients
+     * Process all subscriptions for a specified event.
+     *
+     * This method is executed when a event is triggered.  It is responsible for sending events to clients
      * that are waiting for the event and marking them as seen by the client.
      *
      * @param string $event_id
@@ -2203,10 +2210,12 @@ class Master {
      */
     private function processSubscriptionQueue($event_id, $trigger_id = NULL) {
 
-        if (!array_key_exists($event_id, $this->eventQueue))
+        if (!(array_key_exists($event_id, $this->eventQueue)
+            && is_array($this->eventQueue[$event_id])
+            && ($count = count($this->eventQueue[$event_id])) > 0))
             return false;
 
-        $this->log->write(W_DEBUG, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
+        $this->log->write(W_DEBUG, "QUEUE: NAME=$event_id COUNT=$count");
 
         // Get a list of triggers to process
         $triggers = (empty($trigger_id) ? array_keys($this->eventQueue[$event_id]) : array($trigger_id));
@@ -2227,13 +2236,15 @@ class Master {
                     || $this->filterEvent($event, $item['filter']))
                     continue;
 
+                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client_id");
+
+                if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
+                    return false;
+
                 $event['seen'][] = $client_id;
 
                 if ($event_id != $this->config->admin->trigger)
                     $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger CLIENT={$client_id}");
-
-                if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
-                    return false;
 
             }
 
