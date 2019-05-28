@@ -183,23 +183,30 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        $label = ake($this->__log_levels, $level, 'NONE');
+        if(!($out_level = constant($this->config->get('loglevel'))))
+            $out_level = W_INFO;
 
-        if(!is_array($message))
-            $message = array($message);
+        if($level <= $out_level){
 
-        foreach($message as $m){
+            $label = ake($this->__log_levels, $level, 'NONE');
 
-            $msg = date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+            if(!is_array($message))
+                $message = array($message);
 
-            fwrite($this->__log_file, $msg);
+            foreach($message as $m){
 
-            if($this->__remote === true && $this->config->silent !== true)
-                echo $msg;
+                $msg = date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+
+                fwrite($this->__log_file, $msg);
+
+                if($this->__remote === true && $this->config->silent !== true)
+                    echo $msg;
+
+            }
+
+            fflush($this->__log_file);
 
         }
-
-        fflush($this->__log_file);
 
         return ($level === W_LOCAL) ? true : parent::log($level, $message, $name);
 
@@ -235,7 +242,7 @@ abstract class Service extends Process {
 
     final public function main($params = array(), $dynamic = false) {
 
-        $this->log(W_LOCAL, '*** SERVICE STARTING UP ***');
+        $this->log(W_LOCAL, "Service started");
 
         $init = true;
 
