@@ -37,7 +37,7 @@
     "require": {
         "php": "^5.6 || ^7.0",
         "ext-sockets": "*",
-        "hazaarlabs/hazaar-mvc": "^2.5.0"
+        "hazaarlabs/hazaar-mvc": ">=2.4.0"
     },
     "bin": [
         "bin/warlock"

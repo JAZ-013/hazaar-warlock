@@ -17,7 +17,7 @@ class Pipe implements _Interface {
 
     public    $bytes_received = 0;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
+    function __construct(\Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $guid = null) {
 
         $this->start = time();
 

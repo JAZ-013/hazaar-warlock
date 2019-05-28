@@ -50,7 +50,7 @@ abstract class Service extends Process {
 
     private   $__log_file;
 
-    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
+    final function __construct(\Hazaar\Application $application, Protocol $protocol) {
 
         $this->start = time();
 

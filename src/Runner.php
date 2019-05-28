@@ -13,4 +13,4 @@ require_once('Constants.php');
 // Create application, bootstrap, and run
 $application = new \Hazaar\Application(APPLICATION_ENV);
 
-$application->bootstrap(TRUE)->runStdin();
+exit(\Hazaar\Warlock\Process::runner($application->bootstrap(true)));

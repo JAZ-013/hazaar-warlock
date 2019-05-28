@@ -51,7 +51,7 @@ class Control extends Process {
 
         $application = \Hazaar\Application::getInstance();
 
-        $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
+        $protocol = new Protocol($this->config->sys->id, $this->config->server->encoded);
 
         if(!Control::$guid){
 
@@ -99,7 +99,7 @@ class Control extends Process {
     }
 
     protected function connect($application, $protocol, $guid = null){
-        
+
         $headers = array();
 
         if($this->config->admin->key !== null)

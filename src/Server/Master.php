@@ -294,7 +294,7 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
 
-        Master::$protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
+        Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
 
     }
 
