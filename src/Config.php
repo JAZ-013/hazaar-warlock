@@ -74,7 +74,8 @@ class Config {
          ),
          'exec' => array(
              'timeout' => 30,                       //Timeout for short run jobs initiated by the front end. Prevents runaway processes from hanging around.
-             'limit' => 5                           //Maximum number of concurrent jobs to execute.  THIS INCLUDES SERVICES.  So if this is 5 and you have 6 services, one service will never run!
+             'limit' => 5,                          //Maximum number of concurrent jobs to execute.  THIS INCLUDES SERVICES.  So if this is 5 and you have 6 services, one service will never run!
+             'exitWait' => 30                       //How long the server will wait for processes to exit when shutting down.
          ),
          'service' => array(
              'restarts' => 5,                       //Restart a failed service this many times before disabling it for a bit.

@@ -772,26 +772,30 @@ class Master {
 
             }
 
-            $this->log->write(W_NOTICE, 'Waiting for processes to exit');
+            if(($wait = $this->config->exec['exitWait']) > 0){
 
-            $start = time();
+                $this->log->write(W_NOTICE, "Waiting for processes to exit (max $wait seconds)");
 
-            while(count($this->processes) > 0) {
+                $start = time();
 
-                if(($start  + 10) < time()){
+                while(count($this->processes) > 0) {
 
-                    $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
+                    if(($start  + $wait) < time()){
 
-                    break;
+                        $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
+
+                        break;
+
+                    }
+
+                    $this->processJobs();
+
+                    if (count($this->processes) === 0)
+                        break;
+
+                    sleep(1);
 
                 }
-
-                $this->processJobs();
-
-                if (count($this->processes) === 0)
-                    break;
-
-                sleep(1);
 
             }
 
