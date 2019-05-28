@@ -30,7 +30,7 @@ abstract class Process {
         $this->id = ($guid === null ? guid() : $guid);
 
         if(!($this->conn = $this->connect($application, $protocol, $guid)) instanceof Connection\_Interface)
-            throw new \Exception('Process initialisation failed!');
+            throw new \Exception('Process initialisation failed!', 1);
 
     }
 
@@ -98,7 +98,7 @@ abstract class Process {
 
             case 'EVENT':
 
-                if(! (property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
+                if(!($payload && property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
                     return false;
 
                 $func = $this->subscriptions[$payload->id];

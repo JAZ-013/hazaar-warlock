@@ -70,7 +70,8 @@ abstract class Service extends Process {
                 'checkfile' => 1,
                 'connect_retries' => 3,        //When establishing a control channel, make no more than this number of attempts before giving up
                 'connect_retry_delay' => 100,  //When making multiple attempts to establish the control channel, wait this long between each
-                'server' => array('host' => '127.0.0.1', 'port' => 8000)
+                'server' => array('host' => '127.0.0.1', 'port' => 8000),
+                'silent' => false
             )
         );
 
@@ -152,12 +153,20 @@ abstract class Service extends Process {
 
             $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
-            if($warlock->admin->key !== null)
-                $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
+            if(!($key = $this->config->get('access_key')))
+                $key = $warlock->admin->get('key');
+
+            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($key);
+
+            $headers['X-WARLOCK-CLIENT-TYPE'] = 'service';
 
             $conn = new Connection\Socket($application, $protocol);
 
-            $conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers);
+            if(!$conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
+                return false;
+
+            if(($type = $conn->recv($payload)) === false || $type !== 'OK')
+                return false;
 
         }else{
 
@@ -179,8 +188,16 @@ abstract class Service extends Process {
         if(!is_array($message))
             $message = array($message);
 
-        foreach($message as $m)
-            fwrite($this->__log_file, date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n");
+        foreach($message as $m){
+
+            $msg = date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+
+            fwrite($this->__log_file, $msg);
+
+            if($this->__remote === true && $this->config->silent !== true)
+                echo $msg;
+
+        }
 
         fflush($this->__log_file);
 
@@ -348,6 +365,9 @@ abstract class Service extends Process {
         $msg .= ob_get_clean();
 
         $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
+
+        if(($code = $e->getCode()) < 100)
+            exit($code);
 
         $this->send('ERROR', $msg);
 
