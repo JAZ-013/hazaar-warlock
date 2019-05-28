@@ -19,7 +19,7 @@ abstract class Process {
 
     protected $protocol;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
+    function __construct(\Hazaar\Application $application, Protocol $protocol, $guid = null) {
 
         $this->start = time();
 
@@ -35,7 +35,7 @@ abstract class Process {
     }
 
     function __destruct(){
-        
+
         $this->conn->disconnect();
 
     }
@@ -432,6 +432,104 @@ abstract class Process {
             $data['n'] = $namespace;
 
         return $this->__kv_send_recv('KVCOUNT', $data);
+
+    }
+
+    /**
+     * @brief Execute code from standard input in the application context
+     *
+     * @detail This method is will accept Hazaar Protocol commands from STDIN and execute them.
+     *
+     * Exit codes:
+     *
+     * * 1 - Bad Payload - The execution payload could not be decoded.
+     * * 2 - Unknown Payload Type - The payload execution type is unknown.
+     * * 3 - Service Class Not Found - The service could not start because the service class could not be found.
+     * * 4 - Unable to open control channel - The application was unable to open a control channel back to the execution server.
+     *
+     * @since 1.0.0
+     */
+    static public function runner(\Hazaar\Application $application) {
+
+        if(!class_exists('\Hazaar\Warlock\Config'))
+            throw new \Exception('Could not find default warlock config.  How is this even working!!?');
+
+        $defaults = \Hazaar\Warlock\Config::$default_config;
+
+        $defaults['sys']['id'] = crc32(APPLICATION_PATH);
+
+        $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
+
+        define('RESPONSE_ENCODED', $warlock->server->encoded);
+
+        $protocol = new Protocol($warlock->sys->id, $warlock->server->encoded);
+
+        //Execution should wait here until we get a command
+        $line = fgets(STDIN);
+
+        $code = 1;
+
+        $payload = null;
+
+        if($type = $protocol->decode($line, $payload)){
+
+            if(!$payload instanceof \stdClass)
+                throw new \Exception('Got Hazaar protocol packet without payload!');
+
+            //Synchronise the timezone with the server
+            if($tz = ake($payload, 'timezone'))
+                date_default_timezone_set($tz);
+
+            switch ($type) {
+
+                case 'EXEC' :
+
+                    $container = new \Hazaar\Warlock\Container($application, $protocol);
+
+                    $code = $container->exec($payload->exec, ake($payload, 'params'));
+
+                    break;
+
+                case 'SERVICE' :
+
+                    if(!property_exists($payload, 'name')) {
+
+                        $code = 3;
+
+                        break;
+
+                    }
+
+                    $serviceClass = ucfirst($payload->name) . 'Service';
+
+                    if(class_exists($serviceClass)) {
+
+                        if($config = ake($payload, 'config'))
+                            $application->config->extend($config);
+
+                        $service = new $serviceClass($application, $protocol);
+
+                        $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
+
+                    } else {
+
+                        $code = 3;
+
+                    }
+
+                    break;
+
+                default:
+
+                    $code = 2;
+
+                    break;
+
+            }
+
+        }
+
+        return $code;
 
     }
 

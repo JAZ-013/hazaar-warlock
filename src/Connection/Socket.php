@@ -30,7 +30,7 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
     public    $socket_last_error = null;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
+    function __construct(\Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $guid = null) {
 
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');

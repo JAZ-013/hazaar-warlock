@@ -168,7 +168,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         if($result === false || $result !== $bytes)
             return false;
 
-        $init_packet = json_encode(\Hazaar\Application\Protocol::$typeCodes);
+        $init_packet = json_encode(\Hazaar\Warlock\Protocol::$typeCodes);
 
         if(Master::$protocol->encoded())
             $init_packet = base64_encode($init_packet);

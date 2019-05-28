@@ -28,6 +28,7 @@
     <Compile Include="src\Connection\_Interface.php" />
     <Compile Include="src\Connection\Socket.php" />
     <Compile Include="src\Process.php" />
+    <Compile Include="src\Protocol.php" />
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Connection\Pipe.php" />
     <Compile Include="src\Server.php" />
