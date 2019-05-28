@@ -171,6 +171,8 @@ class Master {
 
         \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
+        \Hazaar\Warlock\Config::$default_config['sys']['pid'] = 'warlock-' . APPLICATION_ENV . '.pid';
+
         global $STDOUT;
 
         global $STDERR;
