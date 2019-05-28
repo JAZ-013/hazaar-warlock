@@ -14,6 +14,8 @@ class Process extends \Hazaar\Model\Strict {
 
     private $pipes;
 
+    private $buffer;
+
     public function init(){
 
         return array(
@@ -83,7 +85,7 @@ class Process extends \Hazaar\Model\Strict {
         );
 
         $env = array_filter(array_merge($_SERVER, array(
-            'APPLICATION_PATH' => $this->application['path'],
+            'APPLICATION_PATH' => APPLICATION_PATH,
             'APPLICATION_ENV' => $this->application['env'],
             'HAZAAR_SID' => $this->config->sys->id,
             'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
@@ -127,30 +129,102 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
+    public function getReadPipe(){
+
+        return $this->pipes[1];
+
+    }
+
     public function start($output){
 
-        $this->log->write(W_DECODE, 'OUT -> ' . $output, $this->tag);
+        $this->log->write(W_DECODE, 'PROCESS->INIT: ' . $output, $this->tag);
 
-        fwrite($this->pipes[0], $output);
+        fwrite($this->pipes[0], $output . "\n");
 
-        fclose($this->pipes[0]);
+        stream_set_blocking($this->pipes[1], false);
+
+        stream_set_blocking($this->pipes[2], false);
 
     }
 
     public function terminate(){
 
+        $pids = preg_split('/\s+/', `ps -o pid --no-heading --ppid $this->pid`);
+
+        foreach($pids as $pid){
+
+            if(!is_numeric($pid))
+                continue;
+
+            $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $pid, $this->tag);
+
+            posix_kill($pid, 15);
+
+        }
+
         $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid, $this->tag);
 
-        if(substr(PHP_OS, 0, 3) == 'WIN')
-            $result = exec('taskkill /F /T /PID ' . $this->pid);
-        else
-            $result = proc_terminate($this->process);
+        $result = proc_terminate($this->process, 15);
 
         return $result;
 
     }
 
-    function close(){
+    public function readErrorPipe(){
+
+        $read = array($this->pipes[2]);
+
+        $write = null;
+
+        $except = null;
+
+        if(!(stream_select($read, $write, $except, 0, 0) > 0))
+            return false;
+
+        foreach($read as $stream) {
+
+            $buffer =  stream_get_contents($stream);
+
+            if(strlen($buffer) === 0)
+                return false;
+
+            return $buffer;
+
+        }
+
+        return false;
+
+    }
+
+    public function write($packet){
+
+        $len = strlen($packet .= "\n");
+
+        $this->log->write(W_DEBUG, "PROCESS->PIPE: BYTES=$len ID=$this->id", $this->tag);
+
+        $this->log->write(W_DECODE, "PROCESS->PACKET: " . trim($packet), $this->tag);
+
+        $bytes_sent = @fwrite($this->pipes[0], $packet, $len);
+
+        if ($bytes_sent === false) {
+
+            $this->log->write(W_WARN, 'An error occured while sending to the client. Pipe has disappeared!?', $this->tag);
+
+            return false;
+
+        } elseif ($bytes_sent !== $len) {
+
+            $this->log->write(W_ERR, $bytes_sent . ' bytes have been sent instead of the ' . $len . ' bytes expected', $this->tag);
+
+            return false;
+
+        }
+
+        return true;
+
+    }
+
+    public function close(){
 
         //Make sure we close all the pipes
         foreach($this->pipes as $sid => $pipe) {

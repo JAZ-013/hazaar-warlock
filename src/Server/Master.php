@@ -107,8 +107,8 @@ class Master {
     // The main socket for listening for incomming connections.
     private $master = NULL;
 
-    // Currently connected sockets we are listening for data on.
-    private $sockets = array();
+    // Currently connected stream resources we are listening for data on.
+    private $streams = array();
 
     // Currently connected clients.
     private $clients = array();
@@ -119,6 +119,44 @@ class Master {
     static public $protocol;
 
     private $kv_store;
+
+    // Signals that we will capture
+    public $pcntl_signals = array(
+        SIGINT  => 'SIGINT',
+        SIGHUP  => 'SIGHUP',
+        SIGTERM => 'SIGTERM',
+        SIGQUIT => 'SIGQUIT'
+    );
+
+    private $exit_codes = array(
+        1 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because the application failed to decode the start payload.'
+        ),
+        2 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because the application runner does not understand the start payload type.'
+        ),
+        3 => array(
+            'lvl' => W_ERR,
+            'msg' => 'Service failed to start because service class does not exist.'
+        ),
+        4 => array(
+            'lvl' => W_WARN,
+            'msg' => 'Service exited because it lost the control channel.',
+            'restart' => true,
+        ),
+        5 => array(
+            'lvl' => W_WARN,
+            'msg' => 'Dynamic service failed to start because it has no runOnce() method!'
+        ),
+        6 => array(
+            'lvl' => W_INFO,
+            'msg' => 'Service exited because it\'s source file was modified.',
+            'restart' => true,
+            'reset' => true
+        )
+    );
 
     /**
      * Warlock server constructor
@@ -141,9 +179,7 @@ class Master {
 
         $this->silent = $silent;
 
-        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
-
-        if(!$this->config->loaded())
+        if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
         Logger::set_default_log_level($this->config->log->level);
@@ -155,7 +191,7 @@ class Master {
         set_exception_handler(array($this, '__exceptionHandler'));
 
         if(!$this->config->sys['php_binary'])
-            $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+            $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) === 'WIN')?'.exe':'');
 
         if($tz = $this->config->sys->get('timezone'))
             date_default_timezone_set($tz);
@@ -204,7 +240,7 @@ class Master {
 
             if (!$this->rrd->exists()) {
 
-                $this->rrd->addDataSource('sockets', 'GAUGE', 60, NULL, NULL, 'Socket Connections');
+                $this->rrd->addDataSource('steams', 'GAUGE', 60, NULL, NULL, 'Stream Connections');
 
                 $this->rrd->addDataSource('clients', 'GAUGE', 60, NULL, NULL, 'Clients');
 
@@ -264,12 +300,23 @@ class Master {
 
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
 
-        echo str_repeat('-', 40) . "\n";
+        if($errno === 2)
+            return;
 
-        echo "MASTER ERROR #$errno\nFile: $errfile\nLine: $errline\n\n$errstr\n";
+        $type_map = array(
+            E_ERROR         => W_ERR,
+            E_WARNING       => W_WARN,
+            E_NOTICE        => W_NOTICE,
+            E_CORE_ERROR    => W_ERR,
+            E_CORE_WARNING  => W_WARN,
+            E_USER_ERROR    => W_ERR,
+            E_USER_WARNING  => W_WARN,
+            E_USER_NOTICE   => W_NOTICE
+        );
 
-        echo str_repeat('-', 40) . "\n";
+        $type = ake($type_map, $errno, W_ERR);
 
+        $this->log->write($type, "ERROR #$errno on line $errline of $errfile - $errstr");
 
     }
 
@@ -290,6 +337,50 @@ class Master {
             echo str_repeat('-', 40) . "\n";
 
         }
+
+    }
+
+    static private function __signalHandler($signo, $siginfo) {
+
+        if(!($master = Master::$instance) instanceof Master)
+            return false;
+
+        $master->log->write(W_DEBUG, 'Got signal: ' . $master->pcntl_signals[$signo]);
+
+        switch ($signo) {
+            case SIGHUP :
+
+                if($master->loadConfig() === false)
+                    $master->log->write(W_ERR, "Reloading configuration failed!  Config disappeared?");
+
+                break;
+
+            case SIGINT:
+            case SIGTERM:
+            case SIGQUIT:
+
+
+
+                $master->shutdown();
+
+                break;
+
+        }
+
+        return true;
+
+    }
+
+    public function loadConfig(){
+
+        $this->log->write(W_NOTICE, (($this->config instanceof \Hazaar\Application\Config) ? 'Re-l' : 'L' ) . "oading configuration");
+
+        $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
+
+        if(!$config->loaded())
+            return false;
+
+        return $this->config = $config;
 
     }
 
@@ -325,6 +416,15 @@ class Master {
      */
     function __destruct() {
 
+        if(count($this->processes) > 0) {
+
+            $this->log->write(W_WARN, 'Killing with processes with extreme prejudice!');
+
+            foreach($this->processes as $process)
+                $process->terminate();
+
+        }
+
         if (file_exists($this->pidfile))
             unlink($this->pidfile);
 
@@ -336,8 +436,7 @@ class Master {
      * Returns the application runtime directory
      *
      * The runtime directory is a place where HazaarMVC will keep files that it needs to create during
-     * normal operation. For example, socket files for background scheduler communication, cached views,
-     * and backend applications.
+     * normal operation. For example, cached views, and backend applications.
      *
      * @param mixed $suffix An optional suffix to tack on the end of the path
      * @param mixed $create_dir If the runtime directory does not yet exist, try and create it (requires write permission).
@@ -412,11 +511,13 @@ class Master {
 
             $pid = (int) file_get_contents($this->pidfile);
 
-            if (file_exists('/proc/' . $pid)) {
+            $proc_file = '/proc/' . $pid . '/stat';
 
-                $this->pid = $pid;
+            if(file_exists($proc_file)){
 
-                return true;
+                $proc = file_get_contents($proc_file);
+
+                return ($proc !== '' && preg_match('/^' . preg_quote($pid) . '\s+\(php\)/', $proc));
 
             }
 
@@ -439,6 +540,9 @@ class Master {
         if ($this->isRunning())
             throw new \Exception("Warlock is already running.");
 
+        foreach($this->pcntl_signals as $sig => $name)
+            pcntl_signal($sig, array($this, '__signalHandler'), true);
+
         if($this->config->kvstore['enabled'] === true){
 
             $this->log->write(W_NOTICE, 'Initialising KV Store');
@@ -447,28 +551,18 @@ class Master {
 
         }
 
-        $this->log->write(W_NOTICE, 'Creating TCP socket');
+        $this->log->write(W_NOTICE, 'Creating TCP socket stream on: '
+            . $this->config->server->listen . ':' . $this->config->server->port);
 
-        $this->master = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-
-        if (!$this->master)
-            throw new \Exception('Unable to create AF_UNIX socket');
+        if(!($this->master = stream_socket_server('tcp://' . $this->config->server->listen . ':' . $this->config->server->port, $errno, $errstr)))
+            throw new \Exception($errstr, $errno);
 
         $this->log->write(W_NOTICE, 'Configuring TCP socket');
 
-        if (!socket_set_option($this->master, SOL_SOCKET, SO_REUSEADDR, 1))
-            throw new \Exception('Failed: socket_option()');
+        if (!stream_set_blocking($this->master, 0))
+            throw new \Exception('Failed: stream_set_blocking(0)');
 
-        $this->log->write(W_NOTICE, 'Binding to socket on '
-            . $this->config->server->listen . ':' . $this->config->server->port);
-
-        if (!socket_bind($this->master, $this->config->server->listen, $this->config->server->port))
-            throw new \Exception('Unable to bind to ' . $this->config->server->listen . ' on port ' . $this->config->server->port);
-
-        if (!socket_listen($this->master))
-            throw new \Exception('Unable to listen on ' . $this->config->server->listen . ':' . $this->config->server->port);
-
-        $this->sockets[0] = $this->master;
+        $this->streams[0] = $this->master;
 
         $this->running = true;
 
@@ -585,25 +679,27 @@ class Master {
 
         while($this->running) {
 
+            pcntl_signal_dispatch();
+
             if ($this->shutdown !== NULL && $this->shutdown <= time())
                 $this->running = false;
 
             if (!$this->running)
                 break;
 
-            $read = $this->sockets;
+            $read = $this->streams;
 
             $write = $except = NULL;
 
-            if (@socket_select($read, $write, $except, $this->tv) > 0) {
+            if (@stream_select($read, $write, $except, $this->tv) > 0) {
 
                 $this->tv = 0;
 
-                foreach($read as $socket) {
+                foreach($read as $stream) {
 
-                    if ($socket == $this->master) {
+                    if ($stream === $this->master) {
 
-                        $client_socket = socket_accept($socket);
+                        $client_socket = stream_socket_accept($stream);
 
                         if ($client_socket < 0) {
 
@@ -615,17 +711,17 @@ class Master {
 
                             $socket_id = intval($client_socket);
 
-                            $this->sockets[$socket_id] = $client_socket;
+                            $this->streams[$socket_id] = $client_socket;
 
-                            socket_getpeername($client_socket, $address, $port);
+                            $peer = stream_socket_get_name($client_socket, true);
 
-                            $this->log->write(W_NOTICE, "Connection from " . $address . ':' . $port);
+                            $this->log->write(W_NOTICE, "Connection from $peer with socket id #$socket_id");
 
                         }
 
                     } else {
 
-                        $this->processClient($socket);
+                        $this->processClient($stream);
 
                     }
 
@@ -650,7 +746,7 @@ class Master {
                 if($this->kv_store)
                     $this->kv_store->expireKeys();
 
-                $this->rrd->setValue('sockets', count($this->sockets));
+                $this->rrd->setValue('streams', count($this->streams));
 
                 $this->rrd->setValue('clients', count($this->clients));
 
@@ -665,12 +761,16 @@ class Master {
 
         }
 
-        if (count($this->processes) > 0) {
+        if (count($this->jobQueue) > 0) {
 
-            $this->log->write(W_NOTICE, 'Terminating running processes');
+            $this->log->write(W_NOTICE, 'Terminating running jobs');
 
-            foreach($this->processes as $process)
-                $process->send('cancel');
+            foreach($this->jobQueue as $job){
+
+                if($job->status() === 'running')
+                    $job->cancel();
+
+            }
 
             $this->log->write(W_NOTICE, 'Waiting for processes to exit');
 
@@ -678,7 +778,7 @@ class Master {
 
             while(count($this->processes) > 0) {
 
-                if ($start >= time() + 10) {
+                if(($start  + 10) < time()){
 
                     $this->log->write(W_WARN, 'Timeout reached while waiting for process to exit.');
 
@@ -688,7 +788,7 @@ class Master {
 
                 $this->processJobs();
 
-                if (count($this->procs) == 0)
+                if (count($this->processes) === 0)
                     break;
 
                 sleep(1);
@@ -697,14 +797,14 @@ class Master {
 
         }
 
-        $this->log->write(W_NOTICE, 'Closing all connections');
+        $this->log->write(W_NOTICE, 'Closing all remaining connections');
 
-        foreach($this->sockets as $socket)
-            socket_close($socket);
-
-        $this->sockets = array();
+        foreach($this->streams as $stream)
+            fclose($stream);
 
         $this->log->write(W_NOTICE, 'Cleaning up');
+
+        $this->streams = array();
 
         $this->jobQueue = array();
 
@@ -718,7 +818,7 @@ class Master {
 
     }
 
-    public function authorise(Client $client, $key, $job_id = null){
+    public function authorise(CommInterface $client, $key, $job_id = null){
 
         if($job_id !== null){
 
@@ -738,7 +838,7 @@ class Master {
             if($key !== $this->config->admin->key)
                 return false;
 
-            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id);
+            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
 
             $client->type = 'admin';
 
@@ -750,23 +850,23 @@ class Master {
 
     }
 
-    private function addClient($socket) {
+    private function addClient($stream) {
 
-        // If we don't have a socket or id, return false
-        if (!($socket && is_resource($socket)))
+        // If we don't have a stream or id, return false
+        if (!($stream && is_resource($stream)))
             return false;
 
-        $socket_id = intval($socket);
+        $stream_id = intval($stream);
 
-        // If the socket already has a client object, return it
-        if (array_key_exists($socket_id, $this->clients))
-            return $this->clients[$socket_id];
+        // If the stream is already has a client object, return it
+        if (array_key_exists($stream_id, $this->clients))
+            return $this->clients[$stream_id];
 
         //Create the new client object
-        $client = new Client($socket, $this->config->client);
+        $client = new Client($stream, $this->config->client);
 
         // Add it to the client array
-        $this->clients[$socket_id] = $client;
+        $this->clients[$stream_id] = $client;
 
         $this->stats['clients']++;
 
@@ -775,54 +875,58 @@ class Master {
     }
 
     /**
-     * Retrieve a client object for a socket resource
+     * Retrieve a client object for a stream resource
      *
-     * @param mixed $socket The socket resource
+     * @param mixed $stream The stream resource
      *
-     * @return Client|null
+     * @return CommInterface|NULL
      */
-    private function getClient($socket) {
+    private function getClient($stream) {
 
-        $socket_id = intval($socket);
+        $stream_id = intval($stream);
 
-        return (array_key_exists($socket_id, $this->clients) ? $this->clients[$socket_id] : NULL);
+        return (array_key_exists($stream_id, $this->clients) ? $this->clients[$stream_id] : NULL);
 
     }
 
     /**
-     * Removes a client from a socket.
+     * Removes a client from a stream.
      *
-     * Because a client can have multiple socket connections (in legacy mode) this removes the client reference
-     * for that socket. Once there are no more references left the client is completely removed.
+     * Because a client can have multiple stream connections (in legacy mode) this removes the client reference
+     * for that stream. Once there are no more references left the client is completely removed.
      *
-     * @param mixed $socket
+     * @param mixed $stream
      *
      * @return boolean
      */
-    public function removeClient($socket) {
+    public function removeClient($stream) {
 
-        if (!$socket)
+        if (!$stream)
             return false;
 
-        $socket_id = intval($socket);
+        $stream_id = intval($stream);
 
-        if (!array_key_exists($socket_id, $this->clients))
+        if (!array_key_exists($stream_id, $this->clients))
             return false;
 
-        $client = $this->clients[$socket_id];
+        $client = $this->clients[$stream_id];
 
-        foreach($this->waitQueue as &$queue){
+        foreach($this->waitQueue as $event_id => &$queue){
 
-            if(array_key_exists($client->id, $queue))
-                unset($queue[$client->id]);
+            if(!array_key_exists($client->id, $queue))
+                continue;
+
+            $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
+
+            unset($queue[$client->id]);
 
         }
 
-        $this->log->write(W_DEBUG, "REMOVE: CLIENT=$socket_id");
+        $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$client->id", $client->name);
 
-        unset($this->clients[$socket_id]);
+        unset($this->clients[$stream_id]);
 
-        unset($this->sockets[$socket_id]);
+        unset($this->streams[$stream_id]);
 
         $this->stats['clients']--;
 
@@ -830,48 +934,49 @@ class Master {
 
     }
 
-    private function processClient($socket) {
+    private function processClient($stream) {
 
-        @$bytes_received = socket_recv($socket, $buf, 65536, 0);
+        $bytes_received = strlen($buf = fread($stream, 65535));
 
-        if ($bytes_received == 0) {
+        $client = $this->getClient($stream);
 
-            $this->log->write(W_NOTICE, 'Remote host closed connection');
+        if ($client instanceof CommInterface) {
 
-            $this->disconnect($socket);
+            if($client instanceof Client){
 
-            return false;
+                if ($bytes_received === 0) {
 
-        }
+                    $this->log->write(W_NOTICE, "Remote host $client->address:$client->port closed connection", $client->name);
 
-        @$status = socket_getpeername($socket, $address, $port);
+                    $this->disconnect($stream);
 
-        if ($status == false) {
+                    return false;
 
-            $this->disconnect($socket);
+                }
 
-            return false;
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
 
-        }
+            }else{
 
-        $this->log->write(W_DEBUG, "SOCKET_RECV: HOST=$address:$port BYTES=" . strlen($buf));
+                if ($bytes_received === 0)
+                    return false;
 
-        $client = $this->getClient($socket);
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
 
-        if ($client instanceof Client) {
+            }
 
             $client->recv($buf);
 
         }else{
 
-            if (!($client = $this->addClient($socket)))
-                $this->disconnect($socket);
+            if (!($client = $this->addClient($stream)))
+                $this->disconnect($stream);
 
             if(!$client->initiateHandshake($buf)){
 
-                $this->removeClient($socket);
+                $this->removeClient($stream);
 
-                socket_close($socket);
+                stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
 
             }
 
@@ -881,22 +986,24 @@ class Master {
 
     }
 
-    public function disconnect($socket) {
+    public function disconnect($stream) {
 
-        $socket_id = intval($socket);
+        $stream_id = intval($stream);
 
-        if ($client = $this->getClient($socket))
+        if ($client = $this->getClient($stream))
             return $client->disconnect();
 
         /**
-         * Remove the socket from our list of sockets
+         * Remove the stream from our list of streams
          */
-        if (array_key_exists($socket_id, $this->sockets))
-            unset($this->sockets[$socket_id]);
+        if (array_key_exists($stream_id, $this->streams))
+            unset($this->streams[$stream_id]);
 
-        $this->log->write(W_DEBUG, "SOCKET_CLOSE: SOCKET=" . $socket);
+        $this->log->write(W_DEBUG, "STREAM_CLOSE: STREAM=" . $stream);
 
-        socket_close($socket);
+        stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
+
+        return fclose($stream);
 
     }
 
@@ -909,6 +1016,9 @@ class Master {
         $when = time() - $this->config->client->check;
 
         foreach($this->clients as $client){
+
+            if(!$client instanceof Client)
+                continue;
 
             if($client->lastContact <= $when)
                 $client->ping();
@@ -928,7 +1038,7 @@ class Master {
             'uptime' => time() - $this->start,
             'memory' => memory_get_usage(),
             'stats' => $this->stats,
-            'connections' => count($this->sockets),
+            'connections' => count($this->streams),
             'clients' => count($this->clients)
         );
 
@@ -974,7 +1084,7 @@ class Master {
             elseif(is_array($array))
                 $status['stats'][$name] = count($array);
 
-            if ($name == 'events' && array_key_exists($this->config->admin->trigger, $array)) {
+            if ($name === 'events' && array_key_exists($this->config->admin->trigger, $array)) {
 
                 $status[$name] = array_diff_key($array, array_flip(array(
                     $this->config->admin->trigger
@@ -995,13 +1105,13 @@ class Master {
     /**
      * Process administative commands for a client
      *
-     * @param Client $client
+     * @param CommInterface $client
      * @param mixed $command
      * @param mixed $payload
      *
      * @return mixed
      */
-    public function processCommand(Client $client, $command, &$payload) {
+    public function processCommand(CommInterface $client, $command, &$payload) {
 
         if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
             return $this->kv_store->process($client, $command, $payload);
@@ -1030,7 +1140,7 @@ class Master {
 
                 $payload->when = time() + ake($payload, 'value', 0);
 
-                $this->log->write(W_NOTICE, "Scheduling delayed job for {$payload->value} seconds");
+                $this->log->write(W_DEBUG, "JOB->DELAY: INTERVAL={$payload->value}");
 
             case 'SCHEDULE' :
 
@@ -1041,11 +1151,9 @@ class Master {
                     $payload->when,
                     $payload->exec,
                     $payload->application,
-                    ake($command, 'tag'),
-                    ake($command, 'overwrite', false)
+                    ake($payload, 'tag'),
+                    ake($payload, 'overwrite', false)
                 ))) throw new \Exception('Could not schedule delayed function');
-
-                $this->log->write(W_NOTICE, 'Job successfully scheduled', $id);
 
                 $client->send('OK', array('command' => $command, 'job_id' => $id));
 
@@ -1210,7 +1318,7 @@ class Master {
 
     }
 
-    private function spawn($client, $name, $options){
+    private function spawn(CommInterface $client, $name, $options){
 
         if (!array_key_exists($name, $this->services))
             return false;
@@ -1242,7 +1350,7 @@ class Master {
 
     }
 
-    private function kill($client, $name){
+    private function kill(CommInterface $client, $name){
 
         if (!array_key_exists($name, $this->services))
             return false;
@@ -1264,7 +1372,7 @@ class Master {
 
     }
 
-    private function signal(Client $client, $event_id, $service, $data = null){
+    private function signal(CommInterface $client, $event_id, $service, $data = null){
 
         $trigger_id = uniqid();
 
@@ -1314,7 +1422,9 @@ class Master {
      * @param mixed $event_id The event ID to subscribe to
      * @param mixed $filter Any event filters
      */
-    public function subscribe(Client $client, $event_id, $filter) {
+    public function subscribe(CommInterface $client, $event_id, $filter) {
+
+        $this->log->write(W_DEBUG, "CLIENT<-QUEUE: EVENT=$event_id CLIENT=$client->id", $client->name);
 
         $this->waitQueue[$event_id][$client->id] = array(
             'client' => $client,
@@ -1322,8 +1432,8 @@ class Master {
             'filter' => $filter
         );
 
-        if ($event_id == $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN_SUBSCRIBE: CLIENT=$client->id");
+        if ($event_id === $this->config->admin->trigger)
+            $this->log->write(W_DEBUG, "ADMIN->SUBSCRIBE: CLIENT=$client->id", $client->name);
         else
             $this->stats['subscriptions']++;
 
@@ -1331,6 +1441,8 @@ class Master {
          * Check to see if this subscribe request has any active and unseen events waiting for it.
          */
         $this->processEventQueue($client, $event_id, $filter);
+
+        return true;
 
     }
 
@@ -1342,19 +1454,19 @@ class Master {
      *
      * @return boolean
      */
-    public function unsubscribe(Client $client, $event_id) {
+    public function unsubscribe(CommInterface $client, $event_id) {
 
         if (!(array_key_exists($event_id, $this->waitQueue)
             && is_array($this->waitQueue[$event_id])
             && array_key_exists($client->id, $this->waitQueue[$event_id])))
             return false;
 
-        $this->log->write(W_DEBUG, "DEQUEUE: NAME=$event_id CLIENT=$client->id");
+        $this->log->write(W_DEBUG, "CLIENT<-DEQUEUE: NAME=$event_id CLIENT=$client->id", $client->name);
 
         unset($this->waitQueue[$event_id][$client->id]);
 
-        if ($event_id == $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN_UNSUBSCRIBE: CLIENT=$client->id");
+        if ($event_id === $this->config->admin->trigger)
+            $this->log->write(W_DEBUG, "ADMIN->UNSUBSCRIBE: CLIENT=$client->id", $client->name);
         else
             $this->stats['subscriptions']--;
 
@@ -1407,7 +1519,6 @@ class Master {
         $job = new Job\Runner(array(
             'when' => $when,
             'application' => array(
-                'path' => $application->path,
                 'env' => $application->env
             ),
             'exec' => $exec->callable,
@@ -1419,9 +1530,7 @@ class Master {
 
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
 
-        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $job->id);
-
-        $this->log->write(W_DEBUG, 'APPLICATION_PATH: ' . $application->path, $job->id);
+        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $job->id);
 
         $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . $application->env, $job->id);
 
@@ -1441,7 +1550,7 @@ class Master {
 
         }
 
-        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date('c', $when), $job->id);
+        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date($this->config->sys['date_format'], $when), $job->id);
 
         $this->queueAddJob($job);
 
@@ -1467,7 +1576,7 @@ class Master {
         /**
          * Stop the job if it is currently running
          */
-        if ($job->status == STATUS_RUNNING) {
+        if ($job->status === STATUS_RUNNING) {
 
             if ($job->process) {
 
@@ -1527,9 +1636,9 @@ class Master {
 
                         $this->log->write(W_NOTICE, "Starting job execution", $id);
 
-                        $this->log->write(W_DEBUG, 'NOW:  ' . date('c', $now), $id);
+                        $this->log->write(W_DEBUG, 'NOW:  ' . date($this->config->sys['date_format'], $now), $id);
 
-                        $this->log->write(W_DEBUG, 'WHEN: ' . date('c', $job->start), $id);
+                        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $id);
 
                         if ($job->retries > 0)
                             $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
@@ -1574,9 +1683,6 @@ class Master {
 
                     $payload = array(
                         'application_name' => APPLICATION_NAME,
-                        'server_port' => $this->config->server['port'] ,
-                        'job_id' => $id,
-                        'access_key' => $job->access_key,
                         'timezone' => date_default_timezone_get(),
                         'config' => array('app' => array('root' => $root))
                     );
@@ -1603,6 +1709,14 @@ class Master {
 
                     }
 
+                    $pipe = $process->getReadPipe();
+
+                    $pipe_id = intval($pipe);
+
+                    $this->streams[$pipe_id] = $pipe;
+
+                    $this->clients[$pipe_id] = $job;
+
                     $process->start($packet);
 
                 } else {
@@ -1618,6 +1732,14 @@ class Master {
 
             } elseif ($job->expired()) { //Clean up any expired jobs (completed or errored)
 
+                if($job->status === STATUS_CANCELLED){
+
+                    $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
+
+                    $job->process->terminate();
+
+                }
+
                 $this->log->write(W_NOTICE, 'Cleaning up', $id);
 
                 $this->stats['queue']--;
@@ -1627,7 +1749,7 @@ class Master {
 
                 unset($this->jobQueue[$id]);
 
-            }elseif($job->status === STATUS_RUNNING){
+            }elseif($job->status === STATUS_RUNNING || $job->status === STATUS_CANCELLED){
 
                 if(!is_object($job->process)){
 
@@ -1643,13 +1765,26 @@ class Master {
 
                 if ($status['running'] === false) {
 
+                    $this->log->write(W_DEBUG, "PROCESS->STOP: PID=$status[pid] ID=" . $job->process->id);
+
+                    $pipe = $job->process->getReadPipe();
+
+                    //Do any last second processing.  Usually shutdown log messages.
+                    if($buffer = stream_get_contents($pipe))
+                        $job->recv($buffer);
+
+                    //One last check of the error buffer
+                    if(($output = $job->process->readErrorPipe()) !== false)
+                        $this->log->write(W_ERR, "PROCESS ERROR:\n$output");
+
+                    //Now remove everything and clean up
                     unset($this->processes[$job->process->id]);
 
-                    $job->process->close();
-
-                    $job->process = null;
-
                     $this->stats['processes']--;
+
+                    $this->removeClient($pipe);
+
+                    $job->disconnect();
 
                     /**
                      * Process a Service shutdown.
@@ -1662,39 +1797,20 @@ class Master {
 
                         $this->log->write(W_DEBUG, "SERVICE=$name EXIT=$status[exitcode]");
 
-                        if ($status['exitcode'] > 0 && $job->status !== STATUS_CANCELLED) {
+                        if ($status['exitcode'] !== 0 && $job->status !== STATUS_CANCELLED) {
 
-                            $this->log->write(W_ERR, "Service returned status code $status[exitcode]", $name);
+                            $this->log->write(W_NOTICE, "Service returned status code $status[exitcode]", $name);
 
-                            if ($status['exitcode'] == 4) {
+                            if(!($ec = ake($this->exit_codes, $status['exitcode'])))
+                                $ec = array(
+                                    'lvl' => W_WARN,
+                                    'msg' => 'Service exited unexpectedly.',
+                                    'restart' => true
+                                );
 
-                                $this->log->write(W_WARN, 'Service exited because it lost the control channel. Restarting.');
+                            $this->log->write($ec['lvl'], $ec['msg'], $name);
 
-                            } elseif ($status['exitcode'] == 6) {
-
-                                $job->retries = 0;
-
-                                $this->log->write(W_INFO, 'Service exited because it\'s source file was modified.', $name);
-
-                            }else{
-
-                                if ($status['exitcode'] == 1) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because the application failed to decode the start payload.', $name);
-
-                                } elseif ($status['exitcode'] == 2) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because the application runner does not understand the start payload type.', $name);
-
-                                } elseif ($status['exitcode'] == 3) {
-
-                                    $this->log->write(W_ERR, 'Service failed to start because service class does not exist.', $name);
-
-                                } elseif ($status['exitcode'] == 5) {
-
-                                    $this->log->write(W_ERR, 'Dynamic service failed to start because it has no runOnce() method!', $name);
-
-                                }
+                            if(ake($ec, 'restart', false) !== true){
 
                                 $this->log->write(W_ERR, 'Disabling the service.', $name);
 
@@ -1703,6 +1819,9 @@ class Master {
                                 continue;
 
                             }
+
+                            if(ake($ec, 'reset', false) === true)
+                                $job->retries = 0;
 
                             if ($job->retries > $this->config->service->restarts) {
 
@@ -1738,7 +1857,7 @@ class Master {
 
                             }
 
-                        } elseif ($job->respawn == true && $job->status == STATUS_RUNNING) {
+                        } elseif ($job->respawn === true && $job->status === STATUS_RUNNING) {
 
                             $this->log->write(W_NOTICE, "Respawning service in "
                                 . $job->respawn_delay . " seconds.", $name);
@@ -1802,7 +1921,7 @@ class Master {
 
                                 $job->retries = 0;
 
-                                $this->log->write(W_NOTICE, 'Next execution at: ' . date('c', $next), $id);
+                                $this->log->write(W_NOTICE, 'Next execution at: ' . date($this->config->sys['date_format'], $next), $id);
 
                             }else{
 
@@ -1817,27 +1936,37 @@ class Master {
 
                     }
 
-                } elseif ($job->status === STATUS_CANCELLED) {
+                } elseif ($status['running'] === TRUE) {
 
-                    $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
+                    try{
 
-                    $job->process->terminate();
+                        //Receive any error from STDERR
+                        if(($output = $job->process->readErrorPipe()) !== false)
+                            $this->log->write(W_ERR, "PROCESS ERROR:\n$output");
 
-                } elseif ($job instanceof Job\Runner && $job->timeout()) {
+                    }
+                    catch(\Throwable $e){
 
-                    $this->log->write(W_WARN, "Process taking too long to execute - Attempting to kill it.", $id);
-
-                    if ($job->process->terminate()) {
-
-                        $this->log->write(W_DEBUG, 'Terminate signal sent.', $id);
-
-                    } else {
-
-                        $this->log->write(W_ERR, 'Failed to send terminate signal.', $id);
+                        $this->log->write(W_ERR, 'EXCEPTION #'
+                            . $e->getCode()
+                            . ' on line ' . $e->getLine()
+                            . ' in file ' . $e->getFile()
+                            . ': ' . $e->getMessage());
 
                     }
 
                 }
+
+            } elseif ($job instanceof Job\Runner
+                        && $job->status === STATUS_RUNNING
+                        && $job->timeout()) {
+
+                $this->log->write(W_WARN, "Process taking too long to execute - Attempting to kill it.", $id);
+
+                if ($job->process->terminate())
+                    $this->log->write(W_DEBUG, 'Terminate signal sent.', $id);
+                else
+                    $this->log->write(W_ERR, 'Failed to send terminate signal.', $id);
 
             }
 
@@ -1859,7 +1988,7 @@ class Master {
 
             $this->stats['queue']++;
 
-            $this->log->write(W_NOTICE, 'Job added to queue', $job->id);
+            $this->log->write(W_DEBUG, "JOB->QUEUE: START=" . date($this->config->sys['date_format'], $job->start) . " TAG=$job->tag", $job->id);
 
         }
 
@@ -1895,7 +2024,7 @@ class Master {
 
                 }
 
-                if (count($this->eventQueue[$event_id]) == 0)
+                if (count($this->eventQueue[$event_id]) === 0)
                     unset($this->eventQueue[$event_id]);
 
             }
@@ -1985,7 +2114,7 @@ class Master {
 
                         case 'not' :
 
-                            if ($field_value == $filter_value)
+                            if ($field_value === $filter_value)
                                 return true;
 
                             break;
@@ -2029,12 +2158,13 @@ class Master {
     }
 
     /**
-     * @detail This method is executed when a client connects to see if there are any events waiting in the event
-     * queue that the client has not yet seen.
-     * If there are, the first event found is sent to the client,
-     * marked as seen and then processing stops.
+     * Process the event queue for a specified client.
      *
-     * @param Client $client
+     * This method is executed when a client connects to see if there are any events waiting in the event
+     * queue that the client has not yet seen.  If there are, the first event found is sent to the client, marked
+     * as seen and then processing stops.
+     *
+     * @param CommInterface $client
      *
      * @param string $event_id
      *
@@ -2042,34 +2172,37 @@ class Master {
      *
      * @return boolean
      */
-    private function processEventQueue($client, $event_id, $filter = NULL) {
+    private function processEventQueue(CommInterface $client, $event_id, $filter = NULL) {
 
-        $this->log->write(W_NOTICE, "PROCESSING EVENT QUEUE: $event_id");
+        if (!(array_key_exists($event_id, $this->eventQueue)
+            && is_array($this->eventQueue[$event_id])
+            && ($count = count($this->eventQueue[$event_id])) > 0))
+            return false;
 
-        if (array_key_exists($event_id, $this->eventQueue)) {
+        $this->log->write(W_DEBUG, "QUEUE: EVENT=$event_id COUNT=$count");
 
-            foreach($this->eventQueue[$event_id] as $trigger_id => &$event) {
+        foreach($this->eventQueue[$event_id] as $trigger_id => &$event) {
 
-                if (!array_key_exists('seen', $event) || !is_array($event['seen']))
-                    $event['seen'] = array();
+            if (!array_key_exists('seen', $event) || !is_array($event['seen']))
+                $event['seen'] = array();
 
-                if (!in_array($client->id, $event['seen'])) {
+            if (!in_array($client->id, $event['seen'])) {
 
-                    if (!array_key_exists($event_id, $client->subscriptions))
-                        continue;
+                if (!array_key_exists($event_id, $client->subscriptions))
+                    continue;
 
-                    if ($this->filterEvent($event, $filter))
-                        continue;
+                if ($this->filterEvent($event, $filter))
+                    continue;
 
-                    $event['seen'][] = $client->id;
+                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client->id");
 
-                    if ($event_id != $this->config->admin->trigger)
-                        $this->log->write(W_NOTICE, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
+                if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
+                    return false;
 
-                    if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
-                        return false;
+                $event['seen'][] = $client->id;
 
-                }
+                if ($event_id != $this->config->admin->trigger)
+                    $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
 
             }
 
@@ -2080,8 +2213,9 @@ class Master {
     }
 
     /**
-     * @detail This method is executed when a event is triggered.
-     * It is responsible for sending events to clients
+     * Process all subscriptions for a specified event.
+     *
+     * This method is executed when a event is triggered.  It is responsible for sending events to clients
      * that are waiting for the event and marking them as seen by the client.
      *
      * @param string $event_id
@@ -2092,10 +2226,12 @@ class Master {
      */
     private function processSubscriptionQueue($event_id, $trigger_id = NULL) {
 
-        if (!array_key_exists($event_id, $this->eventQueue))
+        if (!(array_key_exists($event_id, $this->eventQueue)
+            && is_array($this->eventQueue[$event_id])
+            && ($count = count($this->eventQueue[$event_id])) > 0))
             return false;
 
-        $this->log->write(W_DEBUG, "EVENT_QUEUE: NAME=$event_id COUNT=" . count($this->eventQueue[$event_id]));
+        $this->log->write(W_DEBUG, "QUEUE: NAME=$event_id COUNT=$count");
 
         // Get a list of triggers to process
         $triggers = (empty($trigger_id) ? array_keys($this->eventQueue[$event_id]) : array($trigger_id));
@@ -2116,13 +2252,15 @@ class Master {
                     || $this->filterEvent($event, $item['filter']))
                     continue;
 
+                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client_id");
+
+                if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
+                    return false;
+
                 $event['seen'][] = $client_id;
 
                 if ($event_id != $this->config->admin->trigger)
                     $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger CLIENT={$client_id}");
-
-                if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
-                    return false;
 
             }
 

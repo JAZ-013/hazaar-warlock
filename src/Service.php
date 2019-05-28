@@ -36,8 +36,6 @@ abstract class Service extends Process {
 
     protected $slept    = false;
 
-    private   $ob_file;
-
     private   $last_heartbeat;
 
     private   $last_checkfile;
@@ -50,9 +48,9 @@ abstract class Service extends Process {
 
     private   $__str_pad = 0;
 
-    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
+    private   $__log_file;
 
-        parent::__construct($application, $protocol);
+    final function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol) {
 
         $this->start = time();
 
@@ -63,9 +61,9 @@ abstract class Service extends Process {
 
         $this->name = strtolower($name);
 
-        if(!$application->request instanceof \Hazaar\Application\Request\Http){
+        $this->__log_file = fopen($application->runtimePath($this->name . '.log'), 'a');
 
-            $this->redirectOutput($this->name);
+        if(!$application->request instanceof \Hazaar\Application\Request\Http){
 
             $this->setErrorHandler('__errorHandler');
 
@@ -118,24 +116,21 @@ abstract class Service extends Process {
 
         }
 
+        parent::__construct($application, $protocol, getmypid());
+
     }
 
-    public function connect($application_name, $host, $port, $extra_headers = null){
+    function __destruct(){
 
-        $count = 0;
+        fclose($this->__log_file);
 
-        while(!parent::connect($application_name, $host, $port, $extra_headers)){
+        parent::__destruct();
 
-            $this->log(W_WARN, 'Connection failed.  Trying again.  (count=' . $count . ')');
+    }
 
-            usleep($this->config->connect_retry_delay);
+    protected function connect($application, $protocol, $guid = null){
 
-            if(++$count >= $this->config->connect_retries)
-                return false;
-
-        }
-
-        return true;
+        return new Connection\Pipe($application, $protocol);
 
     }
 
@@ -144,19 +139,17 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        if($level === W_LOCAL || parent::log($level, $message, $name) === true){
+        $label = ake($this->__log_levels, $level, 'NONE');
 
-            $label = ake($this->__log_levels, $level, 'NONE');
+        if(!is_array($message))
+            $message = array($message);
 
-            if(!is_array($message))
-                $message = array($message);
+        foreach($message as $m)
+            fwrite($this->__log_file, date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n");
 
-            foreach($message as $m)
-                echo date('Y-m-d H:i:s') . ' - ' . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+        fflush($this->__log_file);
 
-            flush();
-
-        }
+        return ($level === W_LOCAL) ? true : parent::log($level, $message, $name);
 
     }
 
@@ -165,18 +158,11 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        if(parent::debug($message, $name) === true){
-
-            echo date('Y-m-d H:i:s') . ' - DEBUG - ' . $message . "\n";
-
-            flush();
-
-        }
+        return $this->conn->send('DEBUG', $message, $name);
 
     }
 
     private function invokeMethod($method, $arguments = null){
-
 
         $args = array();
 
@@ -286,11 +272,9 @@ abstract class Service extends Process {
 
         $this->state = HAZAAR_SERVICE_STOPPING;
 
-        $this->shutdown();
+        $this->log(W_INFO, 'Service is shutting down');
 
-        //Do a sleep so that we can correctly flush any output that may have been sent before we exit.
-        while(ob_get_length() > 0)
-            $this->sleep();
+        $this->shutdown();
 
         $this->state = HAZAAR_SERVICE_STOPPED;
 
@@ -298,39 +282,20 @@ abstract class Service extends Process {
 
     }
 
-    /**
-     * This method turns off output to STDOUT and STDERR and redirects them to a file.
-     *
-     * @param mixed $name The name to use in the file.
-     */
-    final protected function redirectOutput($name){
-
-        $this->ob_file = fopen($this->application->runtimePath($name . '.log'), 'at');
-
-        ob_start(array($this, 'writeOutput'));
-
-    }
-
-    final protected function writeOutput($buffer){
-
-        fwrite($this->ob_file, $buffer);
-
-        return '';
-
-    }
-
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
 
-        $msg = "#$errno on line $errline in file $errfile\n" . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40);
+        ob_start();
 
-        $this->log(W_LOCAL, 'ERROR ' . $msg);
+        $msg = "#$errno on line $errline in file $errfile\n"
+            . str_repeat('-', 40) . "\n$errstr\n" .  str_repeat('-', 40) . "\n";
 
         debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
-        echo str_repeat('-', 40) . "\n";
+        $msg .= ob_get_clean();
 
-        if($this->connected)
-            $this->send('ERROR', $msg);
+        $this->log(W_LOCAL, 'ERROR ' . $msg);
+
+        $this->send('ERROR', $msg);
 
         return true;
 
@@ -338,15 +303,18 @@ abstract class Service extends Process {
 
     final public function __exceptionHandler($e){
 
-        $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n" . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40);
+        ob_start();
 
-        $this->send('ERROR', $msg);
-
-        $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
+        $msg = "#{$e->getCode()} on line {$e->getLine()} in file {$e->getFile()}\n"
+            . str_repeat('-', 40) . "\n{$e->getMessage()}\n" . str_repeat('-', 40) . "\n";
 
         debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) . "\n";
 
-        echo str_repeat('-', 40) . "\n";
+        $msg .= ob_get_clean();
+
+        $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
+
+        $this->send('ERROR', $msg);
 
         return true;
 
@@ -444,8 +412,8 @@ abstract class Service extends Process {
 
                 }
 
-                if($exec['when'] === null 
-                    || $exec['when'] === 0 
+                if($exec['when'] === null
+                    || $exec['when'] === 0
                     || ($exec['type'] !== HAZAAR_SCHEDULE_INTERVAL && $exec['when'] < time())){
 
                     unset($this->schedule[$id]);
@@ -470,7 +438,6 @@ abstract class Service extends Process {
 
         $status = array(
             'pid'        => getmypid(),
-            'job_id'     => $this->job_id,
             'name'       => $this->name,
             'start'      => $this->start,
             'state_code' => $this->state,
@@ -602,9 +569,6 @@ abstract class Service extends Process {
      */
     final protected function sleep($timeout = 0) {
 
-        if(!is_resource($this->socket))
-            return sleep($timeout);
-
         $start = microtime(true);
 
         $slept = FALSE;
@@ -655,8 +619,6 @@ abstract class Service extends Process {
                 $this->__sendHeartbeat();
 
             $slept = true;
-
-            ob_flush();
 
         }
 
@@ -827,21 +789,35 @@ abstract class Service extends Process {
 
     }
 
-    final protected function send($command, $payload = null) {
+    final public function send($command, $payload = null){
 
-        try{
+        $result = parent::send($command, $payload);
 
-            return parent::send($command, $payload);
+        if($result === false){
 
-        }
-        catch(\Exception $e){
+            $this->log(W_LOCAL, 'An error occured while sending data.  Stopping.');
 
-            echo "SOCKET ERROR!\n";
-
-            //We have lost the control channel so we must die!
-            exit(4);
+            $this->stop();
 
         }
+
+        return $result;
+
+    }
+
+    final public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0){
+
+        $result = parent::recv($payload, $tv_sec, $tv_usec);
+
+        if($result === false){
+
+            $this->log(W_LOCAL, 'An error occured while receiving data.  Stopping.');
+
+            $this->stop();
+
+        }
+
+        return $result;
 
     }
 
