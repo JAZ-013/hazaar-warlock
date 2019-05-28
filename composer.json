@@ -40,7 +40,8 @@
         "hazaarlabs/hazaar-mvc": ">=2.4.0"
     },
     "bin": [
-        "bin/warlock"
+        "bin/warlock",
+        "bin/service"
     ],
     "extra": {
         "hazaar-console-class": "Hazaar\\Warlock\\Console"
