@@ -824,29 +824,12 @@ class Master {
 
     public function authorise(CommInterface $client, $key, $job_id = null){
 
-        if($job_id !== null){
+        if($key !== $this->config->admin->key)
+            return false;
 
-            if(!array_key_exists($job_id, $this->jobQueue))
-                return false;
+        $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
 
-            $job = $this->jobQueue[$job_id];
-
-            if($job->access_key !== $key)
-                return false;
-
-            if($job->registerClient($client))
-                $this->log->write(W_NOTICE, ucfirst($client->type) . ' registered successfully', $job_id);
-
-        }else{
-
-            if($key !== $this->config->admin->key)
-                return false;
-
-            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
-
-            $client->type = 'admin';
-
-        }
+        $client->type = 'admin';
 
         $this->admins[$client->id] = $client;
 

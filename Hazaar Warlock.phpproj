@@ -49,6 +49,7 @@
     <Compile Include="composer.json" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="bin\" />
     <Folder Include="docs\" />
     <Folder Include="libs\" />
     <Folder Include="libs\console\" />
@@ -64,6 +65,8 @@
     <Folder Include="src" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="bin\warlock" />
+    <Content Include="bin\service" />
     <Content Include="docs\global-events.md" />
     <Content Include="docs\delayed-exec.md" />
     <Content Include="docs\kvstore.md" />

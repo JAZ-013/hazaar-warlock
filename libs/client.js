@@ -213,7 +213,7 @@ var HazaarWarlock = function (options) {
     /* Client Commands */
     this.sync = function (admin_key) {
         this.admin_key = admin_key;
-        this.__send('sync', { 'admin_key': this.admin_key }, true);
+        this.__send('sync', { 'access_key': this.admin_key }, true);
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {

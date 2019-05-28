@@ -34,6 +34,8 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public $username;
 
+    public $status;
+
     public $since;
 
     public $lastContact = 0;
@@ -184,23 +186,19 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         }
 
-        if(array_key_exists('x-warlock-admin-key', $headers)){
-
-            $payload = (object)array('admin_key' => base64_decode($headers['x-warlock-admin-key']));
-
-            if(!$this->commandSync($payload, false))
-                return false;
-
-        }elseif(array_key_exists('x-warlock-job-id', $headers) && array_key_exists('x-warlock-access-key', $headers)){
+        if(array_key_exists('x-warlock-access-key', $headers)){
 
             $payload = (object)array(
                 'client_id' => $this->id,
-                'job_id' => $headers['x-warlock-job-id'],
+                'type' => $type = ake($headers, 'x-warlock-client-type', 'admin'),
                 'access_key' => base64_decode($headers['x-warlock-access-key'])
             );
 
             if(!$this->commandSync($payload, false))
                 return false;
+
+            if($type === 'service')
+                $this->send('OK');
 
         }
 
@@ -658,42 +656,30 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         $this->log->write(W_DEBUG, "CLIENT<-SYNC: OFFSET=$this->offset HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
-        if (property_exists($payload, 'admin_key')){
+        if (!property_exists($payload, 'access_key'))
+            return false;
 
-            if(!Master::$instance->authorise($this, $payload->admin_key) && $acknowledge === true) {
+        if(!Master::$instance->authorise($this, $payload->access_key)) {
 
-                $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id, $this->name);
+            $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id, $this->name);
 
+            if($acknowledge === true)
                 $this->send('ERROR');
 
-            }
+            return false;
 
-            if($acknowledge === true) $this->send('OK');
+        }elseif($acknowledge === true)
+            $this->send('OK');
 
-            return true;
+        if($this->type !== $payload->type){
 
-        }elseif(property_exists($payload, 'job_id')
-            && $payload->client_id === $this->id){
+            $this->log->write(W_NOTICE, "Client type changed from '$this->type' to '$payload->type'.", $this->name);
 
-            if(!Master::$instance->authorise($this, $payload->access_key, $payload->job_id)){
-
-                $this->log->write(W_ERR, 'Service tried to sync with bad access key!', $payload->job_id);
-
-                return false; //A bad access key will drop the service.
-
-            }
-
-            if($acknowledge === true) $this->send('OK');
-
-            return true;
+            $this->type = $payload->type;
 
         }
 
-        $this->log->write(W_ERR, 'Client requested bad sync!', $this->name);
-
-        if($acknowledge) $this->send('ERROR');
-
-        return false;
+        return true;
 
     }
 
@@ -707,15 +693,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         }
 
-        $job = ake($this->jobs, $payload->job_id);
-
-        if(!$job){
-
-            $this->log->write(W_WARN, 'Service status received for client with no job ID', $this->name);
-
-            throw new \Exception('Service has no running job!');
-
-        }
+        $this->status = $payload;
 
         return true;
 

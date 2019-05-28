@@ -28,15 +28,4 @@ class Service extends \Hazaar\Warlock\Server\Job {
 
     }
 
-    public function registerClient(\Hazaar\Warlock\Server\Client $client){
-
-        if(!parent::registerClient($client))
-            return false;
-
-        $client->name = $this->name;
-
-        return true;
-
-    }
-
 }

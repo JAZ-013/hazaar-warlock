@@ -107,7 +107,7 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
         if($response['code'] != 101)
             throw new \Exception('Walock server returned status: ' . $response['code'] . ' ' . $response['status']);
 
-        if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
+        if(!$this->acceptHandshake($response, $responseHeaders, $this->key))
             throw new \Exception('Warlock server denied our connection attempt!');
 
         return true;
@@ -337,7 +337,9 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
             } elseif($bytes_received == 0) {
 
-                return $this->disconnect();
+                $this->disconnect();
+
+                return false;
 
             }
 
