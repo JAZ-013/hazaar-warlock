@@ -50,7 +50,9 @@ abstract class Service extends Process {
 
     private   $__log_file;
 
-    final function __construct(\Hazaar\Application $application, Protocol $protocol) {
+    private   $__remote = false;
+
+    final function __construct(\Hazaar\Application $application, Protocol $protocol, $remote = false) {
 
         $this->start = time();
 
@@ -61,6 +63,24 @@ abstract class Service extends Process {
 
         $this->name = strtolower($name);
 
+        $defaults = array(
+            $this->name => array(
+                'enabled'   => false,
+                'heartbeat' => 60,
+                'checkfile' => 1,
+                'connect_retries' => 3,        //When establishing a control channel, make no more than this number of attempts before giving up
+                'connect_retry_delay' => 100,  //When making multiple attempts to establish the control channel, wait this long between each
+                'server' => array('host' => '127.0.0.1', 'port' => 8000)
+            )
+        );
+
+        $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
+
+        $this->config = ake($config, $this->name);
+
+        if($remote === true && !$this->config->has('server'))
+            throw new \Exception("Warlock server required to run in remote service mode.\n");
+
         $this->__log_file = fopen($application->runtimePath($this->name . '.log'), 'a');
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
@@ -70,20 +90,6 @@ abstract class Service extends Process {
             $this->setExceptionHandler('__exceptionHandler');
 
         }
-
-        $defaults = array(
-            $this->name => array(
-                'enabled'   => false,
-                'heartbeat' => 60,
-                'checkfile' => 1,
-                'connect_retries' => 3,        //When establishing a control channel, make no more than this number of attempts before giving up
-                'connect_retry_delay' => 100   //When making multiple attempts to establish the control channel, wait this long between each
-            )
-        );
-
-        $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
-
-        $this->config = ake($config, $this->name);
 
         if($tz = $this->config->get('timezone'))
             date_default_timezone_set($tz);
@@ -116,13 +122,16 @@ abstract class Service extends Process {
 
         }
 
+        $this->__remote = $remote;
+
         parent::__construct($application, $protocol, getmypid());
 
     }
 
     function __destruct(){
 
-        fclose($this->__log_file);
+        if($this->__log_file)
+            fclose($this->__log_file);
 
         parent::__destruct();
 
@@ -130,7 +139,33 @@ abstract class Service extends Process {
 
     protected function connect($application, $protocol, $guid = null){
 
-        return new Connection\Pipe($application, $protocol);
+        if($this->__remote === true){
+
+            if(!$this->config->has('server'))
+                die("Warlock server required to run in remote service mode.\n");
+
+            $headers = array();
+
+            Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
+
+            Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
+
+            $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
+
+            if($warlock->admin->key !== null)
+                $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
+
+            $conn = new Connection\Socket($application, $protocol);
+
+            $conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers);
+
+        }else{
+
+            $conn = new Connection\Pipe($application, $protocol);
+
+        }
+
+        return $conn;
 
     }
 

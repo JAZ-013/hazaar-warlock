@@ -36,7 +36,8 @@ abstract class Process {
 
     function __destruct(){
 
-        $this->conn->disconnect();
+        if($this->conn instanceof Connection\_Interface)
+            $this->conn->disconnect();
 
     }
 
@@ -449,7 +450,7 @@ abstract class Process {
      *
      * @since 1.0.0
      */
-    static public function runner(\Hazaar\Application $application) {
+    static public function runner(\Hazaar\Application $application, $service = null) {
 
         if(!class_exists('\Hazaar\Warlock\Config'))
             throw new \Exception('Could not find default warlock config.  How is this even working!!?');
@@ -464,66 +465,78 @@ abstract class Process {
 
         $protocol = new Protocol($warlock->sys->id, $warlock->server->encoded);
 
-        //Execution should wait here until we get a command
-        $line = fgets(STDIN);
+        if(is_string($service)){
 
-        $code = 1;
+            $serviceClass = ucfirst($service) . 'Service';
 
-        $payload = null;
+            $service = new $serviceClass($application, $protocol, true);
 
-        if($type = $protocol->decode($line, $payload)){
+            $code = call_user_func(array($service, 'main'));
 
-            if(!$payload instanceof \stdClass)
-                throw new \Exception('Got Hazaar protocol packet without payload!');
+        }else{
 
-            //Synchronise the timezone with the server
-            if($tz = ake($payload, 'timezone'))
-                date_default_timezone_set($tz);
+            //Execution should wait here until we get a command
+            $line = fgets(STDIN);
 
-            switch ($type) {
+            $code = 1;
 
-                case 'EXEC' :
+            $payload = null;
 
-                    $container = new \Hazaar\Warlock\Container($application, $protocol);
+            if($type = $protocol->decode($line, $payload)){
 
-                    $code = $container->exec($payload->exec, ake($payload, 'params'));
+                if(!$payload instanceof \stdClass)
+                    throw new \Exception('Got Hazaar protocol packet without payload!');
 
-                    break;
+                //Synchronise the timezone with the server
+                if($tz = ake($payload, 'timezone'))
+                    date_default_timezone_set($tz);
 
-                case 'SERVICE' :
+                switch ($type) {
 
-                    if(!property_exists($payload, 'name')) {
+                    case 'EXEC' :
 
-                        $code = 3;
+                        $container = new \Hazaar\Warlock\Container($application, $protocol);
+
+                        $code = $container->exec($payload->exec, ake($payload, 'params'));
 
                         break;
 
-                    }
+                    case 'SERVICE' :
 
-                    $serviceClass = ucfirst($payload->name) . 'Service';
+                        if(!property_exists($payload, 'name')) {
 
-                    if(class_exists($serviceClass)) {
+                            $code = 3;
 
-                        if($config = ake($payload, 'config'))
-                            $application->config->extend($config);
+                            break;
 
-                        $service = new $serviceClass($application, $protocol);
+                        }
 
-                        $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
+                        $serviceClass = ucfirst($payload->name) . 'Service';
 
-                    } else {
+                        if(class_exists($serviceClass)) {
 
-                        $code = 3;
+                            if($config = ake($payload, 'config'))
+                                $application->config->extend($config);
 
-                    }
+                            $service = new $serviceClass($application, $protocol);
 
-                    break;
+                            $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
 
-                default:
+                        } else {
 
-                    $code = 2;
+                            $code = 3;
 
-                    break;
+                        }
+
+                        break;
+
+                    default:
+
+                        $code = 2;
+
+                        break;
+
+                }
 
             }
 
