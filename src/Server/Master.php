@@ -865,7 +865,7 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
 
-        $client->type = 'admin';
+        $client->type = 'ADMIN';
 
         $this->admins[$client->id] = $client;
 
@@ -982,7 +982,7 @@ class Master {
 
                 }
 
-                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
+                $this->log->write(W_DEBUG, $client->type . "<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
 
             }elseif(feof($stream)){
 
@@ -990,7 +990,7 @@ class Master {
 
             }else{
 
-                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
+                $this->log->write(W_DEBUG, $client->type . "<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
 
             }
 
@@ -1001,7 +1001,7 @@ class Master {
             if (!($client = $this->addClient($stream)))
                 $this->disconnect($stream);
 
-            if(!$client->initiateHandshake($buf)){
+            if(!$client->processHandshake($buf)){
 
                 $this->removeClient($stream);
 
@@ -1406,7 +1406,7 @@ class Master {
         $trigger_id = uniqid();
 
         //If this is a message coming from the service, send it back to it's parent client connection
-        if($client->type === 'service'){
+        if($client->type === 'SERVICE'){
 
             if(count($client->jobs) === 0)
                 throw new \Exception('Client has no associated jobs!');

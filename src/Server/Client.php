@@ -6,21 +6,36 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public $log;
 
-    /*
-     * WebSocket specific stuff
+    /**
+     * @var string
      */
     public $address;
 
+    /**
+     * @var integer
+     */
     public $port;
 
+    /**
+     * @var resource
+     */
     public $socket;
 
+    /**
+     * @var boolean
+     */
     public $closing = false;
 
-    // Buffer for fragmented frames
+    /**
+     * Buffer for fragmented frames
+     * @var string
+     */
     public $frameBuffer = NULL;
 
-    // Buffer for payloads split over multiple frames
+    /**
+     * Buffer for payloads split over multiple frames
+     * @var string
+     */
     public $payloadBuffer = NULL;
 
     /*
@@ -28,7 +43,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      */
     public $id;
 
-    public $type = 'client';  //Possible types are 'client', 'service' or 'admin'.
+    public $type = 'CLIENT';  //Possible types are 'CLIENT', 'SERVICE' or 'ADMIN'.
 
     public $name;
 
@@ -71,13 +86,16 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         $this->log = new \Hazaar\Warlock\Server\Logger();
 
-        $this->socket = $socket;
-
-        $this->name = 'SOCKET#' . intval($socket);
-
         $this->id = uniqid();
 
         $this->since = time();
+
+        if($socket === null)
+            return;
+
+        $this->socket = $socket;
+
+        $this->name = 'SOCKET#' . intval($socket);
 
         if (is_resource($this->socket)) {
 
@@ -85,7 +103,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
                 list($this->address, $this->port) = explode(':', $peer);
 
-                $this->log->write(W_DEBUG, "CLIENT<-CREATE: HOST=$this->address PORT=$this->port", $this->name);
+                $this->log->write(W_DEBUG, $this->type . "<-CREATE: HOST=$this->address PORT=$this->port", $this->name);
 
             }
 
@@ -101,7 +119,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     function __destruct(){
 
-        $this->log->write(W_DEBUG, "CLIENT->DESTROY: HOST=$this->address PORT=$this->port", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "->DESTROY: HOST=$this->address PORT=$this->port", $this->name);
 
     }
 
@@ -112,7 +130,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      * @param mixed $request
      * @return boolean
      */
-    public function initiateHandshake($request) {
+    public function processHandshake($request) {
 
         if(!($headers = $this->parseHeaders($request))){
 
@@ -180,7 +198,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         //If this is NOT a Warlock process request (ie: it's a browser) send the protocol init frame!
         if(!(array_key_exists('x-warlock-php', $headers) && $headers['x-warlock-php'] === 'true')){
 
-            $this->log->write(W_DEBUG, "CLIENT->INIT: HOST=$this->address POST=$this->port CLIENT=$this->id", $this->name);
+            $this->log->write(W_DEBUG, $this->type . "->INIT: HOST=$this->address POST=$this->port CLIENT=$this->id", $this->name);
 
             $this->write($init_frame);
 
@@ -194,7 +212,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
                 'access_key' => base64_decode($headers['x-warlock-access-key'])
             );
 
-            if(!$this->commandSync($payload, false))
+            if(!$this->commandSync($payload))
                 return false;
 
             if($type === 'service')
@@ -288,7 +306,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
          */
         while($frame = $this->processFrame($buf)) {
 
-            $this->log->write(W_DECODE, "CLIENT<-PACKET: " . $frame, $this->name);
+            $this->log->write(W_DECODE, $this->type . "<-PACKET: " . $frame, $this->name);
 
             $payload = null;
 
@@ -340,7 +358,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         $packet = Master::$protocol->encode($command, $payload); //Override the timestamp.
 
-        $this->log->write(W_DECODE, "CLIENT->PACKET: $packet", $this->name);
+        $this->log->write(W_DECODE, $this->type . "->PACKET: $packet", $this->name);
 
         $frame = $this->frame($packet, 'text', false);
 
@@ -355,9 +373,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         $len = strlen($frame);
 
-        $this->log->write(W_DECODE2, "CLIENT->FRAME: " . implode(' ', $this->hexString($frame)), $this->name);
+        $this->log->write(W_DECODE2, $this->type . "->FRAME: " . implode(' ', $this->hexString($frame)), $this->name);
 
-        $this->log->write(W_DEBUG, "CLIENT->SOCKET: BYTES=$len HOST=$this->address PORT=$this->port", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "->SOCKET: BYTES=$len HOST=$this->address PORT=$this->port", $this->name);
 
         $bytes_sent = @fwrite($this->socket, $frame, $len);
 
@@ -396,7 +414,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 
-        $this->log->write(W_DEBUG, "CLIENT->CLOSE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "->CLOSE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         fclose($this->socket);
 
@@ -424,7 +442,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         if (!$frameBuffer)
             return false;
 
-        $this->log->write(W_DECODE2, "CLIENT<-FRAME: " . implode(' ', $this->hexString($frameBuffer)), $this->name);
+        $this->log->write(W_DECODE2, $this->type . "<-FRAME: " . implode(' ', $this->hexString($frameBuffer)), $this->name);
 
         $opcode = $this->getFrame($frameBuffer, $payload);
 
@@ -462,7 +480,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         }
 
-        $this->log->write(W_DECODE2, "CLIENT<-OPCODE: $opcode", $this->name);
+        $this->log->write(W_DECODE2, $this->type . "<-OPCODE: $opcode", $this->name);
 
         //Save any leftover frame data in the client framebuffer because we got more than a whole frame)
         if (strlen($frameBuffer) > 0) {
@@ -507,7 +525,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
                     @fwrite($this->socket, $frame, strlen($frame));
 
-                    if($this->type === 'client' && ($count = count($this->jobs)) > 0){
+                    if($this->type === 'CLIENT' && ($count = count($this->jobs)) > 0){
 
                         $this->log->write(W_NOTICE, 'Disconnected WebSocket client has '
                             . $count . ' running/pending child jobs', $this->name);
@@ -561,12 +579,12 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     }
 
-    private function processCommand($command, $payload = null){
+    protected function processCommand($command, $payload = null){
 
         if (!$command)
             return false;
 
-        $this->log->write(W_DEBUG, "CLIENT<-COMMAND: $command HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "<-COMMAND: $command HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         switch($command){
 
@@ -652,9 +670,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     }
 
-    private function commandSync(\stdClass $payload, $acknowledge = true){
+    private function commandSync(\stdClass $payload){
 
-        $this->log->write(W_DEBUG, "CLIENT<-SYNC: OFFSET=$this->offset HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "<-SYNC: OFFSET=$this->offset HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         if (!property_exists($payload, 'access_key'))
             return false;
@@ -663,19 +681,21 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
             $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id, $this->name);
 
-            if($acknowledge === true)
-                $this->send('ERROR');
+            $this->send('ERROR');
 
             return false;
 
-        }elseif($acknowledge === true)
-            $this->send('OK');
+        }
+
+        $this->send('OK');
 
         if($this->type !== $payload->type){
 
-            $this->log->write(W_NOTICE, "Client type changed from '$this->type' to '$payload->type'.", $this->name);
+            $type = strtoupper($payload->type);
 
-            $this->type = $payload->type;
+            $this->log->write(W_NOTICE, "Client type changed from $this->type to $type.", $this->name);
+
+            $this->type = $type;
 
         }
 
@@ -685,7 +705,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     private function commandStatus(\stdClass $payload = null) {
 
-        if($this->type !== 'service'){
+        if($this->type !== 'SERVICE'){
 
             $this->log->write(W_WARN, 'Client sent status but client is not a service!', $this->address . ':' . $this->port);
 
@@ -701,7 +721,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     private function commandSubscribe($event_id, $filter = NULL) {
 
-        $this->log->write(W_DEBUG, "CLIENT<-SUBSCRIBE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "<-SUBSCRIBE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         $this->subscriptions[] = $event_id;
 
@@ -713,7 +733,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public function commandUnsubscribe($event_id) {
 
-        $this->log->write(W_DEBUG, "CLIENT<-UNSUBSCRIBE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "<-UNSUBSCRIBE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         if(($index = array_search($event_id, $this->subscriptions)) !== false)
             unset($this->subscriptions[$index]);
@@ -724,7 +744,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public function commandTrigger($event_id, $data, $echo_client = true) {
 
-        $this->log->write(W_DEBUG, "CLIENT<-TRIGGER: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "<-TRIGGER: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         return Master::$instance->trigger($event_id, $data, ($echo_client === false ? $this->id : null));
 

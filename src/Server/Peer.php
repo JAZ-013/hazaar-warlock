@@ -10,26 +10,9 @@ namespace Hazaar\Warlock\Server;
  * @version 1.0
  * @author JamieCarl
  */
-class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface {
-
-    public $name;
-
-    private $id;
-
-    private $host;
-
-    private $port;
+class Peer extends Client implements CommInterface {
 
     private $access_key;
-
-    private $protocol;
-
-    private $log;
-
-    /**
-     * @var resource
-     */
-    private $socket;
 
     private $key;
 
@@ -39,21 +22,23 @@ class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface 
 
     private $buffer = '';
 
-    public function __construct($config, \Hazaar\Warlock\Protocol $protocol){
+    public function __construct($options){
+
+        parent::__construct(array('warlock'));
 
         $this->log = new \Hazaar\Warlock\Server\Logger();
-
-        $this->protocol = $protocol;
 
         $this->id = guid();
 
         $this->key = uniqid();
 
-        $this->host = ake($config, 'host');
+        $this->host = ake($options, 'host');
 
-        $this->port = ake($config, 'port', 8000);
+        $this->port = ake($options, 'port', 8000);
 
-        $this->access_key = base64_encode(ake($config, 'access_key'));
+        $this->access_key = base64_encode(ake($options, 'access_key'));
+
+        $this->type = 'PEER';
 
     }
 
@@ -83,7 +68,7 @@ class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface 
         $headers = array(
             'X-WARLOCK-PHP' => 'true',
             'X-WARLOCK-ACCESS-KEY' => $this->access_key,
-            'X-WARLOCK-CLIENT-TYPE' => 'service'
+            'X-WARLOCK-CLIENT-TYPE' => 'peer'
         );
 
         $handshake = $this->createHandshake('/' . APPLICATION_NAME . '/warlock?CID=' . $this->id, $this->host, null, $this->key, $headers);
@@ -129,34 +114,26 @@ class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface 
 
     public function recv(&$buf){
 
-        $this->buffer .= $buf;
-
         if($this->connected !== true){
+
+            $this->frameBuffer .= $buf;
 
             $this->online = false;
 
-            if(!$this->initiateHandshake($this->buffer))
+            if(!$this->initiateHandshake($this->frameBuffer))
                 return false;
 
             $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->host PORT=$this->port CLIENT=$this->id", $this->name);
 
             $this->connected = true;
 
-        }
+            $buf = $this->frameBuffer;
 
-        if(strlen($this->buffer) > 0){
-
-            $opcode = $this->getFrame($this->buffer, $packet);
-
-            
-
-            $this->log->write(W_DECODE, 'PEER<-PACKET: ' . $packet);
-
-            $command = $this->protocol->decode($packet, $payload);
-
-            $this->processCommand($command, $payload);
+            $this->frameBuffer = '';
 
         }
+
+        return parent::recv($buf);
 
     }
 
@@ -180,9 +157,20 @@ class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface 
 
     }
 
-    private function processCommand($command, $payload = null){
+    protected function processCommand($command, $payload = null){
+
+        if (!$command)
+            return false;
+
+        $this->log->write(W_DEBUG, $this->type . "<-COMMAND: $command HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         switch($command){
+
+            case 'NOOP':
+
+                $this->log->write(W_INFO, 'NOOP: ' . print_r($payload, true), $this->name);
+
+                return true;
 
             case 'OK':
 
@@ -194,7 +182,14 @@ class Peer extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface 
 
                 }
 
-                break;
+                return true;
+
+            case 'ERROR':
+
+                if($this->online !== true)
+                    $this->log->write(W_ERR, 'Error initiating peer connection', $this->name);
+
+                return true;
 
             default:
 
