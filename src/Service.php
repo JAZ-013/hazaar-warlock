@@ -138,7 +138,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function connect($application, $protocol, $guid = null){
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
 
         if($this->__remote === true){
 
@@ -160,7 +160,7 @@ abstract class Service extends Process {
 
             $headers['X-WARLOCK-CLIENT-TYPE'] = 'service';
 
-            $conn = new Connection\Socket($application, $protocol);
+            $conn = new Connection\Socket($protocol);
 
             if(!$conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
                 return false;
@@ -170,7 +170,7 @@ abstract class Service extends Process {
 
         }else{
 
-            $conn = new Connection\Pipe($application, $protocol);
+            $conn = new Connection\Pipe($protocol);
 
         }
 

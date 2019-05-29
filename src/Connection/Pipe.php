@@ -5,11 +5,9 @@
  */
 namespace Hazaar\Warlock\Connection;
 
-class Pipe implements _Interface {
+final class Pipe implements _Interface {
 
     protected $id;
-
-    protected $application;
 
     protected $protocol;
 
@@ -17,11 +15,9 @@ class Pipe implements _Interface {
 
     public    $bytes_received = 0;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $guid = null) {
+    function __construct(\Hazaar\Warlock\Protocol $protocol, $guid = null) {
 
         $this->start = time();
-
-        $this->application = $application;
 
         $this->protocol = $protocol;
 

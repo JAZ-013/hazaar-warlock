@@ -5,7 +5,7 @@
  */
 namespace Hazaar\Warlock\Connection;
 
-class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
+final class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
     protected $id;
 
@@ -14,8 +14,6 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
     protected $socket;
 
     protected $connected = false;
-
-    protected $application;
 
     protected $protocol;
 
@@ -30,7 +28,7 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
     public    $socket_last_error = null;
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $guid = null) {
+    function __construct(\Hazaar\Warlock\Protocol $protocol, $guid = null) {
 
         if(! extension_loaded('sockets'))
             throw new \Exception('The sockets extension is not loaded.');
@@ -38,8 +36,6 @@ class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
         parent::__construct(array('warlock'));
 
         $this->start = time();
-
-        $this->application = $application;
 
         $this->protocol = $protocol;
 

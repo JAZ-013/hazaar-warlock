@@ -29,7 +29,7 @@ abstract class Process {
 
         $this->id = ($guid === null ? guid() : $guid);
 
-        if(!($this->conn = $this->connect($application, $protocol, $guid)) instanceof Connection\_Interface)
+        if(!($this->conn = $this->connect($protocol, $guid)) instanceof Connection\_Interface)
             throw new \Exception('Process initialisation failed!', 1);
 
     }
@@ -59,7 +59,7 @@ abstract class Process {
 
     }
 
-    protected function connect($application, $protocol, $guid = null){
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
 
         return null;
 
