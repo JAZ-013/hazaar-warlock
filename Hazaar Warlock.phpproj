@@ -32,6 +32,7 @@
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Connection\Pipe.php" />
     <Compile Include="src\Server.php" />
+    <Compile Include="src\Server\Peer.php" />
     <Compile Include="src\Server\CommInterface.php" />
     <Compile Include="src\Server\Job.php" />
     <Compile Include="src\Server\Kvstore.php" />

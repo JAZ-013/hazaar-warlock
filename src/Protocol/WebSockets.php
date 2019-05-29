@@ -34,13 +34,14 @@ abstract class WebSockets {
 
         $lead = explode(' ', $lines[0], 3);
 
-        if(! isset($lead[1])) return FALSE;
+        if(! isset($lead[1])) return false;
 
         if(is_numeric($lead[1])) {
 
             $headers['code'] = intval($lead[1]);
 
             $headers['status'] = trim($lead[2]);
+
         } else {
 
             $headers[strtolower($lead[0])] = trim($lead[1]);

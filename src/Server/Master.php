@@ -115,6 +115,15 @@ class Master {
 
     private $admins = array();
 
+    /**
+     * Array of other warlocks to connect and share data with
+     *
+     * @var array Array of Hazaar\Warlock\Server\Peer object.
+     */
+    private $peers = array();
+
+    private $peer_lookup = array();
+
     // The Warlock protocol encoder/decoder.
     static public $protocol;
 
@@ -568,6 +577,29 @@ class Master {
 
         $this->running = true;
 
+        if($peers = $this->config->get('peers')){
+
+            foreach($peers as $peer){
+
+                if($peer->has('host')){
+
+                    if(!$peer->has('access_key'))
+                        $peer->access_key = $this->config->admin['key'];
+
+                    $this->peers[] = new Peer($peer->toArray(), Master::$protocol);
+
+                }else{
+
+                    $this->log(W_ERR, 'Remote peers require a host address.');
+
+                }
+
+            }
+
+            $this->checkPeers();
+
+        }
+
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
         if ($services->loaded()) {
@@ -721,9 +753,9 @@ class Master {
 
                         }
 
-                    } else {
+                    } elseif($this->processClient($stream) === false){
 
-                        $this->processClient($stream);
+                        $this->disconnect($stream);
 
                     }
 
@@ -738,6 +770,8 @@ class Master {
             $now = time();
 
             if($this->time < $now){
+
+                $this->checkPeers();
 
                 $this->processJobs();
 
@@ -824,7 +858,7 @@ class Master {
 
     }
 
-    public function authorise(CommInterface $client, $key, $job_id = null){
+    public function authorise(CommInterface $client, $key){
 
         if($key !== $this->config->admin->key)
             return false;
@@ -874,7 +908,12 @@ class Master {
 
         $stream_id = intval($stream);
 
-        return (array_key_exists($stream_id, $this->clients) ? $this->clients[$stream_id] : NULL);
+        if(array_key_exists($stream_id, $this->clients))
+            return $this->clients[$stream_id];
+        elseif(array_key_exists($stream_id, $this->peer_lookup))
+            return $this->peer_lookup[$stream_id];
+
+        return null;
 
     }
 
@@ -945,10 +984,11 @@ class Master {
 
                 $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
 
-            }else{
+            }elseif(feof($stream)){
 
-                if ($bytes_received === 0)
-                    return false;
+                return false;
+
+            }else{
 
                 $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
 
@@ -2303,6 +2343,32 @@ class Master {
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
+
+    }
+
+    private function checkPeers(){
+
+        if(count($this->peers) === 0)
+            return false;
+
+        foreach($this->peers as $peer){
+
+            if(!$peer->connected()){
+
+                if(($socket = $peer->connect()) === false)
+                    continue;
+
+                $socket_id = intval($socket);
+
+                $this->streams[$socket_id] = $socket;
+
+                $this->peer_lookup[$socket_id] = $peer;
+
+            }
+
+        }
+
+        return true;
 
     }
 
