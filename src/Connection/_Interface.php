@@ -7,7 +7,7 @@ namespace Hazaar\Warlock\Connection;
 
 interface _Interface {
 
-    function __construct(\Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $guid = null);
+    function __construct(\Hazaar\Warlock\Protocol $protocol, $guid = null);
 
     public function connect($application_name, $host, $port, $extra_headers = null);
 

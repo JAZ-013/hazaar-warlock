@@ -98,7 +98,7 @@ class Control extends Process {
 
     }
 
-    protected function connect($application, $protocol, $guid = null){
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
 
         $headers = array();
 
@@ -117,7 +117,7 @@ class Control extends Process {
 
         }
 
-        $conn = new Connection\Socket($application, $protocol, Control::$guid);
+        $conn = new Connection\Socket($protocol, Control::$guid);
 
         if(!$conn->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers))
             $conn->disconnect(FALSE);

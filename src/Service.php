@@ -50,6 +50,8 @@ abstract class Service extends Process {
 
     private   $__log_file;
 
+    private   $__local_log_level = W_INFO;
+
     private   $__remote = false;
 
     final function __construct(\Hazaar\Application $application, Protocol $protocol, $remote = false) {
@@ -78,6 +80,9 @@ abstract class Service extends Process {
         $config = new \Hazaar\Application\Config('service', APPLICATION_ENV, $defaults);
 
         $this->config = ake($config, $this->name);
+
+        if($this->config->has('loglevel') && defined($out_level = $this->config->get('loglevel')))
+            $this->__local_log_level = constant($out_level);
 
         if($remote === true && !$this->config->has('server'))
             throw new \Exception("Warlock server required to run in remote service mode.\n");
@@ -138,7 +143,7 @@ abstract class Service extends Process {
 
     }
 
-    protected function connect($application, $protocol, $guid = null){
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
 
         if($this->__remote === true){
 
@@ -160,7 +165,7 @@ abstract class Service extends Process {
 
             $headers['X-WARLOCK-CLIENT-TYPE'] = 'service';
 
-            $conn = new Connection\Socket($application, $protocol);
+            $conn = new Connection\Socket($protocol);
 
             if(!$conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
                 return false;
@@ -170,7 +175,7 @@ abstract class Service extends Process {
 
         }else{
 
-            $conn = new Connection\Pipe($application, $protocol);
+            $conn = new Connection\Pipe($protocol);
 
         }
 
@@ -183,10 +188,7 @@ abstract class Service extends Process {
         if($name === null)
             $name = $this->name;
 
-        if(!($out_level = constant($this->config->get('loglevel'))))
-            $out_level = W_INFO;
-
-        if($level <= $out_level){
+        if($level <= $this->__local_log_level){
 
             $label = ake($this->__log_levels, $level, 'NONE');
 
