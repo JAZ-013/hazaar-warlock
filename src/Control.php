@@ -122,6 +122,9 @@ class Control extends Process {
         if(!$conn->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers))
             $conn->disconnect(FALSE);
 
+        if($conn->recv($payload) !== 'OK')
+            return false;
+
         return $conn;
 
     }
