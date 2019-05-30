@@ -76,7 +76,7 @@ class Process extends \Hazaar\Model\Strict {
 
         $this->config = $config;
 
-        $this->log = new \Hazaar\Warlock\Server\Logger();
+        $this->log = Master::$instance->log;
 
         $descriptorspec = array(
             0 => array('pipe', 'r'),

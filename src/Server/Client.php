@@ -84,7 +84,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         parent::__construct(array('warlock'));
 
-        $this->log = new \Hazaar\Warlock\Server\Logger();
+        $this->log = Master::$instance->log;
 
         $this->id = uniqid();
 

@@ -142,7 +142,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     final public function construct(){
 
-        $this->log = new Logger();
+        $this->log = Master::$instance->log;
 
     }
 

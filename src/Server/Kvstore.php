@@ -16,9 +16,9 @@ class Kvstore {
 
     private $last_compact = 0;
 
-    function __construct(Logger $log, $persistent = false, $compact_time = null) {
+    function __construct($persistent = false, $compact_time = null) {
 
-        $this->log = $log;
+        $this->log = Master::$instance->log;
 
         if($persistent === true){
 
