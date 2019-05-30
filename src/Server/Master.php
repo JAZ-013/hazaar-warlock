@@ -18,6 +18,8 @@ class Master {
 
     public $config;
 
+    public $log;
+
     /**
      * Job tags
      * @var mixed
@@ -108,21 +110,14 @@ class Master {
     private $master = NULL;
 
     // Currently connected stream resources we are listening for data on.
-    private $streams = array();
+    public $streams = array();
 
     // Currently connected clients.
     private $clients = array();
 
     private $admins = array();
 
-    /**
-     * Array of other warlocks to connect and share data with
-     *
-     * @var array Array of Hazaar\Warlock\Server\Peer object.
-     */
-    private $peers = array();
-
-    private $peer_lookup = array();
+    private $cluster;
 
     // The Warlock protocol encoder/decoder.
     static public $protocol;
@@ -182,6 +177,8 @@ class Master {
 
         \Hazaar\Warlock\Config::$default_config['sys']['pid'] = 'warlock-' . APPLICATION_ENV . '.pid';
 
+        \Hazaar\Warlock\Config::$default_config['cluster']['name'] = crc32(APPLICATION_PATH . APPLICATION_ENV);
+
         global $STDOUT;
 
         global $STDERR;
@@ -200,6 +197,8 @@ class Master {
         set_error_handler(array($this, '__errorHandler'));
 
         set_exception_handler(array($this, '__exceptionHandler'));
+
+        $this->cluster = new Cluster($this->config->cluster);
 
         if(!$this->config->sys['php_binary'])
             $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) === 'WIN')?'.exe':'');
@@ -558,7 +557,7 @@ class Master {
 
             $this->log->write(W_NOTICE, 'Initialising KV Store');
 
-            $this->kv_store = new Kvstore($this->log, $this->config->kvstore['persist'], $this->config->kvstore['compact']);
+            $this->kv_store = new Kvstore($this->config->kvstore['persist'], $this->config->kvstore['compact']);
 
         }
 
@@ -577,28 +576,7 @@ class Master {
 
         $this->running = true;
 
-        if($peers = $this->config->get('peers')){
-
-            foreach($peers as $peer){
-
-                if($peer->has('host')){
-
-                    if(!$peer->has('access_key'))
-                        $peer->access_key = $this->config->admin['key'];
-
-                    $this->peers[] = new Peer($peer->toArray(), Master::$protocol);
-
-                }else{
-
-                    $this->log(W_ERR, 'Remote peers require a host address.');
-
-                }
-
-            }
-
-            $this->checkPeers();
-
-        }
+        $this->cluster->start();
 
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
@@ -771,7 +749,7 @@ class Master {
 
             if($this->time < $now){
 
-                $this->checkPeers();
+                $this->cluster->checkPeers();
 
                 $this->processJobs();
 
@@ -858,14 +836,31 @@ class Master {
 
     }
 
-    public function authorise(CommInterface $client, $key){
+    public function authorise(CommInterface $client, $payload, &$response){
 
-        if($key !== $this->config->admin->key)
-            return false;
+        if(!($payload instanceof \stdClass
+            && property_exists($payload, 'access_key')
+            && $payload->access_key === $this->config->admin->key
+        )) return false;
 
-        $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
+        $type = strtoupper(ake($payload, 'type', 'admin'));
 
-        $client->type = 'ADMIN';
+        $client->type = $type;
+
+        if($type === 'PEER'){
+
+            $response = $this->cluster->addPeer($client);
+
+            $stream_id = intval($client->socket);
+
+            if(!array_key_exists($stream_id, $this->streams))
+                $this->streams[$stream_id] = $client;
+
+        }else{
+
+            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
+
+        }
 
         $this->admins[$client->id] = $client;
 
@@ -881,7 +876,7 @@ class Master {
 
         $stream_id = intval($stream);
 
-        // If the stream is already has a client object, return it
+        // If the stream already has a client object, return it
         if (array_key_exists($stream_id, $this->clients))
             return $this->clients[$stream_id];
 
@@ -910,8 +905,8 @@ class Master {
 
         if(array_key_exists($stream_id, $this->clients))
             return $this->clients[$stream_id];
-        elseif(array_key_exists($stream_id, $this->peer_lookup))
-            return $this->peer_lookup[$stream_id];
+        elseif(array_key_exists($stream_id, $this->cluster->peer_lookup))
+            return $this->cluster->peer_lookup[$stream_id];
 
         return null;
 
@@ -1142,15 +1137,31 @@ class Master {
      */
     public function processCommand(CommInterface $client, $command, &$payload) {
 
+        if(!$command)
+            return false;
+
         if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
             return $this->kv_store->process($client, $command, $payload);
 
-        if (!($command && array_key_exists($client->id, $this->admins)))
+        if (!($client instanceof Peer || array_key_exists($client->id, $this->admins)))
             throw new \Exception('Admin commands only allowed by authorised clients!');
 
         $this->log->write(W_DEBUG, "ADMIN_COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL));
 
         switch ($command) {
+
+            case 'EVENT':
+
+                if(!property_exists($payload, 'trigger'))
+                    throw new \Exception('Event triggered without trigger ID!');
+
+                if(array_key_exists($payload->id, $this->eventQueue)
+                    && array_key_exists($payload->trigger, $this->eventQueue[$payload->id]))
+                    $this->log->write(W_WARN, 'Received existing trigger ' . $payload->trigger . ' for event ' . $payload->id);
+                else
+                    $this->trigger($payload->id, ake($payload, 'data'), $client->id, $payload->trigger);
+
+                break;
 
             case 'SHUTDOWN':
 
@@ -1290,15 +1301,16 @@ class Master {
 
     }
 
-    public function trigger($event_id, $data, $client_id = null) {
+    public function trigger($event_id, $data, $client_id = null, $trigger_id = null) {
 
-        $this->log->write(W_NOTICE, "TRIGGER: $event_id");
+        if($trigger_id === NULL)
+            $trigger_id = uniqid();
+
+        $this->log->write(W_NOTICE, "TRIGGER: $event_id ID=$trigger_id");
 
         $this->stats['events']++;
 
         $this->rrd->setValue('events', 1);
-
-        $trigger_id = uniqid();
 
         $seen = array();
 
@@ -2041,11 +2053,10 @@ class Master {
 
                     if (($data['when'] + $this->config->event->queue_timeout) <= time()) {
 
-                        if ($event_id != $this->config->admin->trigger) {
-
+                        if ($event_id != $this->config->admin->trigger)
                             $this->log->write(W_DEBUG, "EXPIRE: NAME=$event_id TRIGGER=$id");
 
-                        }
+                        $this->cluster->expireTrigger($id);
 
                         unset($this->eventQueue[$event_id][$id]);
 
@@ -2275,6 +2286,8 @@ class Master {
             if (!array_key_exists($event_id, $this->waitQueue))
                 continue;
 
+            $this->cluster->sendEvent($event_id, $trigger, $event['data']);
+
             foreach($this->waitQueue[$event_id] as $client_id => $item) {
 
                 if (in_array($client_id, $event['seen'])
@@ -2343,32 +2356,6 @@ class Master {
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
-
-    }
-
-    private function checkPeers(){
-
-        if(count($this->peers) === 0)
-            return false;
-
-        foreach($this->peers as $peer){
-
-            if(!$peer->connected()){
-
-                if(($socket = $peer->connect()) === false)
-                    continue;
-
-                $socket_id = intval($socket);
-
-                $this->streams[$socket_id] = $socket;
-
-                $this->peer_lookup[$socket_id] = $peer;
-
-            }
-
-        }
-
-        return true;
 
     }
 

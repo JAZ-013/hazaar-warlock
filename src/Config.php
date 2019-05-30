@@ -29,6 +29,10 @@ class Config {
              'encoded' => TRUE,
              'win_bg' => FALSE
          ),
+         'cluster' => array(
+            'name' => null,
+            'peers' => array()
+         ),
          'kvstore' => array(
             'enabled' => TRUE,                      //Enable the built-in key/value storage system.  Enabled by default.
             'persist' => FALSE,                     //If KVStore is enabled, this setting will enable restart persistent storage. Disabled by default.

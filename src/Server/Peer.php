@@ -24,15 +24,15 @@ class Peer extends Client implements CommInterface {
 
     public function __construct($options){
 
-        parent::__construct(array('warlock'));
+        parent::__construct();
 
-        $this->log = new \Hazaar\Warlock\Server\Logger();
+        $this->log = Master::$instance->log;
 
         $this->id = guid();
 
         $this->key = uniqid();
 
-        $this->host = ake($options, 'host');
+        $this->address = ake($options, 'host');
 
         $this->port = ake($options, 'port', 8000);
 
@@ -44,7 +44,7 @@ class Peer extends Client implements CommInterface {
 
     function __destruct(){
 
-        $this->log->write(W_DEBUG, "PEER->DESTROY: HOST=$this->host PORT=$this->port", $this->name);
+        $this->log->write(W_DEBUG, "PEER->DESTROY: HOST=$this->address PORT=$this->port", $this->name);
 
     }
 
@@ -53,9 +53,11 @@ class Peer extends Client implements CommInterface {
         if($this->online === true)
             throw new \Exception('Already connected and online with peer!');
 
-        $this->log->write(W_INFO, 'Connecting to peer at ' . $this->host . ':' . $this->port);
+        $this->log->write(W_INFO, 'Connecting to peer at ' . $this->address . ':' . $this->port);
 
-        $socket = stream_socket_client('tcp://' . $this->host . ':' . $this->port, $errno, $errstr, 30, STREAM_CLIENT_CONNECT);
+        $socket = stream_socket_client('tcp://' . $this->address . ':' . $this->port, $errno, $errstr, 3, STREAM_CLIENT_CONNECT);
+
+        $this->name = 'SOCKET#' . intval($socket);
 
         if(!$socket){
 
@@ -66,14 +68,15 @@ class Peer extends Client implements CommInterface {
         }
 
         $headers = array(
-            'X-WARLOCK-PHP' => 'true',
-            'X-WARLOCK-ACCESS-KEY' => $this->access_key,
-            'X-WARLOCK-CLIENT-TYPE' => 'peer'
-        );
+           'X-WARLOCK-PHP' => 'true',
+           'X-WARLOCK-ACCESS-KEY' => $this->access_key,
+           'X-WARLOCK-CLIENT-TYPE' => 'peer',
+           'X-WARLOCK-PEER-NAME' => Master::$instance->config->cluster['name']
+       );
 
-        $handshake = $this->createHandshake('/' . APPLICATION_NAME . '/warlock?CID=' . $this->id, $this->host, null, $this->key, $headers);
+        $handshake = $this->createHandshake('/' . APPLICATION_NAME . '/warlock?CID=' . $this->id, $this->address, null, $this->key, $headers);
 
-        $this->log->write(W_DEBUG, "WEBSOCKETS->HANDSHAKE: HOST=$this->host PORT=$this->port CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, "WEBSOCKETS->HANDSHAKE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
         fwrite($socket, $handshake);
 
@@ -92,11 +95,11 @@ class Peer extends Client implements CommInterface {
         if(!is_resource($this->socket))
             return false;
 
-        $this->log->write(W_NOTICE, 'Peer ' . $this->host . ':'. $this->port . ' going offline');
+        $this->log->write(W_NOTICE, 'Peer ' . $this->address . ':'. $this->port . ' going offline');
 
         stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 
-        $this->log->write(W_DEBUG, "CLIENT->CLOSE: HOST=$this->host PORT=$this->port", $this->name);
+        $this->log->write(W_DEBUG, "CLIENT->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
 
         fclose($this->socket);
 
@@ -105,10 +108,6 @@ class Peer extends Client implements CommInterface {
         $this->socket = null;
 
         return true;
-
-    }
-
-    public function send($command, $payload = null){
 
     }
 
@@ -123,7 +122,7 @@ class Peer extends Client implements CommInterface {
             if(!$this->initiateHandshake($this->frameBuffer))
                 return false;
 
-            $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->host PORT=$this->port CLIENT=$this->id", $this->name);
+            $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
             $this->connected = true;
 
@@ -164,6 +163,22 @@ class Peer extends Client implements CommInterface {
 
         $this->log->write(W_DEBUG, $this->type . "<-COMMAND: $command HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
+        if($this->online === false){
+
+            if($command === 'OK'){
+
+                $this->name = ake($payload, 'peer', 'UNKNOWN');
+
+                $this->log->write(W_NOTICE, "Peer $this->name is now online at $this->address:$this->port", $this->name);
+
+                return $this->online = true;
+
+            }
+
+            throw new \Exception('Command ' . $command . ' when peer is not online!');
+
+        }
+
         switch($command){
 
             case 'NOOP':
@@ -174,13 +189,7 @@ class Peer extends Client implements CommInterface {
 
             case 'OK':
 
-                if($this->online !== true){
-
-                    $this->log->write(W_NOTICE, 'Peer ' . $this->host . ':'. $this->port . ' is now online');
-
-                    $this->online = true;
-
-                }
+                $this->log->write(W_NOTICE, 'OK', $this->name);
 
                 return true;
 
@@ -191,13 +200,9 @@ class Peer extends Client implements CommInterface {
 
                 return true;
 
-            default:
-
-                $this->log->write(W_WARN, 'Received: ' . $command);
-
-                break;
-
         }
+
+        return Master::$instance->processCommand($this, $command, $payload);
 
     }
 

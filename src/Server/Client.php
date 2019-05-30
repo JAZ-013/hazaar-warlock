@@ -66,7 +66,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
      * @var int
      */
-    public $offset = NULL;
+    public $offset = 0;
 
     /**
      * This is an array of event_id and socket pairs
@@ -207,7 +207,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         if(array_key_exists('x-warlock-access-key', $headers)){
 
             $payload = (object)array(
-                'client_id' => $this->id,
+                'client_id' => $this->id = ake($headers, 'x-warlock-peer-name', $this->id),
                 'type' => $type = ake($headers, 'x-warlock-client-type', 'admin'),
                 'access_key' => base64_decode($headers['x-warlock-access-key'])
             );
@@ -326,7 +326,10 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
                 }
                 catch(\Exception $e){
 
-                    $this->log->write(W_ERR, 'An error occurred processing the command: ' . $type, $this->name);
+                    if(!($msg = $e->getMessage()))
+                        $msg = 'An error occurred processing the command: ' . $type;
+
+                    $this->log->write(W_ERR, $msg, $this->name);
 
                     $this->send('error', array(
                         'reason' => $e->getMessage(),
@@ -674,10 +677,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         $this->log->write(W_DEBUG, $this->type . "<-SYNC: OFFSET=$this->offset HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
-        if (!property_exists($payload, 'access_key'))
-            return false;
+        $response = null;
 
-        if(!Master::$instance->authorise($this, $payload->access_key)) {
+        if(!Master::$instance->authorise($this, $payload, $response)) {
 
             $this->log->write(W_WARN, 'Warlock control rejected to client ' . $this->id, $this->name);
 
@@ -687,17 +689,17 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
         }
 
-        $this->send('OK');
+        $type = strtoupper($payload->type);
 
-        if($this->type !== $payload->type){
-
-            $type = strtoupper($payload->type);
+        if($this->type !== $type){
 
             $this->log->write(W_NOTICE, "Client type changed from $this->type to $type.", $this->name);
 
             $this->type = $type;
 
         }
+
+        $this->send('OK', $response);
 
         return true;
 
