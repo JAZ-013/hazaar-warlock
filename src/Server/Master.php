@@ -1306,7 +1306,7 @@ class Master {
         if($trigger_id === NULL)
             $trigger_id = uniqid();
 
-        $this->log->write(W_NOTICE, "TRIGGER: $event_id ID=$trigger_id");
+        $this->log->write(W_NOTICE, "TRIGGER: EVENT=$event_id TRIGGER_ID=$trigger_id");
 
         $this->stats['events']++;
 
@@ -2055,8 +2055,6 @@ class Master {
 
                         if ($event_id != $this->config->admin->trigger)
                             $this->log->write(W_DEBUG, "EXPIRE: NAME=$event_id TRIGGER=$id");
-
-                        $this->cluster->expireTrigger($id);
 
                         unset($this->eventQueue[$event_id][$id]);
 

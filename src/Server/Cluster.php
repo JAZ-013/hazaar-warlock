@@ -19,8 +19,6 @@ class Cluster  {
 
     private $last_check = 0;
 
-    private $seen = array();
-
     function __construct(\Hazaar\Map $config){
 
         $this->log = Master::$instance->log;
@@ -65,7 +63,7 @@ class Cluster  {
 
     public function addPeer(Client $peer){
 
-        $this->log->write(W_NOTICE, "Link from $peer->id is now online at $peer->address:$peer->port", $peer->name);
+        $this->log->write(W_NOTICE, "Link from peer $peer->id is now online at $peer->address:$peer->port", $peer->name);
 
         $socket_id = intval($peer->socket);
 
@@ -114,17 +112,16 @@ class Cluster  {
 
         $this->log->write(W_DEBUG, "CLUSTER->SEND: $command");
 
+        $frame_id = uniqid();
+
         foreach($this->peers as $peer)
-            $peer->send($command, $payload);
+            $peer->send($command, $payload, $frame_id);
 
         return true;
 
     }
 
     public function sendEvent($event_id, $trigger_id, $data) {
-
-        if(array_key_exists($trigger_id, $this->seen) || count($this->peers) === 0)
-            return false;
 
         $this->log->write(W_DEBUG, "CLUSTER->EVENT: NAME=$event_id TRIGGER_ID=$trigger_id");
 
@@ -135,20 +132,7 @@ class Cluster  {
             'data' => $data
         );
 
-        $this->seen[$trigger_id] = time();
-
         return $this->sendAll('EVENT', $packet);
-
-    }
-
-    public function expireTrigger($id){
-
-        if(!array_key_exists($id, $this->seen))
-            return false;
-
-        unset($this->seen[$id]);
-
-        return true;
 
     }
 

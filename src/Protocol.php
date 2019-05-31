@@ -82,6 +82,8 @@ class Protocol {
 
     private $encoded   = true;
 
+    static private $frame_ids = array();
+
     function __construct($id, $encoded = true) {
 
         $this->id = $id;
@@ -150,7 +152,7 @@ class Protocol {
 
     }
 
-    public function encode($type, $payload = null) {
+    public function encode($type, $payload = null, $frame_id = null) {
 
         if(($type = $this->check($type)) === false)
             return false;
@@ -158,6 +160,7 @@ class Protocol {
         $packet = (object) array(
             'TYP' => $type,
             'SID' => $this->id,
+            'FID' => ($frame_id === null) ? uniqid() : $frame_id,
             'TME' => time()
         );
 
@@ -166,11 +169,13 @@ class Protocol {
 
         $packet = json_encode($packet);
 
+        Protocol::$frame_ids[$frame_id] = time();
+
         return ($this->encoded ? base64_encode($packet) : $packet);
 
     }
 
-    public function decode($packet, &$payload = null, &$time = null) {
+    public function decode($packet, &$payload = null, &$time = null, &$frame_id = null) {
 
         $payload = null;
 
@@ -183,8 +188,11 @@ class Protocol {
         if(!property_exists($packet, 'TYP'))
             return $this->error('No packet type');
 
+        if(property_exists($packet, 'FID') && array_key_exists($packet->FID, Protocol::$frame_ids))
+            return $this->error('Packet decode rejected because we have already seen this frame!');
+
         //This is a security thing to ensure that the client is connecting to the correct instance of Warlock
-        if(! property_exists($packet, 'SID') || $packet->SID != $this->id)
+        if(!property_exists($packet, 'SID') || $packet->SID != $this->id)
             return $this->error('Packet decode rejected due to bad SID');
 
         if(property_exists($packet, 'PLD'))
@@ -192,6 +200,9 @@ class Protocol {
 
         if(property_exists($packet, 'TME'))
             $time = $packet->TME;
+
+        if(property_exists($packet, 'FID'))
+            $frame_id = $packet->FID;
 
         return $this->getTypeName($packet->TYP);
 

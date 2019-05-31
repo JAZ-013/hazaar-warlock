@@ -80,6 +80,8 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      */
     public $jobs = array();
 
+    static protected $frame_ids = array();
+
     function __construct($socket = NULL, $options = array()) {
 
         parent::__construct(array('warlock'));
@@ -354,16 +356,22 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     }
 
-    public function send($command, $payload = NULL) {
+    public function send($command, $payload = null, $frame_id = null) {
 
-        if (!is_string($command))
+        if(!is_string($command) || isset(Client::$frame_ids[$this->id][$frame_id]))
             return false;
 
-        $packet = Master::$protocol->encode($command, $payload); //Override the timestamp.
+        if(!($packet = Master::$protocol->encode($command, $payload, $frame_id))) //Override the timestamp.
+            return false;
 
         $this->log->write(W_DECODE, $this->type . "->PACKET: $packet", $this->name);
 
         $frame = $this->frame($packet, 'text', false);
+
+        if(!array_key_exists($this->id, Client::$frame_ids))
+            Client::$frame_ids[$this->id] = array();
+
+        Client::$frame_ids[$this->id][$frame_id] = time();
 
         return $this->write($frame);
 
@@ -430,7 +438,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      *
      * @return mixed
      */
-    private function processFrame(&$frameBuffer) {
+    protected function processFrame(&$frameBuffer) {
 
         if ($this->frameBuffer) {
 

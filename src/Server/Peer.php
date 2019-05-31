@@ -213,9 +213,9 @@ class Peer extends Client implements CommInterface {
 
             if($command === 'OK'){
 
-                $this->name = ake($payload, 'peer', 'UNKNOWN');
+                $this->id = ake($payload, 'peer', 'UNKNOWN');
 
-                $this->log->write(W_NOTICE, "Link to peer $this->name is now online at $this->address:$this->port", $this->name);
+                $this->log->write(W_NOTICE, "Link to peer $this->id is now online at $this->address:$this->port", $this->name);
 
                 return $this->active = true;
 
