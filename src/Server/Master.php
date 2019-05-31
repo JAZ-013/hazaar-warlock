@@ -2281,10 +2281,10 @@ class Master {
 
             $event = &$this->eventQueue[$event_id][$trigger];
 
+            $this->cluster->sendEvent($event_id, $trigger, $event['data']);
+
             if (!array_key_exists($event_id, $this->waitQueue))
                 continue;
-
-            $this->cluster->sendEvent($event_id, $trigger, $event['data']);
 
             foreach($this->waitQueue[$event_id] as $client_id => $item) {
 
