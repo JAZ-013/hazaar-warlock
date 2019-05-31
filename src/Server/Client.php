@@ -358,7 +358,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     public function send($command, $payload = null, $frame_id = null) {
 
-        if(!is_string($command) || isset(Client::$frame_ids[$this->id][$frame_id]))
+        if(!is_string($command) || ($frame_id !== null && isset(Client::$frame_ids[$this->id][$frame_id])))
             return false;
 
         if(!($packet = Master::$protocol->encode($command, $payload, $frame_id))) //Override the timestamp.
