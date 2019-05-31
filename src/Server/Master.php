@@ -731,11 +731,7 @@ class Master {
 
                         }
 
-                    } elseif($this->processClient($stream) === false){
-
-                        $this->disconnect($stream);
-
-                    }
+                    } else $this->processClient($stream);
 
                 }
 
@@ -980,6 +976,10 @@ class Master {
                 $this->log->write(W_DEBUG, $client->type . "<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
 
             }elseif(feof($stream)){
+
+                $this->log->write(W_WARN, "Socket $stream abruptly closed connection", $client->name);
+
+                $this->disconnect($stream);
 
                 return false;
 

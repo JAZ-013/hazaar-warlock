@@ -31,6 +31,9 @@ class Cluster  {
 
             foreach($peers as $peer){
 
+                if(ake($peer, 'enabled', true) !== true)
+                    continue;
+
                 if($peer->has('host')){
 
                     if(!$peer->has('access_key'))
@@ -62,7 +65,7 @@ class Cluster  {
 
     public function addPeer(Client $peer){
 
-        $this->log->write(W_NOTICE, "Peer $peer->id is now online.", $peer->name);
+        $this->log->write(W_NOTICE, "Link from $peer->id is now online at $peer->address:$peer->port", $peer->name);
 
         $socket_id = intval($peer->socket);
 

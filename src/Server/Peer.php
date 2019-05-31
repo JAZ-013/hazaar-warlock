@@ -12,15 +12,38 @@ namespace Hazaar\Warlock\Server;
  */
 class Peer extends Client implements CommInterface {
 
+    /**
+     * Warlock protocol access key
+     * @var string
+     */
     private $access_key;
 
+    /**
+     * WebSocket handshake key
+     *
+     * @var string
+     */
     private $key;
 
+    /**
+     * The socket is connected.  This must be maintained because we use ASYNC stream socket connections
+     * @var boolean
+     */
     private $connected = false;
 
+    /**
+     * The connection is online and WebSocket protocol has been negotiated successfully
+     * @var boolean
+     */
     private $online = false;
 
-    private $buffer = '';
+    /**
+     * The peer is online and the cluster level protocol has been negotiated successfully
+     * @var mixed
+     */
+    private $active = false;
+
+    private $timeout;
 
     public function __construct($options){
 
@@ -36,6 +59,8 @@ class Peer extends Client implements CommInterface {
 
         $this->port = ake($options, 'port', 8000);
 
+        $this->timeout = ake($options, 'timeout', 3);
+
         $this->access_key = base64_encode(ake($options, 'access_key'));
 
         $this->type = 'PEER';
@@ -50,22 +75,43 @@ class Peer extends Client implements CommInterface {
 
     public function connect(){
 
-        if($this->online === true)
+        if($this->active === true)
             throw new \Exception('Already connected and online with peer!');
 
-        $this->log->write(W_INFO, 'Connecting to peer at ' . $this->address . ':' . $this->port);
+        if($this->socket && stream_socket_get_name($this->socket, true) === false){
 
-        $socket = stream_socket_client('tcp://' . $this->address . ':' . $this->port, $errno, $errstr, 3, STREAM_CLIENT_CONNECT);
+            stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 
-        $this->name = 'SOCKET#' . intval($socket);
+            fclose($this->socket);
 
-        if(!$socket){
-
-            $this->log->write(W_ERR, 'Error #' . $errno . ': ' . $errstr);
-
-            return false;
+            $this->socket = null;
 
         }
+
+        if(!$this->socket){
+
+            $this->log->write(W_INFO, 'Connecting to peer at ' . $this->address . ':' . $this->port);
+
+            $socket = stream_socket_client('tcp://' . $this->address . ':' . $this->port, $errno, $errstr, $this->timeout, STREAM_CLIENT_ASYNC_CONNECT);
+
+            $this->name = 'SOCKET#' . intval($socket);
+
+            if(!$socket){
+
+                $this->log->write(W_ERR, 'Error #' . $errno . ': ' . $errstr);
+
+                return false;
+
+            }
+
+            $this->socket = $socket;
+
+            if(stream_socket_get_name($this->socket, true) === false)
+                return false;
+
+        }
+
+        $this->connected = true;
 
         $headers = array(
            'X-WARLOCK-PHP' => 'true',
@@ -78,15 +124,15 @@ class Peer extends Client implements CommInterface {
 
         $this->log->write(W_DEBUG, "WEBSOCKETS->HANDSHAKE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
-        fwrite($socket, $handshake);
+        fwrite($this->socket, $handshake);
 
-        return $this->socket = $socket;
+        return $this->socket;
 
     }
 
     public function connected(){
 
-        return is_resource($this->socket);
+        return $this->connected;
 
     }
 
@@ -95,7 +141,7 @@ class Peer extends Client implements CommInterface {
         if(!is_resource($this->socket))
             return false;
 
-        $this->log->write(W_NOTICE, 'Peer ' . $this->address . ':'. $this->port . ' going offline');
+        $this->log->write(W_NOTICE, "Link to peer $this->name going offline", $this->name);
 
         stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 
@@ -103,7 +149,7 @@ class Peer extends Client implements CommInterface {
 
         fclose($this->socket);
 
-        $this->connected = $this->online = false;
+        $this->connected = $this->online = $this->active = false;
 
         $this->socket = null;
 
@@ -113,18 +159,18 @@ class Peer extends Client implements CommInterface {
 
     public function recv(&$buf){
 
-        if($this->connected !== true){
+        if($this->online !== true){
 
             $this->frameBuffer .= $buf;
 
-            $this->online = false;
+            $this->active = false;
 
             if(!$this->initiateHandshake($this->frameBuffer))
                 return false;
 
             $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
-            $this->connected = true;
+            $this->online = true;
 
             $buf = $this->frameBuffer;
 
@@ -163,15 +209,15 @@ class Peer extends Client implements CommInterface {
 
         $this->log->write(W_DEBUG, $this->type . "<-COMMAND: $command HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
-        if($this->online === false){
+        if($this->active === false){
 
             if($command === 'OK'){
 
                 $this->name = ake($payload, 'peer', 'UNKNOWN');
 
-                $this->log->write(W_NOTICE, "Peer $this->name is now online at $this->address:$this->port", $this->name);
+                $this->log->write(W_NOTICE, "Link to peer $this->name is now online at $this->address:$this->port", $this->name);
 
-                return $this->online = true;
+                return $this->active = true;
 
             }
 
@@ -195,7 +241,7 @@ class Peer extends Client implements CommInterface {
 
             case 'ERROR':
 
-                if($this->online !== true)
+                if($this->active !== true)
                     $this->log->write(W_ERR, 'Error initiating peer connection', $this->name);
 
                 return true;
