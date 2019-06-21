@@ -9,6 +9,11 @@ class Master {
      */
     static public $instance;
 
+    // The Warlock protocol encoder/decoder.
+    static public $protocol;
+
+    static public $cluster;
+
     private $silent = false;
 
     // Main loop state. On false, Warlock will exit the main loop and terminate
@@ -72,10 +77,6 @@ class Master {
         'subscriptions' => 0    // The number of waiting client connections
     );
 
-    private $rrd;
-
-    private $rrdfile;
-
     /**
      * JOBS & SERVICES
      */
@@ -93,15 +94,6 @@ class Master {
     // Main job queue
     public $jobQueue = array();
 
-    // The wait queue. Clients subscribe to events and are added to this array.
-    private $waitQueue = array();
-
-    // The Event queue. Holds active events waiting to be seen.
-    private $eventQueue = array();
-
-    // The global event queue.  Holds details about jobs that need to start up to process global events.
-    private $globalQueue = array();
-
     /**
      * SOCKETS & STREAMS
      */
@@ -112,15 +104,9 @@ class Master {
     // Currently connected stream resources we are listening for data on.
     public $streams = array();
 
-    // Currently connected clients.
-    private $clients = array();
+    private $connections = array();
 
     private $admins = array();
-
-    private $cluster;
-
-    // The Warlock protocol encoder/decoder.
-    static public $protocol;
 
     private $kv_store;
 
@@ -198,7 +184,7 @@ class Master {
 
         set_exception_handler(array($this, '__exceptionHandler'));
 
-        $this->cluster = new Cluster($this->config->cluster);
+        self::$cluster = new Cluster($this->config);
 
         if(!$this->config->sys['php_binary'])
             $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) === 'WIN')?'.exe':'');
@@ -244,38 +230,6 @@ class Master {
 
         $this->pidfile = $this->runtimePath($this->config->sys->pid);
 
-        if ($this->rrdfile = $this->runtimePath($this->config->log->rrd)) {
-
-            $this->rrd = new \Hazaar\File\RRD($this->rrdfile, 60);
-
-            if (!$this->rrd->exists()) {
-
-                $this->rrd->addDataSource('steams', 'GAUGE', 60, NULL, NULL, 'Stream Connections');
-
-                $this->rrd->addDataSource('clients', 'GAUGE', 60, NULL, NULL, 'Clients');
-
-                $this->rrd->addDataSource('memory', 'GAUGE', 60, NULL, NULL, 'Memory Usage');
-
-                $this->rrd->addDataSource('jobs', 'COUNTER', 60, NULL, NULL, 'Job Executions');
-
-                $this->rrd->addDataSource('events', 'COUNTER', 60, NULL, NULL, 'Events');
-
-                $this->rrd->addDataSource('services', 'GAUGE', 60, NULL, NULL, 'Enabled Services');
-
-                $this->rrd->addDataSource('processes', 'GAUGE', 60, NULL, NULL, 'Running Processes');
-
-                $this->rrd->addArchive('permin_1hour', 'MAX', 0.5, 1, 60, 'Max per minute for the last hour');
-
-                $this->rrd->addArchive('perhour_100days', 'AVERAGE', 0.5, 60, 2400, 'Average per hour for the last 100 days');
-
-                $this->rrd->addArchive('perday_1year', 'AVERAGE', 0.5, 1440, 365, 'Average per day for the last year');
-
-                $this->rrd->create();
-
-            }
-
-        }
-
         $this->log->write(W_NOTICE, 'PHP Version = ' . PHP_VERSION);
 
         $this->log->write(W_NOTICE, 'PHP Binary = ' . $this->config->sys['php_binary']);
@@ -304,7 +258,7 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
 
-        Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
+        Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded, true);
 
     }
 
@@ -576,7 +530,7 @@ class Master {
 
         $this->running = true;
 
-        $this->cluster->start();
+        self::$cluster->start();
 
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
@@ -594,61 +548,6 @@ class Master {
 
                 if ($options['enabled'] === true)
                     $this->serviceEnable($name);
-
-            }
-
-        }
-
-        if($this->config->has('schedule')){
-
-            $this->log->write(W_NOTICE, 'Scheduling ' . $this->config->schedule->count() . ' jobs');
-
-            foreach($this->config->schedule as $job){
-
-                if(!$job->has('exec'))
-                    continue;
-
-                $application = (object)array(
-                    'path' => APPLICATION_PATH,
-                    'env'  => APPLICATION_ENV
-                );
-
-                if(!($callable = $this->callable(ake($job, 'exec')))){
-
-                    $this->log->write(W_ERR, 'Warlock schedule config contains invalid callable.');
-
-                    continue;
-
-                }
-
-                $exec = (object)array('callable' => $callable);
-
-                if($args = ake($job, 'args'))
-                    $exec->params = $args->toArray();
-
-                $this->scheduleJob(ake($job, 'when'), $exec, $application, ake($job, 'tag'), ake($job, 'overwrite'));
-
-            }
-
-        }
-
-        if($this->config->has('subscribe')){
-
-            $this->log->write(W_NOTICE, 'Found ' . $this->config->subscribe->count() . ' global events');
-
-            foreach($this->config->subscribe as $event_name => $event_func){
-
-                if(!($callable = $this->callable($event_func))){
-
-                    $this->log->write(W_ERR, 'Global event config contains invalid callable for event: ' . $event_name);
-
-                    continue;
-
-                }
-
-                $this->log->write(W_DEBUG, 'SUBSCRIBE: ' . $event_name);
-
-                $this->globalQueue[$event_name] = $callable;
 
             }
 
@@ -711,9 +610,9 @@ class Master {
 
                     if ($stream === $this->master) {
 
-                        $client_socket = stream_socket_accept($stream);
+                        $client_stream = stream_socket_accept($stream);
 
-                        if ($client_socket < 0) {
+                        if ($client_stream < 0) {
 
                             $this->log->write(W_ERR, "Failed: socket_accept()");
 
@@ -721,17 +620,20 @@ class Master {
 
                         } else {
 
-                            $socket_id = intval($client_socket);
+                            $conn = new Connection($client_stream);
 
-                            $this->streams[$socket_id] = $client_socket;
+                            $stream_id = $this->addConnection($conn);
 
-                            $peer = stream_socket_get_name($client_socket, true);
-
-                            $this->log->write(W_NOTICE, "Connection from $peer with socket id #$socket_id");
+                            $this->log->write(W_NOTICE, "Connection from $conn->address:$conn->port with stream id #$stream_id");
 
                         }
 
-                    } else $this->processClient($stream);
+                    } else {
+
+                        if($this->processStream($stream) !== true)
+                            $this->disconnect($stream);
+
+                    }
 
                 }
 
@@ -745,25 +647,12 @@ class Master {
 
             if($this->time < $now){
 
-                $this->cluster->checkPeers();
+                self::$cluster->process();
 
                 $this->processJobs();
 
-                $this->queueCleanup();
-
-                $this->checkClients();
-
                 if($this->kv_store)
                     $this->kv_store->expireKeys();
-
-                $this->rrd->setValue('streams', count($this->streams));
-
-                $this->rrd->setValue('clients', count($this->clients));
-
-                $this->rrd->setValue('memory', memory_get_usage());
-
-                if ($this->rrd->update())
-                    gc_collect_cycles();
 
                 $this->time = $now;
 
@@ -824,198 +713,66 @@ class Master {
 
         $this->clients = array();
 
-        $this->eventQueue = array();
-
-        $this->waitQueue = array();
-
         return 0;
 
     }
 
-    public function authorise(CommInterface $client, $payload, &$response){
+    public function addConnection(Connection $conn){
 
-        if(!($payload instanceof \stdClass
-            && property_exists($payload, 'access_key')
-            && $payload->access_key === $this->config->admin->key
-        )) return false;
+        $stream_id = intval($conn->stream);
 
-        $type = strtoupper(ake($payload, 'type', 'admin'));
+        $this->streams[$stream_id] = $conn->stream;
 
-        $client->type = $type;
+        $this->connections[$stream_id] = $conn;
 
-        if($type === 'PEER'){
-
-            $response = $this->cluster->addPeer($client);
-
-            $stream_id = intval($client->socket);
-
-            if(!array_key_exists($stream_id, $this->streams))
-                $this->streams[$stream_id] = $client;
-
-        }else{
-
-            $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
-
-        }
-
-        $this->admins[$client->id] = $client;
-
-        return true;
-
-    }
-
-    private function addClient($stream) {
-
-        // If we don't have a stream or id, return false
-        if (!($stream && is_resource($stream)))
-            return false;
-
-        $stream_id = intval($stream);
-
-        // If the stream already has a client object, return it
-        if (array_key_exists($stream_id, $this->clients))
-            return $this->clients[$stream_id];
-
-        //Create the new client object
-        $client = new Client($stream, $this->config->client);
-
-        // Add it to the client array
-        $this->clients[$stream_id] = $client;
-
-        $this->stats['clients']++;
-
-        return $client;
+        return $stream_id;
 
     }
 
     /**
      * Retrieve a client object for a stream resource
      *
-     * @param mixed $stream The stream resource
+     * @param resource $stream The stream resource
      *
-     * @return CommInterface|NULL
+     * @return Connection
      */
-    private function getClient($stream) {
+    public function getConnection($stream) {
 
         $stream_id = intval($stream);
 
-        if(array_key_exists($stream_id, $this->clients))
-            return $this->clients[$stream_id];
-        elseif(array_key_exists($stream_id, $this->cluster->peer_lookup))
-            return $this->cluster->peer_lookup[$stream_id];
+        if(array_key_exists($stream_id, $this->connections))
+            return $this->connections[$stream_id];
 
         return null;
 
     }
 
     /**
-     * Removes a client from a stream.
+     * Process data input on a stream
      *
-     * Because a client can have multiple stream connections (in legacy mode) this removes the client reference
-     * for that stream. Once there are no more references left the client is completely removed.
+     * @param resource $stream The stream to read data from
      *
-     * @param mixed $stream
-     *
-     * @return boolean
+     * @return boolean Result of data processing.  True is good.  False is bad.
      */
-    public function removeClient($stream) {
+    public function processStream($stream) {
 
-        if (!$stream)
+        $buf = fread($stream, STREAM_MAX_RECV_LEN);
+
+        $conn = $this->getConnection($stream);
+
+        if(!$conn instanceof Connection)
             return false;
 
-        $stream_id = intval($stream);
-
-        if (!array_key_exists($stream_id, $this->clients))
-            return false;
-
-        $client = $this->clients[$stream_id];
-
-        foreach($this->waitQueue as $event_id => &$queue){
-
-            if(!array_key_exists($client->id, $queue))
-                continue;
-
-            $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
-
-            unset($queue[$client->id]);
-
-        }
-
-        $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$client->id", $client->name);
-
-        unset($this->clients[$stream_id]);
-
-        unset($this->streams[$stream_id]);
-
-        $this->stats['clients']--;
-
-        return true;
-
-    }
-
-    private function processClient($stream) {
-
-        $bytes_received = strlen($buf = fread($stream, 65535));
-
-        $client = $this->getClient($stream);
-
-        if ($client instanceof CommInterface) {
-
-            if($client instanceof Client){
-
-                if ($bytes_received === 0) {
-
-                    $this->log->write(W_NOTICE, "Remote host $client->address:$client->port closed connection", $client->name);
-
-                    $this->disconnect($stream);
-
-                    return false;
-
-                }
-
-                $this->log->write(W_DEBUG, $client->type . "<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
-
-            }elseif(feof($stream)){
-
-                $this->log->write(W_WARN, "Socket $stream abruptly closed connection", $client->name);
-
-                $this->disconnect($stream);
-
-                return false;
-
-            }else{
-
-                $this->log->write(W_DEBUG, $client->type . "<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
-
-            }
-
-            $client->recv($buf);
-
-        }else{
-
-            if (!($client = $this->addClient($stream)))
-                $this->disconnect($stream);
-
-            if(!$client->processHandshake($buf)){
-
-                $this->removeClient($stream);
-
-                stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
-
-            }
-
-        }
-
-        return true;
+        return $conn->recv($buf);
 
     }
 
     public function disconnect($stream) {
 
-        $stream_id = intval($stream);
+        if ($conn = $this->getConnection($stream))
+            return $conn->disconnect();
 
-        if ($client = $this->getClient($stream))
-            return $client->disconnect();
+        $stream_id = intval($stream);
 
         /**
          * Remove the stream from our list of streams
@@ -1031,27 +788,110 @@ class Master {
 
     }
 
-    private function checkClients(){
+    /*
+    public function authorise(CommInterface $client, $payload, &$response){
 
-        if(!($this->config->client->check > 0 && is_array($this->clients) && count($this->clients) > 0))
-            return;
+    if(!($payload instanceof \stdClass
+    && property_exists($payload, 'access_key')
+    && $payload->access_key === $this->config->admin->key
+    )) return false;
 
-        //Only ping if we havn't received data from the client for the configured number of seconds (default to 60).
-        $when = time() - $this->config->client->check;
+    $type = strtoupper(ake($payload, 'type', 'admin'));
 
-        foreach($this->clients as $client){
+    $client->type = $type;
 
-            if(!$client instanceof Client)
-                continue;
+    if($type === 'PEER'){
 
-            if($client->lastContact <= $when)
-                $client->ping();
+    $response = self::$cluster->addPeer($client);
 
-        }
+    $stream_id = intval($client->socket);
 
-        return;
+    if(!array_key_exists($stream_id, $this->streams))
+    $this->streams[$stream_id] = $client;
+
+    }else{
+
+    $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
 
     }
+
+    $this->admins[$client->id] = $client;
+
+    return true;
+
+
+    }*/
+
+    /*
+    private function addClient($stream) {
+
+    // If we don't have a stream or id, return false
+    if (!($stream && is_resource($stream)))
+    return false;
+
+    $stream_id = intval($stream);
+
+    // If the stream already has a client object, return it
+    if (array_key_exists($stream_id, $this->clients))
+    return $this->clients[$stream_id];
+
+    //Create the new client object
+    $client = new Node($stream, $this->config->client);
+
+    // Add it to the client array
+    $this->clients[$stream_id] = $client;
+
+    $this->stats['clients']++;
+
+    return $client;
+
+    }*/
+
+    /**
+     * Removes a client from a stream.
+     *
+     * Because a client can have multiple stream connections (in legacy mode) this removes the client reference
+     * for that stream. Once there are no more references left the client is completely removed.
+     *
+     * @param mixed $stream
+     *
+     * @return boolean
+     */
+    /*
+    public function removeClient($stream) {
+
+    if (!$stream)
+    return false;
+
+    $stream_id = intval($stream);
+
+    if (!array_key_exists($stream_id, $this->clients))
+    return false;
+
+    $client = $this->clients[$stream_id];
+
+    foreach($this->waitQueue as $event_id => &$queue){
+
+    if(!array_key_exists($client->id, $queue))
+    continue;
+
+    $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
+
+    unset($queue[$client->id]);
+
+    }
+
+    $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$client->id", $client->name);
+
+    unset($this->clients[$stream_id]);
+
+    unset($this->streams[$stream_id]);
+
+    $this->stats['clients']--;
+
+    return true;
+
+    }*/
 
     private function getStatus($full = true) {
 
@@ -1129,13 +969,13 @@ class Master {
     /**
      * Process administative commands for a client
      *
-     * @param CommInterface $client
+     * @param Node $client
      * @param mixed $command
      * @param mixed $payload
      *
      * @return mixed
      */
-    public function processCommand(CommInterface $client, $command, &$payload) {
+    public function processCommand(Node $client, $command, &$payload) {
 
         if(!$command)
             return false;
@@ -1143,7 +983,7 @@ class Master {
         if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
             return $this->kv_store->process($client, $command, $payload);
 
-        if (!($client instanceof Peer || array_key_exists($client->id, $this->admins)))
+        if (!($client instanceof Node\Peer || array_key_exists($client->id, $this->admins)))
             throw new \Exception('Admin commands only allowed by authorised clients!');
 
         $this->log->write(W_DEBUG, "ADMIN_COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL));
@@ -1301,65 +1141,7 @@ class Master {
 
     }
 
-    public function trigger($event_id, $data, $client_id = null, $trigger_id = null) {
-
-        if($trigger_id === NULL)
-            $trigger_id = uniqid();
-
-        $this->log->write(W_NOTICE, "TRIGGER: EVENT=$event_id TRIGGER_ID=$trigger_id");
-
-        $this->stats['events']++;
-
-        $this->rrd->setValue('events', 1);
-
-        $seen = array();
-
-        if($client_id > 0)
-            $seen[] = $client_id;
-
-        $this->eventQueue[$event_id][$trigger_id] = $payload = array(
-            'id' => $event_id,
-            'trigger' => $trigger_id,
-            'when' => time(),
-            'data' => $data,
-            'seen' => $seen
-        );
-
-        if(array_key_exists($event_id, $this->globalQueue)){
-
-            $this->log->write(W_NOTICE, 'Global event triggered', $event_id);
-
-            $job = new Job\Runner(array(
-                'application' => array(
-                    'path' => APPLICATION_PATH,
-                    'env' => APPLICATION_ENV
-                ),
-                'exec' => $this->globalQueue[$event_id],
-                'params' => array($data, $payload),
-                'timeout' => $this->config->exec->timeout,
-                'event' => true
-            ));
-
-            $this->log->write(W_DEBUG, "JOB: ID=$job->id");
-
-            $this->log->write(W_DEBUG, 'APPLICATION_PATH: ' . APPLICATION_PATH, $job->id);
-
-            $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . APPLICATION_ENV, $job->id);
-
-            $this->queueAddJob($job);
-
-            $this->processJobs();
-
-        }
-
-        // Check to see if there are any clients waiting for this event and send notifications to them all.
-        $this->processSubscriptionQueue($event_id, $trigger_id);
-
-        return true;
-
-    }
-
-    private function spawn(CommInterface $client, $name, $options){
+    private function spawn(Node $client, $name, $options){
 
         if (!array_key_exists($name, $this->services))
             return false;
@@ -1391,7 +1173,7 @@ class Master {
 
     }
 
-    private function kill(CommInterface $client, $name){
+    private function kill(Node $client, $name){
 
         if (!array_key_exists($name, $this->services))
             return false;
@@ -1413,7 +1195,7 @@ class Master {
 
     }
 
-    private function signal(CommInterface $client, $event_id, $service, $data = null){
+    private function signal(Node $client, $event_id, $service, $data = null){
 
         $trigger_id = uniqid();
 
@@ -1425,7 +1207,7 @@ class Master {
 
             foreach($client->jobs as $id => $job){
 
-                if(!(array_key_exists($id, $this->jobQueue) && $job->name === $service && $job->parent instanceof Client))
+                if(!(array_key_exists($id, $this->jobQueue) && $job->name === $service && $job->parent instanceof Node))
                     continue;
 
                 $this->log->write(W_NOTICE, "SERVICE->SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$client->id}");
@@ -1456,66 +1238,7 @@ class Master {
 
     }
 
-    /**
-     * Subscribe a client to an event
-     *
-     * @param mixed $client The client to subscribe
-     * @param mixed $event_id The event ID to subscribe to
-     * @param mixed $filter Any event filters
-     */
-    public function subscribe(CommInterface $client, $event_id, $filter) {
-
-        $this->log->write(W_DEBUG, "CLIENT<-QUEUE: EVENT=$event_id CLIENT=$client->id", $client->name);
-
-        $this->waitQueue[$event_id][$client->id] = array(
-            'client' => $client,
-            'since' => time(),
-            'filter' => $filter
-        );
-
-        if ($event_id === $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN->SUBSCRIBE: CLIENT=$client->id", $client->name);
-        else
-            $this->stats['subscriptions']++;
-
-        /*
-         * Check to see if this subscribe request has any active and unseen events waiting for it.
-         */
-        $this->processEventQueue($client, $event_id, $filter);
-
-        return true;
-
-    }
-
-    /**
-     * Unsubscibe a client from an event
-     *
-     * @param mixed $client The client to unsubscribe
-     * @param mixed $event_id The event ID to unsubscribe from
-     *
-     * @return boolean
-     */
-    public function unsubscribe(CommInterface $client, $event_id) {
-
-        if (!(array_key_exists($event_id, $this->waitQueue)
-            && is_array($this->waitQueue[$event_id])
-            && array_key_exists($client->id, $this->waitQueue[$event_id])))
-            return false;
-
-        $this->log->write(W_DEBUG, "CLIENT<-DEQUEUE: NAME=$event_id CLIENT=$client->id", $client->name);
-
-        unset($this->waitQueue[$event_id][$client->id]);
-
-        if ($event_id === $this->config->admin->trigger)
-            $this->log->write(W_DEBUG, "ADMIN->UNSUBSCRIBE: CLIENT=$client->id", $client->name);
-        else
-            $this->stats['subscriptions']--;
-
-        return true;
-
-    }
-
-    private function scheduleJob($when, $exec, $application, $tag = NULL, $overwrite = false) {
+    public function scheduleJob($when, $exec, $application, $tag = NULL, $overwrite = false) {
 
         if(!property_exists($exec, 'callable')){
 
@@ -1670,8 +1393,6 @@ class Master {
 
                     if ($job->retries > 0)
                         $this->stats['retries']++;
-
-                    $this->rrd->setValue('jobs', 1);
 
                     if($job->event === false){
 
@@ -2015,7 +1736,7 @@ class Master {
 
     }
 
-    private function queueAddJob(Job $job){
+    public function queueAddJob(Job $job){
 
         if(array_key_exists($job->id, $this->jobQueue)){
 
@@ -2033,280 +1754,9 @@ class Master {
 
         }
 
+        $this->processJobs();
+
         return $job;
-
-    }
-
-    private function queueCleanup() {
-
-        if (!is_array($this->eventQueue))
-            $this->eventQueue = array();
-
-        if($this->config->sys['cleanup'] === false)
-            return;
-
-        if (count($this->eventQueue) > 0) {
-
-            foreach($this->eventQueue as $event_id => $events) {
-
-                foreach($events as $id => $data) {
-
-                    if (($data['when'] + $this->config->event->queue_timeout) <= time()) {
-
-                        if ($event_id != $this->config->admin->trigger)
-                            $this->log->write(W_DEBUG, "EXPIRE: NAME=$event_id TRIGGER=$id");
-
-                        unset($this->eventQueue[$event_id][$id]);
-
-                    }
-
-                }
-
-                if (count($this->eventQueue[$event_id]) === 0)
-                    unset($this->eventQueue[$event_id]);
-
-            }
-
-        }
-
-    }
-
-    private function fieldExists($search, $array) {
-
-        reset($search);
-
-        while($field = current($search)) {
-
-            if (!property_exists($array, $field))
-                return false;
-
-            $array = &$array->$field;
-
-            next($search);
-
-        }
-
-        return true;
-
-    }
-
-    private function getFieldValue($search, $array) {
-
-        reset($search);
-
-        while($field = current($search)) {
-
-            if (!property_exists($array, $field))
-                return false;
-
-            $array = &$array->$field;
-
-            next($search);
-
-        }
-
-        return $array;
-
-    }
-
-    /**
-     * Tests whether a event should be filtered.
-     *
-     * Returns true if the event should be filtered (skipped), and false if the event should be processed.
-     *
-     * @param string $event
-     *            The event to check.
-     *
-     * @param Array $filter
-     *            The filter rule to test against.
-     *
-     * @return bool Returns true if the event should be filtered (skipped), and false if the event should be processed.
-     */
-    private function filterEvent($event, $filter = NULL) {
-
-        if (!$filter instanceof \stdClass)
-            return false;
-
-        $this->log->write(W_DEBUG, 'Checking event filter for \'' . $event['id'] . '\'');
-
-        foreach($filter as $field => $data) {
-
-            $field = explode('.', $field);
-
-            if (!$this->fieldExists($field, $event['data']))
-                return true;
-
-            $field_value = $this->getFieldValue($field, $event['data']);
-
-            if ($data instanceof \stdClass) { // If $data is an array it's a complex filter
-
-                foreach($data as $filter_type => $filter_value) {
-
-                    switch ($filter_type) {
-                        case 'is' :
-
-                            if ($field_value != $filter_value)
-                                return true;
-
-                            break;
-
-                        case 'not' :
-
-                            if ($field_value === $filter_value)
-                                return true;
-
-                            break;
-
-                        case 'like' :
-
-                            if (!preg_match($filter_value, $field_value))
-                                return true;
-
-                            break;
-
-                        case 'in' :
-
-                            if (!in_array($field_value, $filter_value))
-                                return true;
-
-                            break;
-
-                        case 'nin' :
-
-                            if (in_array($field_value, $filter_value))
-                                return true;
-
-                            break;
-
-                    }
-
-                }
-
-            } else { // Otherwise it's a simple filter with an acceptable value in it
-
-                if ($field_value != $data)
-                    return true;
-
-            }
-
-        }
-
-        return false;
-
-    }
-
-    /**
-     * Process the event queue for a specified client.
-     *
-     * This method is executed when a client connects to see if there are any events waiting in the event
-     * queue that the client has not yet seen.  If there are, the first event found is sent to the client, marked
-     * as seen and then processing stops.
-     *
-     * @param CommInterface $client
-     *
-     * @param string $event_id
-     *
-     * @param Array $filter
-     *
-     * @return boolean
-     */
-    private function processEventQueue(CommInterface $client, $event_id, $filter = NULL) {
-
-        if (!(array_key_exists($event_id, $this->eventQueue)
-            && is_array($this->eventQueue[$event_id])
-            && ($count = count($this->eventQueue[$event_id])) > 0))
-            return false;
-
-        $this->log->write(W_DEBUG, "QUEUE: EVENT=$event_id COUNT=$count");
-
-        foreach($this->eventQueue[$event_id] as $trigger_id => &$event) {
-
-            if (!array_key_exists('seen', $event) || !is_array($event['seen']))
-                $event['seen'] = array();
-
-            if (!in_array($client->id, $event['seen'])) {
-
-                if (!array_key_exists($event_id, $client->subscriptions))
-                    continue;
-
-                if ($this->filterEvent($event, $filter))
-                    continue;
-
-                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client->id");
-
-                if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
-                    return false;
-
-                $event['seen'][] = $client->id;
-
-                if ($event_id != $this->config->admin->trigger)
-                    $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger_id CLIENT=" . $client->id);
-
-            }
-
-        }
-
-        return true;
-
-    }
-
-    /**
-     * Process all subscriptions for a specified event.
-     *
-     * This method is executed when a event is triggered.  It is responsible for sending events to clients
-     * that are waiting for the event and marking them as seen by the client.
-     *
-     * @param string $event_id
-     *
-     * @param string $trigger_id
-     *
-     * @return boolean
-     */
-    private function processSubscriptionQueue($event_id, $trigger_id = NULL) {
-
-        if (!(array_key_exists($event_id, $this->eventQueue)
-            && is_array($this->eventQueue[$event_id])
-            && ($count = count($this->eventQueue[$event_id])) > 0))
-            return false;
-
-        $this->log->write(W_DEBUG, "QUEUE: NAME=$event_id COUNT=$count");
-
-        // Get a list of triggers to process
-        $triggers = (empty($trigger_id) ? array_keys($this->eventQueue[$event_id]) : array($trigger_id));
-
-        foreach($triggers as $trigger) {
-
-            if (!isset($this->eventQueue[$event_id][$trigger]))
-                continue;
-
-            $event = &$this->eventQueue[$event_id][$trigger];
-
-            $this->cluster->sendEvent($event_id, $trigger, $event['data']);
-
-            if (!array_key_exists($event_id, $this->waitQueue))
-                continue;
-
-            foreach($this->waitQueue[$event_id] as $client_id => $item) {
-
-                if (in_array($client_id, $event['seen'])
-                    || $this->filterEvent($event, $item['filter']))
-                    continue;
-
-                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client_id");
-
-                if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
-                    return false;
-
-                $event['seen'][] = $client_id;
-
-                if ($event_id != $this->config->admin->trigger)
-                    $this->log->write(W_DEBUG, "SEEN: NAME=$event_id TRIGGER=$trigger CLIENT={$client_id}");
-
-            }
-
-        }
-
-        return true;
 
     }
 

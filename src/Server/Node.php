@@ -1,0 +1,109 @@
+<?php
+
+namespace Hazaar\Warlock\Server;
+
+use \Hazaar\Warlock\Server\Connection;
+
+abstract class Node {
+
+    /**
+     * @var Connection
+     */
+    public $conn;
+
+    /**
+     * @var boolean
+     */
+    public $closing = false;
+
+    /**
+     * Buffer for fragmented frames
+     * @var string
+     */
+    public $frameBuffer = NULL;
+
+    /**
+     * Buffer for payloads split over multiple frames
+     * @var string
+     */
+    public $payloadBuffer = NULL;
+
+    /*
+     * Warlock specific stuff
+     */
+    private $cluster;
+
+    public $id;
+
+    public $log;
+
+    public $type = 'CLIENT';  //Possible types are 'CLIENT', 'SERVICE' or 'ADMIN'.
+
+    public $name;
+
+    public $status;
+
+    public $since;
+
+    /**
+     * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
+     * @var int
+     */
+    public $offset = 0;
+
+    function __construct(Connection $conn, $type, $id, $options = array()) {
+
+        $this->id = $id;
+
+        $this->conn = $conn;
+
+        $this->log = Master::$instance->log;
+
+        $this->type = strtoupper($type);
+
+        $this->since = time();
+
+    }
+
+    function __destruct(){
+
+        $this->log->write(W_DEBUG, $this->type . "->DESTROY: ID=$this->id", $this->name);
+
+    }
+
+    public function disconnect(){
+
+        $this->log->write(W_DEBUG, $this->type . "<-DISCONNECT: CLIENT=$this->id", $this->name);
+
+        return Master::$cluster->removeNode($this);
+
+    }
+
+    public function init($headers){
+
+        $this->log->write(W_DEBUG, $this->type . "->INIT: ID=$this->id", $this->name);
+
+        $this->lastContact = time();
+
+        return true;
+
+    }
+
+    protected function processCommand($command, $payload = null){
+
+        return false;
+
+    }
+
+    public function send($command, $payload = null, $frame_id = null) {
+
+        if(!($packet = Master::$protocol->encode($command, $payload, $frame_id))) //Override the timestamp.
+            return false;
+
+        $this->log->write(W_DECODE, $this->type . "->PACKET: $packet", $this->name);
+
+        return $this->conn->send($packet);
+
+    }
+
+}

@@ -82,13 +82,13 @@ class Protocol {
 
     private $encoded   = true;
 
-    static private $frame_ids = array();
-
-    function __construct($id, $encoded = true) {
+    function __construct($id, $encoded = true, $cluster_mode = false) {
 
         $this->id = $id;
 
         $this->encoded = $encoded;
+
+        $this->cluster_mode = $cluster_mode;
 
     }
 
@@ -152,7 +152,7 @@ class Protocol {
 
     }
 
-    public function encode($type, $payload = null, $frame_id = null) {
+    public function encode($type, $payload = null, $extra = null) {
 
         if(($type = $this->check($type)) === false)
             return false;
@@ -160,51 +160,46 @@ class Protocol {
         $packet = (object) array(
             'TYP' => $type,
             'SID' => $this->id,
-            'FID' => ($frame_id === null) ? uniqid() : $frame_id,
             'TME' => time()
         );
+
+        if(is_iterable($extra)){
+
+            foreach($extra as $k => $v)
+                $packet->$k = $v;
+
+        }
 
         if($payload !== null)
             $packet->PLD = $payload;
 
         $packet = json_encode($packet);
 
-        Protocol::$frame_ids[$frame_id] = time();
-
         return ($this->encoded ? base64_encode($packet) : $packet);
 
     }
 
-    public function decode($packet, &$payload = null, &$time = null, &$frame_id = null) {
+    public function decode($packet, &$payload = null, &$frame = null) {
 
         $payload = null;
 
-        if(!($packet = json_decode(($this->encoded ? base64_decode($packet) : $packet))))
+        if(!($frame = json_decode(($this->encoded ? base64_decode($packet) : $packet))))
             return $this->error('Packet decode failed');
 
-        if(!$packet instanceof \stdClass)
+        if(!$frame instanceof \stdClass)
             return $this->error('Invalid packet format');
 
-        if(!property_exists($packet, 'TYP'))
+        if(!property_exists($frame, 'TYP'))
             return $this->error('No packet type');
 
-        if(property_exists($packet, 'FID') && array_key_exists($packet->FID, Protocol::$frame_ids))
-            return $this->error('Packet decode rejected because we have already seen this frame!');
-
         //This is a security thing to ensure that the client is connecting to the correct instance of Warlock
-        if(!property_exists($packet, 'SID') || $packet->SID != $this->id)
+        if(!property_exists($frame, 'SID') || $frame->SID != $this->id)
             return $this->error('Packet decode rejected due to bad SID');
 
-        if(property_exists($packet, 'PLD'))
-            $payload = $packet->PLD;
+        if(property_exists($frame, 'PLD'))
+            $payload = $frame->PLD;
 
-        if(property_exists($packet, 'TME'))
-            $time = $packet->TME;
-
-        if(property_exists($packet, 'FID'))
-            $frame_id = $packet->FID;
-
-        return $this->getTypeName($packet->TYP);
+        return $this->getTypeName($frame->TYP);
 
     }
 

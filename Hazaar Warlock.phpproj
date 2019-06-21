@@ -32,8 +32,10 @@
     <Compile Include="src\Runner.php" />
     <Compile Include="src\Connection\Pipe.php" />
     <Compile Include="src\Server.php" />
+    <Compile Include="src\Server\Connection.php" />
+    <Compile Include="src\Server\Node.php" />
     <Compile Include="src\Server\Cluster.php" />
-    <Compile Include="src\Server\Peer.php" />
+    <Compile Include="src\Server\Node\Peer.php" />
     <Compile Include="src\Server\CommInterface.php" />
     <Compile Include="src\Server\Job.php" />
     <Compile Include="src\Server\Kvstore.php" />
@@ -42,7 +44,7 @@
     <Compile Include="src\Server\Job\Service.php" />
     <Compile Include="src\Server\Process.php" />
     <Compile Include="src\Server\Logger.php" />
-    <Compile Include="src\Server\Client.php" />
+    <Compile Include="src\Server\Node\Client.php" />
     <Compile Include="src\Server\Master.php" />
     <Compile Include="src\View\Helper\Warlock.php" />
     <Compile Include="src\Control.php" />
@@ -62,6 +64,7 @@
     <Folder Include="src\Protocol\" />
     <Folder Include="src\Server\" />
     <Folder Include="src\Server\Job\" />
+    <Folder Include="src\Server\Node\" />
     <Folder Include="src\View\Helper" />
     <Folder Include="src\View" />
     <Folder Include="src" />

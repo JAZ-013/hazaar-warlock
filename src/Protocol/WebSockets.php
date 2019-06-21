@@ -83,7 +83,7 @@ abstract class WebSockets {
 
         $requestHeaders = 'GET ' . $path . " HTTP/1.1\r\n";
 
-        foreach($headers as $name => $value) 
+        foreach($headers as $name => $value)
             $requestHeaders .= $name . ': ' . $value . "\r\n";
 
         return $requestHeaders . "\r\n";
@@ -92,19 +92,21 @@ abstract class WebSockets {
 
     protected function acceptHandshake($headers, &$responseHeaders = array(), $key = NULL, &$results = array()) {
 
-        if(! is_array($headers)) $headers = $this->parseHeaders($headers);
+        if(!is_array($headers)) $headers = $this->parseHeaders($headers);
 
         $this->headers = $headers;
 
         if(array_key_exists('get', $headers)) {
 
-            if(! array_key_exists('host', $headers) || ! ($results['host'] = $this->checkHost($headers['host']))) {
+            if(!array_key_exists('host', $headers) || ! ($results['host'] = $this->checkHost($headers['host']))) {
 
                 return 400;
 
             }
 
-            if(! ($results['url'] = $this->checkRequestURL($headers['get']))) {
+            if(($results['url'] = $this->checkRequestURL($headers['get'])) === false) {
+
+                var_dump($results);
 
                 return 404;
 
@@ -178,7 +180,7 @@ abstract class WebSockets {
 
     protected function frame($payload, $type = NULL, $masked = TRUE) {
 
-        if(! $type) $type = 'text';
+        if(!$type) $type = 'text';
 
         $frameHead = array();
 

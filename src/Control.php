@@ -74,7 +74,7 @@ class Control extends Process {
             if($autostart === true){
 
                 if(!$this->config->sys['php_binary'])
-                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ($this->isWindowsOS()?'.exe':'');
+                    $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '' ) . 'php' . ($this->isWindowsOS()?'.exe':'');
 
                 $this->pidfile = $application->runtimePath($this->config->sys->pid);
 

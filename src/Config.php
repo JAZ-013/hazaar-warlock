@@ -85,10 +85,10 @@ class Config {
              'restarts' => 5,                       //Restart a failed service this many times before disabling it for a bit.
              'disable' => 300                       //Disable a failed service for this many seconds before trying to start it up again.
          ),
-         'event' => array(
-             'queue_timeout' => 5                   //Message queue timeout.  Messages will hang around in the queue for this many seconds.  This allows late connections to
-                                                    //still get events and was the founding principle that allowed Warlock to work with long-polling HTTP connections.  Still
-                                                    //very useful in the WebSocket world though.
+         'signal' => array(
+             'queue_timeout' => 5   //Message queue timeout.  Messages will hang around in the queue for this many seconds.  This allows late connections to
+                                    //still get events and was the founding principle that allowed Warlock to work with long-polling HTTP connections.  Still
+                                    //very useful in the WebSocket world though.
          )
      );
 

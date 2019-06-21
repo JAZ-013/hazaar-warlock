@@ -124,7 +124,7 @@ class Kvstore {
 
     }
 
-    public function process(CommInterface $client, $command, &$payload){
+    public function process(Node $client, $command, &$payload){
 
         if(!$payload)
             return false;
@@ -205,7 +205,7 @@ class Kvstore {
 
     }
 
-    public function get(CommInterface $client, $payload, $namespace){
+    public function get(Node $client, $payload, $namespace){
 
         $value = null;
 
@@ -225,7 +225,7 @@ class Kvstore {
 
     }
 
-    public function set(CommInterface $client, $payload, $namespace){
+    public function set(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -271,7 +271,7 @@ class Kvstore {
 
     }
 
-    public function has(CommInterface $client, $payload, $namespace){
+    public function has(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -303,7 +303,7 @@ class Kvstore {
 
     }
 
-    public function del(CommInterface $client, $payload, $namespace){
+    public function del(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -330,7 +330,7 @@ class Kvstore {
 
     }
 
-    public function list(CommInterface $client, $payload, $namespace){
+    public function list(Node $client, $payload, $namespace){
 
         $list = null;
 
@@ -351,7 +351,7 @@ class Kvstore {
 
     }
 
-    public function clear(CommInterface $client, $payload, $namespace){
+    public function clear(Node $client, $payload, $namespace){
 
         $this->kv_store[$namespace] = array();
 
@@ -359,7 +359,7 @@ class Kvstore {
 
     }
 
-    public function pull(CommInterface $client, $payload, $namespace){
+    public function pull(Node $client, $payload, $namespace){
 
         $result = null;
 
@@ -383,7 +383,7 @@ class Kvstore {
 
     }
 
-    public function push(CommInterface $client, $payload, $namespace){
+    public function push(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -404,7 +404,7 @@ class Kvstore {
 
     }
 
-    public function pop(CommInterface $client, $payload, $namespace){
+    public function pop(Node $client, $payload, $namespace){
 
         $result = null;
 
@@ -425,7 +425,7 @@ class Kvstore {
 
     }
 
-    public function shift(CommInterface $client, $payload, $namespace){
+    public function shift(Node $client, $payload, $namespace){
 
         $result = null;
 
@@ -446,7 +446,7 @@ class Kvstore {
 
     }
 
-    public function unshift(CommInterface $client, $payload, $namespace){
+    public function unshift(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -467,7 +467,7 @@ class Kvstore {
 
     }
 
-    public function count(CommInterface $client, $payload, $namespace){
+    public function count(Node $client, $payload, $namespace){
 
         $result = null;
 
@@ -488,7 +488,7 @@ class Kvstore {
 
     }
 
-    public function incr(CommInterface $client, $payload, $namespace){
+    public function incr(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -511,7 +511,7 @@ class Kvstore {
 
     }
 
-    public function decr(CommInterface $client, $payload, $namespace){
+    public function decr(Node $client, $payload, $namespace){
 
         $result = false;
 
@@ -534,7 +534,7 @@ class Kvstore {
 
     }
 
-    public function keys(CommInterface $client, $payload, $namespace){
+    public function keys(Node $client, $payload, $namespace){
 
         $result = null;
 
@@ -545,7 +545,7 @@ class Kvstore {
 
     }
 
-    public function values(CommInterface $client, $payload, $namespace){
+    public function values(Node $client, $payload, $namespace){
 
         $result = null;
 

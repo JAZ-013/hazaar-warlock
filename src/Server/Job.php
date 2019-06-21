@@ -21,7 +21,7 @@ define('STATUS_CANCELLED', 6);
 
 define('STATUS_ERROR', 7);
 
-abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
+abstract class Job extends \Hazaar\Model\Strict {
 
     public $process;
 

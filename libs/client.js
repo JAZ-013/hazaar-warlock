@@ -27,17 +27,6 @@ var HazaarWarlock = function (options) {
     this.__sockets = [];
     this.__admin_key = null;
     this.__connect = false;
-    this.__getGUID = function () {
-        var guid = window.name;
-        if (!guid) {
-            this.__log('Generating new GUID');
-            guid = window.name = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = Math.random() * 16 | 0, v = c === 'x' ? r : r & 0x3 | 0x8;
-                return v.toString(16);
-            });
-        }
-        return guid;
-    };
     this.connect = function () {
         this.__connect = true;
         if (!this.__socket) {
@@ -46,7 +35,7 @@ var HazaarWarlock = function (options) {
                 + this.__options.server + ':'
                 + this.__options.port + '/'
                 + this.__options.applicationName
-                + '/warlock?CID=' + this.guid;
+                + '/warlock';
             this.__socket = new WebSocket(url, 'warlock');
             try {
                 this.__socket.onopen = function (event) {
@@ -329,8 +318,6 @@ var HazaarWarlock = function (options) {
     this.values = function (key, c) {
         this.__kv_send('kvclear', { k: key }, c);
     };
-    this.guid = this.__getGUID();
-    this.__log('GUID=' + this.guid);
     this.__log('Server ID=' + this.__options.sid);
     if (this.__options.connect === true) this.connect();
     return this;
