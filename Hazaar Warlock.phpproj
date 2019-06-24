@@ -46,6 +46,7 @@
     <Compile Include="src\Server\Logger.php" />
     <Compile Include="src\Server\Node\Client.php" />
     <Compile Include="src\Server\Master.php" />
+    <Compile Include="src\Server\Signal.php" />
     <Compile Include="src\View\Helper\Warlock.php" />
     <Compile Include="src\Control.php" />
     <Compile Include="src\Service.php" />

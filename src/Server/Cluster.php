@@ -12,25 +12,24 @@ class Cluster  {
 
     private $log;
 
-    private $nodes = array();
-
     /**
      * Array of other warlocks to connect and share data with
      *
      * @var array Array of Hazaar\Warlock\Server\Peer object.
      */
-    private $peers = array();
+    public $peers = array();
 
     /**
      * Array of normal clients that are currently connected
      * @var array
      */
-    private $clients = array();
+    public $clients = array();
 
     private $last_check = 0;
 
     public $stats = array(
         'clients' => 0,         // Total number of connected clients
+        'peers' => 0,
         'processed' => 0,       // Total number of processed jobs & events
         'execs' => 0,           // The number of successful job executions
         'lateExecs' => 0,       // The number of delayed executions
@@ -47,7 +46,7 @@ class Cluster  {
 
         $this->config = $config;
 
-        $this->name = $this->config->cluster['name'];
+        $this->name = ake($this->config->cluster, 'name', gethostname());
 
         $this->signal = new Signal($this->config->signal);
 
@@ -205,15 +204,29 @@ class Cluster  {
      */
     public function removeNode(Node $node) {
 
-        if(array_key_exists($node->id, $this->clients))
-            unset($this->clients[$node->id]);
-        else return false;
+        if($node instanceof Node\Client){
 
-        $this->signal->disconnect($node);
+            if(array_key_exists($node->id, $this->clients))
+                unset($this->clients[$node->id]);
+            else return false;
 
-        $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$node->id", $node->name);
+            $this->signal->disconnect($node);
 
-        $this->stats['clients']--;
+            $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: CLIENT=$node->id", $this->name);
+
+            $this->stats['clients']--;
+
+        }elseif($node instanceof Node\Peer){
+
+            if(array_key_exists($node->id, $this->peers))
+                unset($this->peers[$node->id]);
+            else return false;
+
+            $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: PEER=$node->id", $this->name);
+
+            $this->stats['peers']--;
+
+        }
 
         return true;
 
@@ -231,7 +244,7 @@ class Cluster  {
 
             $this->log->write(W_ERR, "Protocol error: $reason", $this->name);
 
-            $node->send('error', array('reason' => $reason));
+            $node->conn->disconnect();
 
             return false;
 
@@ -338,9 +351,7 @@ class Cluster  {
 
                     $this->log->write(W_DEBUG, "PEER->CONNECT: HOST={$peer->conn->address} PORT={$peer->conn->port}", $peer->name);
 
-                    $stream_id = Master::$instance->addConnection($peer->conn);
-
-                    $this->peers[$stream_id] = $peer;
+                    Master::$instance->addConnection($peer->conn);
 
                 }
 

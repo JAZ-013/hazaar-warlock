@@ -33,6 +33,8 @@ class Peer extends \Hazaar\Warlock\Server\Node {
      */
     public $active = false;
 
+    private $out = false;
+
     private $options;
 
     public function __construct($conn = null, $options = array()){
@@ -40,15 +42,19 @@ class Peer extends \Hazaar\Warlock\Server\Node {
         if($conn === null)
             $conn = new \Hazaar\Warlock\Server\Connection($this);
 
-        parent::__construct($conn, 'PEER', null, $options);
+        parent::__construct($conn, 'PEER', $options);
+
+        if($this->out = (ake($options, 'host', false) !== false))
+            $this->access_key = base64_encode(ake($options, 'access_key'));
 
         $this->options = $options;
-
-        $this->access_key = base64_encode(ake($options, 'access_key'));
 
     }
 
     public function connect(){
+
+        if($this->out !== true)
+            return false;
 
         $headers = array(
             'X-WARLOCK-PHP' => 'true',
@@ -56,6 +62,8 @@ class Peer extends \Hazaar\Warlock\Server\Node {
             //'X-WARLOCK-CLIENT-TYPE' => 'peer',
             //'X-WARLOCK-PEER-NAME' => Master::$instance->config->cluster['name']
         );
+
+        $this->out = true;
 
         return $this->conn->connect(ake($this->options, 'host'), ake($this->options, 'port', 8000), $headers);
 
@@ -65,7 +73,10 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         $this->active = false;
 
-        $this->log->write(W_DEBUG, $this->type . "<-DISCONNECT: HOST={$this->conn->address} PORT={$this->conn->port}", $this->name);
+        if($this->out !== true)
+            return parent::disconnect();
+
+        $this->log->write(W_DEBUG, $this->type . "->DISCONNECT: HOST={$this->conn->address} PORT={$this->conn->port}", $this->name);
 
         return true;
 
@@ -82,7 +93,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
             if(!$this->initiateHandshake($this->frameBuffer))
                 return false;
 
-            $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
+            $this->log->write(W_DEBUG, "WEBSOCKETS<-ACCEPT: HOST=$this->address PORT=$this->port PEER=$this->id", $this->name);
 
             $this->online = true;
 

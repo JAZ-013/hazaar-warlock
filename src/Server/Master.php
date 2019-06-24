@@ -626,12 +626,20 @@ class Master {
 
                             $this->log->write(W_NOTICE, "Connection from $conn->address:$conn->port with stream id #$stream_id");
 
+                            //Unset the conn variable.  This fixes a quirk where the last connection object is never destroyed
+                            unset($conn);
+
                         }
 
                     } else {
 
-                        if($this->processStream($stream) !== true)
+                        if($this->processStream($stream) !== true){
+
+                            var_dump('dcon');
+
                             $this->disconnect($stream);
+
+                        }
 
                     }
 
@@ -725,7 +733,25 @@ class Master {
 
         $this->connections[$stream_id] = $conn;
 
+        $this->log->write(W_DEBUG, 'MASTER->ADDCONNECTION: STREAM=' . $stream_id);
+
         return $stream_id;
+
+    }
+
+    public function removeConnection(Connection $conn){
+
+        $stream_id = intval($conn->stream);
+
+        if(array_key_exists($stream_id, $this->streams))
+            unset($this->streams[$stream_id]);
+
+        if(array_key_exists($stream_id, $this->connections))
+            unset($this->connections[$stream_id]);
+
+        $this->log->write(W_DEBUG, 'MASTER->REMOVECONNECTION: STREAM=' . $stream_id);
+
+        return true;
 
     }
 
@@ -760,7 +786,7 @@ class Master {
 
         $conn = $this->getConnection($stream);
 
-        if(!$conn instanceof Connection)
+        if(!($conn instanceof Connection && strlen($buf) > 0))
             return false;
 
         return $conn->recv($buf);
@@ -770,7 +796,7 @@ class Master {
     public function disconnect($stream) {
 
         if ($conn = $this->getConnection($stream))
-            return $conn->disconnect();
+            return $conn->disconnect(true);
 
         $stream_id = intval($stream);
 

@@ -28,12 +28,6 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
     public $closing = false;
 
     /**
-     * The stream is connected.  This must be maintained because we use ASYNC stream socket connections
-     * @var boolean
-     */
-    private $connected = false;
-
-    /**
      * The connection is online and WebSocket protocol has been negotiated successfully
      * @var boolean
      */
@@ -106,7 +100,11 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if($this->stream && !$this->connected())
             $this->disconnect();
 
-        if(!$this->stream){
+        if($this->stream){
+
+            $stream = $this->stream;
+
+        }else{
 
             $this->log->write(W_INFO, 'Connecting to peer at ' . $address . ':' . $port);
 
@@ -119,6 +117,10 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
                 return false;
 
             }
+
+        }
+
+        if(!($this->address && $this->port && $this->name)){
 
             if(!$this->attach($stream))
                 return false;
@@ -196,13 +198,31 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
      *
      * @param mixed $socket
      */
-    public function disconnect() {
+    public function disconnect($remove_node = false) {
 
         if(!is_resource($this->stream))
             return false;
 
-        if($this->node)
-            $this->node->disconnect();
+        if($this->online === true){
+
+            $this->log->write(W_DEBUG, "WEBSOCKET->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
+
+            $frame = $this->frame('', 'close', false);
+
+            @fwrite($this->stream, $frame, strlen($frame));
+
+        }
+
+        Master::$instance->removeConnection($this);
+
+        if($this->node){
+
+            Master::$cluster->removeNode($this->node);
+
+            if($remove_node === true)
+                $this->node = null;
+
+        }
 
         stream_socket_shutdown($this->stream, STREAM_SHUT_RDWR);
 
@@ -210,9 +230,9 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         fclose($this->stream);
 
-        $this->stream = null;
+        $this->stream = $this->name = null;
 
-        $this->online = $this->active = false;
+        $this->online = false;
 
         return true;
 
@@ -538,7 +558,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         }
 
-        $this->log->write(W_DECODE2, "CONNECTION<-OPCODE: $opcode", $this->name);
+        $this->log->write(W_DEBUG, "CONNECTION<-OPCODE: $opcode", $this->name);
 
         //Save any leftover frame data in the client framebuffer because we got more than a whole frame)
         if (strlen($frameBuffer) > 0) {
@@ -556,7 +576,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
                 //If we have data in the payload buffer (we absolutely should) then retrieve it here.
                 if (!$this->payloadBuffer)
-                    $this->log(W_WARN, 'Got finaly continuation frame but there is no payload in the buffer!?');
+                    $this->log(W_WARN, 'Got final continuation frame but there is no payload in the buffer!?');
 
                 $payload = $this->payloadBuffer . $payload;
 
@@ -573,6 +593,8 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
             case 8 : //Close frame
 
+                $this->online = false;
+
                 if($this->closing === false){
 
                     $this->log->write(W_DEBUG, "WEBSOCKET<-CLOSE: HOST=$this->address PORT=$this->port", $this->name);
@@ -583,7 +605,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
                     @fwrite($this->stream, $frame, strlen($frame));
 
-                    if($this->disconnect())
+                    if($this->disconnect(true))
                         $this->log->write(W_NOTICE, "Websockets connection closed to $this->address:$this->port", $this->name);
 
                 }

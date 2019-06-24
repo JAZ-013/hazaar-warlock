@@ -51,9 +51,9 @@ abstract class Node {
      */
     public $offset = 0;
 
-    function __construct(Connection $conn, $type, $id, $options = array()) {
+    function __construct(Connection $conn, $type, $options = array()) {
 
-        $this->id = $id;
+        $this->id = guid();
 
         $this->conn = $conn;
 
@@ -73,9 +73,15 @@ abstract class Node {
 
     public function disconnect(){
 
-        $this->log->write(W_DEBUG, $this->type . "<-DISCONNECT: CLIENT=$this->id", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "->DISCONNECT: HOST={$this->conn->address} PORT={$this->conn->port}", $this->name);
 
-        return Master::$cluster->removeNode($this);
+        $this->conn->disconnect();
+
+        $this->conn = null;
+
+        Master::$cluster->removeNode($this);
+
+        return true;
 
     }
 
