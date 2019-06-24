@@ -261,7 +261,12 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if(!$this->acceptHandshake($response, $responseHeaders, $this->key))
             throw new \Exception('Warlock server denied our connection attempt!');
 
+        $this->log->write(W_DEBUG, "CONNECTION<-ACCEPT: HOST=$this->address PORT=$this->port", $this->name);
+
         $this->online = true;
+
+        if($this->node)
+            return $this->node->init($response);
 
         return true;
 
@@ -314,6 +319,8 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->log->write(W_DEBUG, "CONNECTION->ACCEPT: HOST=$this->address PORT=$this->port", $this->name);
 
+        $responseHeaders['X-WARLOCK-PEER-NAME'] = $node->name;
+
         $response = $this->httpResponse($responseCode, null, $responseHeaders);
 
         $bytes = strlen($response);
@@ -323,37 +330,13 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if($result === false || $result !== $bytes)
             return false;
 
-        $this->log->write(W_NOTICE, "WebSockets connection from $this->address:$this->port");
-
-        if(!$node->init($results))
-            return false;
+        $this->online = true;
 
         $this->node = $node;
 
-        $this->online = true;
+        $this->log->write(W_NOTICE, "WebSockets connection from $this->address:$this->port");
 
-        if(array_key_exists('x-warlock-access-key', $headers)){
-
-            die('X_ACCESS NOT DONE YET!');
-
-            if(!$this->node->auth($headers['x-warlock-access_key']))
-                return false;
-
-            $payload = (object)array(
-                'client_id' => $this->id = ake($headers, 'x-warlock-peer-name', $this->id),
-                'type' => $type = ake($headers, 'x-warlock-client-type', 'admin'),
-                'access_key' => base64_decode($headers['x-warlock-access-key'])
-            );
-
-            if(!$this->commandSync($payload))
-                return false;
-
-            if($type === 'service')
-                $this->node->send('OK');
-
-        }
-
-        return true;
+        return $node->init($results);
 
     }
 

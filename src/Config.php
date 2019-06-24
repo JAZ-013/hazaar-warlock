@@ -31,6 +31,7 @@ class Config {
          ),
          'cluster' => array(
             'name' => null,
+            'access_key' => null,
             'peers' => array()
          ),
          'kvstore' => array(

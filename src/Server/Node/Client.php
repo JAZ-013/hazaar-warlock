@@ -26,14 +26,14 @@ class Client extends \Hazaar\Warlock\Server\Node {
 
     }
 
-    public function init($headers){
+    public function init($params){
 
-        if(!parent::init($headers))
+        if(!parent::init($params))
             return false;
 
-        if(array_key_exists('UID', $headers['url'])){
+        if(array_key_exists('UID', $params['url'])){
 
-            if(($this->username = base64_decode($headers['url']['UID'])) === NULL)
+            if(($this->username = base64_decode($params['url']['UID'])) === NULL)
                 return false;
 
             $this->log->write(W_NOTICE, "USER: $this->username");

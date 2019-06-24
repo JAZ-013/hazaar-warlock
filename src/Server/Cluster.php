@@ -27,6 +27,8 @@ class Cluster  {
 
     private $last_check = 0;
 
+    private $frames = array();
+
     public $stats = array(
         'clients' => 0,         // Total number of connected clients
         'peers' => 0,
@@ -62,7 +64,11 @@ class Cluster  {
                     if(!$peer->has('access_key'))
                         $peer->access_key = Master::$instance->config->admin['key'];
 
-                    $this->peers[] = new Node\Peer(null, $peer->toArray());
+                    $peer = new Node\Peer(null, $peer->toArray());
+
+                    $peer->name = Master::$instance->config->cluster['name'];
+
+                    $this->peers[] = $peer;
 
                 }else{
 
@@ -164,7 +170,7 @@ class Cluster  {
      */
     public function createNode(Connection $conn, $request){
 
-        $type = ake($request, 'x-warlock-type', 'client');
+        $type = ake($request, 'x-warlock-client-type', 'client');
 
         $this->log->write(W_DEBUG, "CLUSTER->ADDNODE: HOST=$conn->address PORT=$conn->port TYPE=$type", $this->name);
 
@@ -176,9 +182,37 @@ class Cluster  {
 
         }elseif($type === 'peer'){
 
-            die('SOCKET PEERS NOT DONE YET!');
+            if(!(($access_key = ake($request, 'x-warlock-access-key')) && ($name = ake($request, 'x-warlock-peer-name'))))
+                return false;
 
-            //$this->node = new Node\Peer($results['url']['CID']);
+            if(array_key_exists($name, $this->peers)){
+
+                $this->log->write(W_WARN, "A peer with name '$name' already connected!");
+
+                return false;
+
+            }
+
+            $node = new Node\Peer($conn, $this->config->cluster->toArray());
+
+            $node->name = $this->name;
+
+            if(!$node->auth($name, $access_key)){
+
+                $this->log->write(W_WARN, 'Peer connected with incorrect access key!');
+
+                return false;
+
+            }
+
+            $this->peers[$node->id] = $node;
+
+        }elseif($type === 'service'){
+
+            die('Remote services not done yet!');
+
+            if($type === 'service')
+                $this->node->send('OK');
 
         }else{
 
@@ -250,9 +284,28 @@ class Cluster  {
 
         }
 
-        //If there is no frame ID, add on now.  This happens when the frame comes from a CLIENT and has not yet entered the network.
-        if(!property_exists($frame, 'FID'))
-            $packet = Master::$protocol->encode($type, $payload, array('FID' => uniqid()));
+        //If there is no frame ID, add one now.  This happens when the frame comes from a CLIENT and has not yet entered the network.
+        if(property_exists($frame, 'FID')){
+
+            $frame_id = $frame->FID;
+
+            if(array_key_exists($frame->FID, $this->frames)){
+
+                $this->log->write(W_WARN, 'Received a frame we have already seen.', $this->name);
+
+                return true;
+
+            }
+
+        }else{
+
+            $frame_id = uniqid();
+
+            $packet = Master::$protocol->encode($type, $payload, array('FID' => $frame_id));
+
+        }
+
+        $this->frames[$frame_id] = array('when' => time(), 'peers' => array($node->id => time()));
 
         if(property_exists($frame, 'TME'))
             $this->offset = (time() - $frame->TME);
@@ -268,8 +321,15 @@ class Cluster  {
              */
             if($type !== 'SUBSCRIBE'){
 
-                foreach($this->peers as $peer)
-                    $peer->send($packet);
+                foreach($this->peers as $peer){
+
+                    if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->active !== true)
+                        continue;
+
+                    if($peer->conn->send($packet))
+                        $this->frames[$frame_id]['peers'][$peer->id] = time();
+
+                }
 
             }
 
@@ -344,16 +404,15 @@ class Cluster  {
                 if(!$peer instanceof Node\Peer)
                     continue;
 
-                if($peer->conn->connected() !== true){
+                if($peer->connected() === true)
+                    continue;
 
-                    if($peer->connect() === false)
-                        continue;
+                if($peer->connect() === false)
+                    continue;
 
-                    $this->log->write(W_DEBUG, "PEER->CONNECT: HOST={$peer->conn->address} PORT={$peer->conn->port}", $peer->name);
+                $this->log->write(W_DEBUG, "PEER->CONNECT: HOST={$peer->conn->address} PORT={$peer->conn->port}", $peer->name);
 
-                    Master::$instance->addConnection($peer->conn);
-
-                }
+                Master::$instance->addConnection($peer->conn);
 
             }
 
