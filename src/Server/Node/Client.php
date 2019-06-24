@@ -68,6 +68,19 @@ class Client extends \Hazaar\Warlock\Server\Node {
 
     }
 
+    public function sendEvent($event_id, $trigger_id, $data) {
+
+        $packet = array(
+            'id' => $event_id,
+            'trigger' => $trigger_id,
+            'time' => microtime(true),
+            'data' => $data
+        );
+
+        return $this->send('EVENT', $packet);
+
+    }
+
     public function processCommand($command, $payload = null){
 
         if (!$command)

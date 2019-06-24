@@ -633,13 +633,8 @@ class Master {
 
                     } else {
 
-                        if($this->processStream($stream) !== true){
-
-                            var_dump('dcon');
-
+                        if($this->processStream($stream) !== true)
                             $this->disconnect($stream);
-
-                        }
 
                     }
 
