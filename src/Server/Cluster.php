@@ -52,36 +52,6 @@ class Cluster  {
 
         $this->signal = new Signal($this->config->signal);
 
-        if(($peers = $this->config->cluster['peers']) && $peers->count() > 0){
-
-            foreach($peers as $peer){
-
-                if(ake($peer, 'enabled', true) !== true)
-                    continue;
-
-                if($peer->has('host')){
-
-                    if(!$peer->has('access_key'))
-                        $peer->access_key = Master::$instance->config->admin['key'];
-
-                    if(!$peer->has('timeout'))
-                        $peer->timeout = $config->cluster['connect_timeout'];
-
-                    $peer = new Node\Peer(null, $peer->toArray());
-
-                    $peer->name = Master::$instance->config->cluster['name'];
-
-                    $this->peers[] = $peer;
-
-                }else{
-
-                    $this->log(W_ERR, 'Remote peers require a host address.');
-
-                }
-            }
-
-        }
-
     }
 
     function __destruct() {
@@ -145,11 +115,54 @@ class Cluster  {
 
         }
 
-        if(($count = count($this->peers)) > 0){
+        if(($peers = $this->config->cluster['peers']) && $peers->count() > 0){
 
-            $this->log->write(W_INFO, "Found $count peers.");
+            foreach($peers as $peer_item){
 
-            $this->process();
+                if(ake($peer_item, 'enabled', true) !== true)
+                    continue;
+
+                if(!$peer_item->has('host')){
+
+                    $this->log(W_ERR, 'Remote peers require a host address.');
+
+                    continue;
+
+                }
+
+                $target = $peer_item->get('host') . ':' . $peer_item->get('port');
+
+                $id = hash('crc32b', $target);
+
+                if(array_key_exists($id, $this->peers)){
+
+                    $this->log->write(W_WARN, 'Duplicate peer connection to ' . $target);
+
+                    continue;
+
+                }
+
+                if(!$peer_item->has('access_key'))
+                    $peer_item->access_key = $this->config->admin['key'];
+
+                if(!$peer_item->has('timeout'))
+                    $peer_item->timeout = $this->config->cluster['connect_timeout'];
+
+                $peer = new Node\Peer(null, $peer_item->toArray());
+
+                $peer->name = Master::$instance->config->cluster['name'];
+
+                $this->peers[$id] = $peer;
+
+            }
+
+            if(($count = count($this->peers)) > 0){
+
+                $this->log->write(W_INFO, "Found $count peers.");
+
+                $this->process();
+
+            }
 
         }
 
