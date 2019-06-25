@@ -443,6 +443,13 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     public function recv(&$buf){
 
+        $len = strlen($buf);
+
+        if(!strlen($buf) > 0)
+            return false;
+
+        $this->log->write(W_DEBUG, "CONNECTION<-SOCKET: BYTES=$len HOST=$this->address PORT=$this->port", $this->name);
+
         //Record this time as the last time we received data from the client
         $this->lastContact = time();
 

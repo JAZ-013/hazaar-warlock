@@ -781,7 +781,7 @@ class Master {
 
         $conn = $this->getConnection($stream);
 
-        if(!($conn instanceof Connection && strlen($buf) > 0))
+        if(!$conn instanceof Connection)
             return false;
 
         return $conn->recv($buf);

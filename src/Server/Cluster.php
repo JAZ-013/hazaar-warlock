@@ -289,13 +289,9 @@ class Cluster  {
 
             $frame_id = $frame->FID;
 
-            if(array_key_exists($frame->FID, $this->frames)){
-
-                $this->log->write(W_WARN, 'Received a frame we have already seen.', $this->name);
-
+            //If we have seen this frame, then silently ignore it.
+            if(array_key_exists($frame->FID, $this->frames))
                 return true;
-
-            }
 
         }else{
 
