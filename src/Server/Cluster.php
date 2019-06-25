@@ -64,6 +64,9 @@ class Cluster  {
                     if(!$peer->has('access_key'))
                         $peer->access_key = Master::$instance->config->admin['key'];
 
+                    if(!$peer->has('timeout'))
+                        $peer->timeout = $config->cluster['connect_timeout'];
+
                     $peer = new Node\Peer(null, $peer->toArray());
 
                     $peer->name = Master::$instance->config->cluster['name'];
@@ -322,7 +325,7 @@ class Cluster  {
 
                 foreach($this->peers as $peer){
 
-                    if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->active !== true)
+                    if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->online() !== true)
                         continue;
 
                     if($peer->conn->send($packet))
@@ -400,18 +403,11 @@ class Cluster  {
 
             foreach($this->peers as $peer){
 
+                //If the peer is already ONLINE, there's nothing to do
                 if(!$peer instanceof Node\Peer)
                     continue;
 
-                if($peer->connected() === true)
-                    continue;
-
-                if($peer->connect() === false)
-                    continue;
-
-                $this->log->write(W_DEBUG, "PEER->CONNECT: HOST={$peer->conn->address} PORT={$peer->conn->port}", $peer->name);
-
-                Master::$instance->addConnection($peer->conn);
+                while($peer->ping() !== true);
 
             }
 

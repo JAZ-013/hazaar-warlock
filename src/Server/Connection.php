@@ -2,6 +2,16 @@
 
 namespace Hazaar\Warlock\Server;
 
+define('WARLOCK_CONN_OFFLINE', 0);
+
+define('WARLOCK_CONN_INIT', 1);
+
+define('WARLOCK_CONN_HANDSHAKE', 2);
+
+define('WARLOCK_CONN_ONLINE', 3);
+
+define('WARLOCK_CONN_CLOSING', 4);
+
 class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterface {
 
     //WebSocket Security Key
@@ -22,16 +32,13 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
      */
     public $stream;
 
-    /**
-     * @var boolean
-     */
-    public $closing = false;
+    private $name;
 
     /**
      * The connection is online and WebSocket protocol has been negotiated successfully
      * @var boolean
      */
-    private $online = false;
+    private $status = WARLOCK_CONN_OFFLINE;
 
     /**
      * Buffer for fragmented frames
@@ -92,40 +99,42 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     }
 
+    public function setNode(Node $node){
+
+        $this->node = $node;
+
+    }
+
     public function connect($address, $port, $headers = null){
 
         if(!($address && $port > 0))
             return false;
 
-        if($this->stream && !$this->connected())
-            $this->disconnect();
+        if(is_resource($this->stream))
+            return false;
 
-        if($this->stream){
+        $this->log->write(W_INFO, 'Connecting to peer at ' . $address . ':' . $port);
 
-            $stream = $this->stream;
+        $this->stream = stream_socket_client('tcp://' . $address . ':' . $port, $errno, $errstr, 0, STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT);
 
-        }else{
+        if(!$this->stream){
 
-            $this->log->write(W_INFO, 'Connecting to peer at ' . $address . ':' . $port);
+            $this->log->write(W_ERR, 'Error #' . $errno . ': ' . $errstr);
 
-            $stream = stream_socket_client('tcp://' . $address . ':' . $port, $errno, $errstr, 0, STREAM_CLIENT_ASYNC_CONNECT);
-
-            if(!$stream){
-
-                $this->log->write(W_ERR, 'Error #' . $errno . ': ' . $errstr);
-
-                return false;
-
-            }
+            return false;
 
         }
 
-        if(!($this->address && $this->port && $this->name)){
+        $this->status = WARLOCK_CONN_INIT;
 
-            if(!$this->attach($stream))
-                return false;
+        return true;
 
-        }
+    }
+
+    public function initHandshake($headers = array()){
+
+        if($this->status !== WARLOCK_CONN_INIT)
+            return false;
 
         $this->key = uniqid();
 
@@ -135,18 +144,24 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         fwrite($this->stream, $handshake);
 
+        $this->status = WARLOCK_CONN_HANDSHAKE;
+
         return true;
 
     }
 
     public function attach($stream){
 
-        if(!is_resource($stream))
+        if(!is_resource($stream) || $this->name !== null)
             return false;
+
+        $stream_id = intval($stream);
+
+        $this->log->write(W_DEBUG, "CONNECTION->ATTACH: STREAM=$stream_id", $this->name);
 
         $this->stream = $stream;
 
-        $this->name = 'STREAM#' . intval($stream);
+        $this->name = 'STREAM#' . $stream_id;
 
         $this->since = time();
 
@@ -183,13 +198,17 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     public function connected(){
 
-        return (stream_socket_get_name($this->stream, true) !== false);
+        if(($connected = (is_resource($this->stream) && stream_socket_get_name($this->stream, true) !== false))
+            && $this->status === WARLOCK_CONN_INIT)
+            $this->attach($this->stream);
+
+        return $connected;
 
     }
 
     public function online(){
 
-        return $this->online;
+        return $this->status === WARLOCK_CONN_ONLINE;
 
     }
 
@@ -203,7 +222,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if(!is_resource($this->stream))
             return false;
 
-        if($this->online === true){
+        if($this->status === WARLOCK_CONN_ONLINE){
 
             $this->log->write(W_DEBUG, "WEBSOCKET->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
 
@@ -232,7 +251,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->stream = $this->name = null;
 
-        $this->online = false;
+        $this->status = WARLOCK_CONN_OFFLINE;
 
         return true;
 
@@ -263,7 +282,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->log->write(W_DEBUG, "CONNECTION<-ACCEPT: HOST=$this->address PORT=$this->port", $this->name);
 
-        $this->online = true;
+        $this->status = WARLOCK_CONN_ONLINE;
 
         if($this->node)
             return $this->node->init($response);
@@ -330,7 +349,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if($result === false || $result !== $bytes)
             return false;
 
-        $this->online = true;
+        $this->status = WARLOCK_CONN_ONLINE;
 
         $this->node = $node;
 
@@ -453,16 +472,16 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         //Record this time as the last time we received data from the client
         $this->lastContact = time();
 
-        if(!$this->node instanceof Node){
+        if($this->status === WARLOCK_CONN_HANDSHAKE){
 
-            if(!$this->processHandshake($buf))
+            if(!$this->completeHandshake($buf))
                 return false;
 
             return true;
 
-        }elseif($this->online !== true){
+        }elseif(!$this->node instanceof Node){
 
-            if(!$this->completeHandshake($buf))
+            if(!$this->processHandshake($buf))
                 return false;
 
             return true;
@@ -583,13 +602,11 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
             case 8 : //Close frame
 
-                $this->online = false;
-
-                if($this->closing === false){
+                if($this->status === WARLOCK_CONN_ONLINE){
 
                     $this->log->write(W_DEBUG, "WEBSOCKET<-CLOSE: HOST=$this->address PORT=$this->port", $this->name);
 
-                    $this->closing = true;
+                    $this->status = WARLOCK_CONN_CLOSING;
 
                     $frame = $this->frame('', 'close', false);
 

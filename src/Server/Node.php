@@ -41,8 +41,6 @@ abstract class Node {
 
     public $name;
 
-    public $status;
-
     public $since;
 
     /**

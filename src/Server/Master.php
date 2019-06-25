@@ -738,13 +738,21 @@ class Master {
 
         $stream_id = intval($conn->stream);
 
-        if(array_key_exists($stream_id, $this->streams))
+        if(array_key_exists($stream_id, $this->streams)){
+
+            $this->log->write(W_DEBUG, 'MASTER->REMOVESTREAM: STREAM=' . $stream_id);
+
             unset($this->streams[$stream_id]);
 
-        if(array_key_exists($stream_id, $this->connections))
+        }
+
+        if(array_key_exists($stream_id, $this->connections)){
+
+            $this->log->write(W_DEBUG, 'MASTER->REMOVECONNECTION: STREAM=' . $stream_id);
+
             unset($this->connections[$stream_id]);
 
-        $this->log->write(W_DEBUG, 'MASTER->REMOVECONNECTION: STREAM=' . $stream_id);
+        }
 
         return true;
 
