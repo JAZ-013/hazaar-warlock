@@ -62,7 +62,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         $this->options = $options;
 
-        $this->setStatus(WARLOCK_PEER_OFFLINE);
+        $this->status = WARLOCK_PEER_OFFLINE;
 
     }
 
