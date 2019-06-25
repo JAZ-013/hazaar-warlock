@@ -143,7 +143,7 @@ class Cluster  {
                 }
 
                 if(!$peer_item->has('access_key'))
-                    $peer_item->access_key = $this->config->admin['key'];
+                    $peer_item->access_key = $this->config->cluster['access_key'];
 
                 if(!$peer_item->has('timeout'))
                     $peer_item->timeout = $this->config->cluster['connect_timeout'];

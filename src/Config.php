@@ -31,7 +31,7 @@ class Config {
          ),
          'cluster' => array(
             'name' => null,
-            'access_key' => null,
+            'access_key' => '0000',
             'connect_timeout' => 5,
             'frame_lifetime' => 15,
             'peers' => array()
