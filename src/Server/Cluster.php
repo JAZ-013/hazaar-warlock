@@ -301,7 +301,10 @@ class Cluster  {
 
         }
 
-        $this->frames[$frame_id] = array('when' => time(), 'peers' => array($node->id => time()));
+        $this->frames[$frame_id] = array(
+            'expires' => time() + $this->config->cluster['frame_lifetime'],
+            'peers' => array($node->id => time())
+        );
 
         if(property_exists($frame, 'TME'))
             $this->offset = (time() - $frame->TME);
@@ -414,8 +417,22 @@ class Cluster  {
 
         }
 
-        $this->signal->queueCleanup();
+        if(count($this->frames) > 0){
 
+            $now = time();
+
+            foreach($this->frames as $id => $frame){
+
+                if(!($now >= $frame['expires']))
+                    continue;
+
+                unset($this->frames[$id]);
+
+            }
+
+        }
+
+        $this->signal->queueCleanup();
 
         return;
 
