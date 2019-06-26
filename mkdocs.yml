@@ -2,6 +2,7 @@ site_name: Documentation
 docs_dir: docs
 pages:
   - Welcome: index.md
+  - Configuration: configuration.md
   - Delayed Execution: delayed-exec.md
   - Real-Time Signalling: realtime-signalling.md
   - Services: services.md
