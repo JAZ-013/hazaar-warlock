@@ -466,13 +466,8 @@ class Master {
         foreach($this->pcntl_signals as $sig => $name)
             pcntl_signal($sig, array($this, '__signalHandler'), true);
 
-        if($this->config->kvstore['enabled'] === true){
-
-            $this->log->write(W_NOTICE, 'Initialising KV Store');
-
-            $this->kv_store = new Kvstore($this->config->kvstore['persist'], $this->config->kvstore['compact']);
-
-        }
+        if($this->config->kvstore['enabled'] === true)
+            self::$cluster->startKV();
 
         $this->log->write(W_NOTICE, 'Creating TCP socket stream on: '
             . $this->config->server->listen . ':' . $this->config->server->port);
@@ -574,9 +569,6 @@ class Master {
             if($this->time < $now){
 
                 self::$cluster->process();
-
-                if($this->kv_store)
-                    $this->kv_store->expireKeys();
 
                 $this->time = $now;
 

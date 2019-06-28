@@ -42,6 +42,8 @@ class Cluster  {
         'limitHits' => 0       // The number of hits on the process limiter
     );
 
+    private $kv_store;
+
     function __construct(\Hazaar\Map $config){
 
         $this->log = Master::$instance->log;
@@ -384,6 +386,9 @@ class Cluster  {
 
         $this->log->write(W_DEBUG, $node->type . "<-$type: CLIENT=$node->id", $node->name);
 
+        if($this->kv_store !== NULL && substr($type, 0, 2) === 'KV')
+            return $this->kv_store->process($node, $type, $payload);
+
         switch($type){
 
             case 'SUBSCRIBE':
@@ -474,6 +479,9 @@ class Cluster  {
 
         $this->signal->queueCleanup();
 
+        if($this->kv_store)
+            $this->kv_store->expireKeys();
+
         return;
 
     }
@@ -499,6 +507,16 @@ class Cluster  {
         }
 
         return;
+
+    }
+
+    public function startKV(){
+
+        $this->log->write(W_NOTICE, 'Initialising KV Store');
+
+        $this->kv_store = new Kvstore($this->config->kvstore['persist'], $this->config->kvstore['compact']);
+
+        return true;
 
     }
 
