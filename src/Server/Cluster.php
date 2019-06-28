@@ -117,7 +117,7 @@ class Cluster  {
 
         }
 
-        if(($peers = $this->config->cluster['peers']) && $peers->count() > 0){
+        if(($peers = $this->config['peers']) && $peers->count() > 0){
 
             foreach($peers as $peer_item){
 
@@ -145,10 +145,10 @@ class Cluster  {
                 }
 
                 if(!$peer_item->has('access_key'))
-                    $peer_item->access_key = $this->config->cluster['access_key'];
+                    $peer_item->access_key = $this->config['access_key'];
 
                 if(!$peer_item->has('timeout'))
-                    $peer_item->timeout = $this->config->cluster['connect_timeout'];
+                    $peer_item->timeout = $this->config['connect_timeout'];
 
                 $peer = new Node\Peer(null, $peer_item->toArray());
 
@@ -215,7 +215,7 @@ class Cluster  {
 
             }
 
-            $node = new Node\Peer($conn, $this->config->cluster->toArray());
+            $node = new Node\Peer($conn, $this->config->toArray());
 
             $node->name = $this->name;
 
@@ -331,7 +331,7 @@ class Cluster  {
         }
 
         $this->frames[$frame_id] = array(
-            'expires' => time() + $this->config->cluster['frame_lifetime'],
+            'expires' => time() + $this->config['frame_lifetime'],
             'peers' => array($node->id => time())
         );
 
@@ -347,7 +347,7 @@ class Cluster  {
              * * Frames with frame_ids will eventually be ignored and recorded.
              * * I may need to come up with a better frame forwarding scheme.  Perhaps based on frame IDs or something.
              */
-            if($type !== 'SUBSCRIBE'){
+            if($type === 'TRIGGER'){
 
                 foreach($this->peers as $peer){
 
@@ -403,6 +403,12 @@ class Cluster  {
             case 'LOG':
 
                 $this->log->write(ake($payload, 'level', W_INFO), ake($payload, 'msg'));
+
+                return true;
+
+            case 'STATUS':
+
+                $node->status = $payload;
 
                 return true;
 
@@ -474,11 +480,13 @@ class Cluster  {
 
     private function checkClients(){
 
-        if(!($this->config->client->check > 0 && is_array($this->clients) && count($this->clients) > 0))
+        $check = Master::$instance->config->client['check'];
+
+        if(!($check > 0 && is_array($this->clients) && count($this->clients) > 0))
             return;
 
         //Only ping if we havn't received data from the client for the configured number of seconds (default to 60).
-        $when = time() - $this->config->client->check;
+        $when = time() - $check;
 
         foreach($this->clients as $client){
 

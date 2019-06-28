@@ -18,8 +18,6 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
     public $tag;
 
-    public $status;
-
     function __construct($id, $type, $application, $tag = null){
 
         $this->name = $id;
@@ -230,12 +228,6 @@ class Process extends \Hazaar\Warlock\Server\Node {
     public function processCommand($command, $payload = null){
 
         switch($command){
-
-            case 'STATUS':
-
-                $this->status = $payload;
-
-                return true;
 
             default:
 

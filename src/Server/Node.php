@@ -43,6 +43,8 @@ abstract class Node {
 
     public $since;
 
+    public $status;
+
     /**
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
      * @var int

@@ -41,11 +41,9 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
     private $options;
 
-    private $status;
+    private $peer_status;
 
-    private $status_time;
-
-    private $status_names = array(
+    private $peer_status_names = array(
         0 => 'WARLOCK_PEER_OFFLINE',
         1 => 'WARLOCK_PEER_CONNECT',
         2 => 'WARLOCK_PEER_INIT',
@@ -62,7 +60,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         $this->options = $options;
 
-        $this->status = WARLOCK_PEER_OFFLINE;
+        $this->peer_status = WARLOCK_PEER_OFFLINE;
 
     }
 
@@ -74,7 +72,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
     public function disconnect(){
 
-        $this->status = WARLOCK_PEER_OFFLINE;
+        $this->peer_status = WARLOCK_PEER_OFFLINE;
 
         if($this->out !== true)
             return parent::disconnect();
@@ -113,23 +111,23 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
     public function online(){
 
-        return ($this->conn->connected() && $this->status === WARLOCK_PEER_ONLINE);
+        return ($this->conn->connected() && $this->peer_status === WARLOCK_PEER_ONLINE);
 
     }
 
     private function setStatus($status){
 
-        $this->log->write(W_DEBUG, "PEER->STATUS: " . $this->status_names[$status], $this->name);
+        $this->log->write(W_DEBUG, "PEER->STATUS: " . $this->peer_status_names[$status], $this->name);
 
-        $this->status = $status;
+        $this->peer_status = $status;
 
-        $this->status_when = time();
+        $this->peer_status_when = time();
 
     }
 
     public function ping(){
 
-        if($this->status === WARLOCK_PEER_ONLINE){
+        if($this->peer_status === WARLOCK_PEER_ONLINE){
 
             if($this->conn->connected())
                 return true;
@@ -138,7 +136,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         }
 
-        if($this->status === WARLOCK_PEER_OFFLINE){
+        if($this->peer_status === WARLOCK_PEER_OFFLINE){
 
             if($this->conn->connected() === true){
 
@@ -157,11 +155,11 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         }
 
-        if($this->status === WARLOCK_PEER_CONNECT){
+        if($this->peer_status === WARLOCK_PEER_CONNECT){
 
             if($this->conn->connected() !== true){ //Waiting for connection
 
-                if(time() >= ($this->status_when + $this->options['timeout'])){
+                if(time() >= ($this->peer_status_when + $this->options['timeout'])){
 
                     $this->log->write(W_NOTICE, 'Connection timed out after ' . $this->options['timeout'] . ' seconds.', $this->name);
 
@@ -185,7 +183,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         }
 
-        if($this->status === WARLOCK_PEER_INIT){
+        if($this->peer_status === WARLOCK_PEER_INIT){
 
             if($this->conn->connected() !== true){
 
@@ -208,7 +206,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         }
 
-        if($this->status === WARLOCK_PEER_HANDSHAKE){
+        if($this->peer_status === WARLOCK_PEER_HANDSHAKE){
 
             //TODO: Check a handshake timeout
 

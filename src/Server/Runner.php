@@ -708,7 +708,7 @@ class Runner {
 
                     $this->log->write(W_DEBUG, "PROCESS->STOP: PID=$status[pid] ID=" . $job->process->id);
 
-                    $pipe = $job->process->getReadPipe();
+                    $pipe = $job->process->conn->getReadStream();
 
                     //Do any last second processing.  Usually shutdown log messages.
                     if($buffer = stream_get_contents($pipe))
@@ -723,7 +723,7 @@ class Runner {
 
                     $this->stats['processes']--;
 
-                    $this->removeClient($pipe);
+                    Master::$cluster->removeNode($job->process);
 
                     $job->disconnect();
 
