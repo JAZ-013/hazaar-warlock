@@ -48,9 +48,11 @@ class Cluster  {
 
         $this->config = $config;
 
-        $this->name = ake($this->config->cluster, 'name', gethostname());
+        $this->name = ake($this->config, 'name', gethostname());
 
-        $this->signal = new Signal($this->config->signal);
+        $this->signal = new Signal(Master::$instance->config['signal']);
+
+        $this->runner = new Runner(Master::$instance->config['runner']);
 
     }
 
@@ -166,11 +168,15 @@ class Cluster  {
 
         }
 
-        return true;
+        return $this->runner->start();
 
     }
 
     public function stop(){
+
+        $this->log->write(W_NOTICE, 'Shutting down cluster.', $this->name);
+
+        $this->runner->stop();
 
     }
 
@@ -184,7 +190,7 @@ class Cluster  {
      * @param mixed $request
      * @return boolean
      */
-    public function createNode(Connection $conn, $request){
+    public function createNode(Connection $conn, $request = null){
 
         $type = ake($request, 'x-warlock-client-type', 'client');
 
@@ -223,13 +229,6 @@ class Cluster  {
 
             $this->peers[$node->id] = $node;
 
-        }elseif($type === 'service'){
-
-            die('Remote services not done yet!');
-
-            if($type === 'service')
-                $this->node->send('OK');
-
         }else{
 
             $this->log->write(W_ERR, 'Unknown client type requested: ' . $type);
@@ -239,6 +238,20 @@ class Cluster  {
         }
 
         return $node;
+
+    }
+
+    public function addNode(Node $node){
+
+        if(!Master::$instance->addConnection($node->conn))
+            return false;
+
+        if($node instanceof Node\Peer)
+            $this->peers[$node->id] = $node;
+        else
+            $this->clients[$node->id] = $node;
+
+        return true;
 
     }
 
@@ -387,6 +400,16 @@ class Cluster  {
 
                 return $this->signal->trigger($node, $payload->id, ake($payload, 'data'), ake($payload, 'echo', false));
 
+            case 'LOG':
+
+                $this->log->write(ake($payload, 'level', W_INFO), ake($payload, 'msg'));
+
+                return true;
+
+            default:
+
+                return $node->processCommand($type, $payload);
+
         }
 
         return false;
@@ -440,6 +463,8 @@ class Cluster  {
             }
 
         }
+
+        $this->runner->process();
 
         $this->signal->queueCleanup();
 

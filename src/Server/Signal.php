@@ -75,13 +75,13 @@ class Signal {
      */
     public function subscribe(Node $client, $event_id, $filter) {
 
-        $this->log->write(W_DEBUG, "CLIENT<-QUEUE: EVENT=$event_id CLIENT=$client->id", $client->name);
-
         $this->waitQueue[$event_id][$client->id] = array(
             'client' => $client,
             'since' => time(),
             'filter' => $filter
         );
+
+        $this->log->write(W_DEBUG, "CLIENT<-QUEUE: EVENT=$event_id COUNT=" . count($this->waitQueue[$event_id]) . " CLIENT=$client->id", $client->name);
 
         if ($event_id === $this->config->admin->trigger)
             $this->log->write(W_DEBUG, "ADMIN->SUBSCRIBE: CLIENT=$client->id", $client->name);
@@ -209,9 +209,6 @@ class Signal {
 
             if (!in_array($client->id, $event['seen'])) {
 
-                if (!array_key_exists($event_id, $client->subscriptions))
-                    continue;
-
                 if ($this->filterEvent($event, $filter))
                     continue;
 
@@ -276,7 +273,7 @@ class Signal {
                 $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client_id");
 
                 if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
-                    return false;
+                    continue;
 
                 $event['seen'][] = $client_id;
 

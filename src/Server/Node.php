@@ -93,9 +93,22 @@ abstract class Node {
 
     }
 
-    protected function processCommand($command, $payload = null){
+    public function processCommand($command, $payload = null){
 
         return false;
+
+    }
+
+    public function sendEvent($event_id, $trigger_id, $data) {
+
+        $packet = array(
+            'id' => $event_id,
+            'trigger' => $trigger_id,
+            'time' => microtime(true),
+            'data' => $data
+        );
+
+        return $this->send('EVENT', $packet);
 
     }
 

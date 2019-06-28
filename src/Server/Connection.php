@@ -28,7 +28,13 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
     public $port;
 
     /**
-     * @var resource
+     * @var resource|array
+     *
+     * Read stream.
+     *
+     * In the case of a socket, this is also the write stream.
+     *
+     * In the case of pipes, this is an array of write/read/error streams.
      */
     public $stream;
 
@@ -39,6 +45,13 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
      * @var boolean
      */
     private $status = WARLOCK_CONN_OFFLINE;
+
+    /**
+     * Indicates that this is a direct connection and does not use WebSockets.
+     *
+     * @var bool
+     */
+    private $direct = false;
 
     /**
      * Buffer for fragmented frames
@@ -72,7 +85,8 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     /**
      * Any detected time offset. This doesn't need to be exact so we don't bother worrying about latency.
-     * @var int
+     *
+     * @var resource|Node
      */
     public $offset = 0;
 
@@ -82,14 +96,11 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->log = Master::$instance->log;
 
-        if($stream_or_node instanceof Node)
-            $this->node = $stream_or_node;
-        elseif(is_resource($stream_or_node))
-            $this->attach($stream_or_node);
-
         $this->ping['wait'] = ake($options, 'pingWait', 15);
 
         $this->ping['pings'] = ake($options, 'pingCount', 5);
+
+        $this->attach($stream_or_node);
 
     }
 
@@ -102,6 +113,30 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
     public function setNode(Node $node){
 
         $this->node = $node;
+
+    }
+
+    public function getReadStream(){
+
+        if(is_resource($this->stream))
+            return $this->stream;
+
+        if(is_array($this->stream) && is_resource($this->stream[1]))
+            return $this->stream[1];
+
+        return false;
+
+    }
+
+    public function getWriteStream(){
+
+        if(is_resource($this->stream))
+            return $this->stream;
+
+        if(is_array($this->stream) && is_resource($this->stream[0]))
+            return $this->stream[0];
+
+        return false;
 
     }
 
@@ -152,39 +187,63 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     public function attach($stream){
 
-        if(!is_resource($stream) || $this->name !== null)
+        if($stream instanceof Node){
+
+            $this->node = $stream;
+
+            $this->node->conn = $this;
+
+            return true;
+
+        }elseif($this->name !== null)
             return false;
 
-        $stream_id = intval($stream);
-
-        $this->log->write(W_DEBUG, "CONNECTION->ATTACH: STREAM=$stream_id", $this->name);
+        $stream_id = null;
 
         $this->stream = $stream;
 
-        $this->name = 'STREAM#' . $stream_id;
-
         $this->since = time();
 
-        $meta = stream_get_meta_data($stream);
+        if(is_resource($stream)){ //Socket
 
-        switch($meta['stream_type']){
+            $stream_id = intval($stream);
 
-            case 'tcp_socket/ssl':
+            $meta = stream_get_meta_data($stream);
 
-                if(($peer = stream_socket_get_name($this->stream, true)) === false)
-                    return false;
+            switch($meta['stream_type']){
 
-                list($this->address, $this->port) = explode(':', $peer);
+                case 'tcp_socket/ssl':
 
-                $this->log->write(W_DEBUG, "CONNECTION->CREATE: HOST=$this->address PORT=$this->port", $this->name);
+                    if(($peer = stream_socket_get_name($this->stream, true)) === false)
+                        return false;
 
-                break;
+                    list($this->address, $this->port) = explode(':', $peer);
 
-            default:
+                    $this->log->write(W_DEBUG, "CONNECTION->CREATE: HOST=$this->address PORT=$this->port", $this->name);
 
-                $this->log->write(W_WARN, "Unknown stream type: " . $meta['stream_type'], $this->name);
+                    break;
+
+                default:
+
+                    $this->log->write(W_WARN, "Unknown stream type: " . $meta['stream_type'], $this->name);
+
+            }
+
+        }elseif(is_array($stream) && is_resource($stream[0])){ //Pipes
+
+            $stream_id = intval($stream[1]); //We use the read stream id
+
+            $this->log->write(W_DEBUG, "CONNECTION->CREATE: PIPES COUNT=" . count($stream), $this->name);
+
+            $this->status = WARLOCK_CONN_ONLINE;
+
+            $this->direct = true;
 
         }
+
+        $this->log->write(W_DEBUG, "CONNECTION->ATTACH: STREAM=$stream_id");
+
+        $this->name = 'STREAM#' . $stream_id;
 
         return true;
 
@@ -421,22 +480,26 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->log->write(W_DECODE, "CONNECTION->PACKET: " . $packet, $this->name);
 
-        return $this->write($this->frame($packet, 'text', false));
+        return $this->write(($this->direct ? $packet . "\n": $this->frame($packet, 'text', false)));
 
     }
 
     private function write($frame){
 
-        if (!is_resource($this->stream))
+        $stream = $this->getWriteStream();
+
+        if(!is_resource($stream))
             return false;
 
         $len = strlen($frame);
 
         $this->log->write(W_DECODE2, "CONNECTION->FRAME: " . implode(' ', $this->hexString($frame)), $this->name);
 
-        $this->log->write(W_DEBUG, "CONNECTION->SOCKET: BYTES=$len HOST=$this->address PORT=$this->port", $this->name);
+        $desc = is_resource($this->stream) ? "HOST=$this->address PORT=$this->port" : "PIPE";
 
-        $bytes_sent = @fwrite($this->stream, $frame, $len);
+        $this->log->write(W_DEBUG, "CONNECTION->SOCKET: BYTES=$len $desc", $this->name);
+
+        $bytes_sent = @fwrite($stream, $frame, $len);
 
         if ($bytes_sent === false) {
 
@@ -467,19 +530,23 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
         if(!strlen($buf) > 0)
             return false;
 
-        $this->log->write(W_DEBUG, "CONNECTION<-SOCKET: BYTES=$len HOST=$this->address PORT=$this->port", $this->name);
+        $desc = is_resource($this->stream) ? "HOST=$this->address PORT=$this->port" : "PIPE";
+
+        $this->log->write(W_DEBUG, "CONNECTION<-SOCKET: BYTES=$len $desc", $this->name);
 
         //Record this time as the last time we received data from the client
         $this->lastContact = time();
 
         if($this->status === WARLOCK_CONN_HANDSHAKE){
 
-            if(!$this->completeHandshake($buf))
-                return false;
+            if($this->node instanceof Node){
 
-            return true;
+                if(!$this->completeHandshake($buf))
+                    return false;
 
-        }elseif(!$this->node instanceof Node){
+            }
+
+        }elseif($this->status !== WARLOCK_CONN_ONLINE){
 
             if(!$this->processHandshake($buf))
                 return false;
@@ -515,6 +582,33 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
      * @return mixed
      */
     public function processFrame(&$frameBuffer) {
+
+        if($this->direct === true){
+
+            if($this->payloadBuffer){
+
+                $frameBuffer = $this->payloadBuffer .= $frameBuffer;
+
+                $this->payloadBuffer = NULL;
+
+                return $this->processFrame($frameBuffer);
+
+            }
+
+            if(($pos = strpos($frameBuffer, "\n")) === false){
+
+                $this->payloadBuffer .= $frameBuffer;
+
+                return false;
+
+            }
+
+            $payload = substr($frameBuffer, 0, $pos++);
+
+            $frameBuffer = substr($frameBuffer, $pos);
+            return $payload;
+
+        }
 
         if ($this->frameBuffer) {
 
@@ -686,4 +780,17 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     }
 
+    public function getStatus(){
+
+        $warlock_conn_constants = array(
+            'WARLOCK_CONN_OFFLINE',
+            'WARLOCK_CONN_INIT',
+            'WARLOCK_CONN_HANDSHAKE',
+            'WARLOCK_CONN_ONLINE',
+            'WARLOCK_CONN_CLOSING',
+        );
+
+        return $warlock_conn_constants[$this->status];
+
+    }
 }

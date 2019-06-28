@@ -1,80 +1,28 @@
 <?php
 
-namespace Hazaar\Warlock\Server;
+namespace Hazaar\Warlock\Server\Node;
 
 use \Hazaar\Warlock\Server\Master;
 
-class Process extends \Hazaar\Model\Strict {
-
-    private $config;
-
-    private $log;
+class Process extends \Hazaar\Warlock\Server\Node {
 
     private $process;
 
+    private $process_status;
+
     private $pipes;
 
-    private $buffer;
+    public $pid;
 
-    public function init(){
+    public $start;
 
-        return array(
-            'id' => array(
-                'type' => 'string'
-            ),
-            'type' =>array(
-                'type' => 'string'
-            ),
-            'start' => array(
-                'type' => 'int',
-                'default' => time()
-            ),
-            'application' => array(
-                'type' => 'model',
-                'items' => array(
-                    'path' => array(
-                        'type' => 'string',
-                        'default' => APPLICATION_PATH
-                    ),
-                    'env' => array(
-                        'type' => 'string',
-                        'default' => APPLICATION_ENV
-                    )
-                )
-            ),
-            'pid' => array(
-                'type' => 'int',
-                'read' => function(){
-                    return ake($this->status, 'pid');
-                }
-            ),
-            'exitcode' => array(
-                'type' => 'int',
-                'read' => function(){
-                    return ake($this->status, 'exitcode');
-                }
-            ),
-            'status' => array(
-                'type' => 'array',
-                'read' => function(){
-                    if(!is_resource($this->process))
-                        return false;
-                    return proc_get_status($this->process);
-                }
-            ),
-            'tag' => array(
-                'type' => 'string'
-            ),
-            'env' => array(
-                'type' => 'string'
-            )
-        );
+    public $tag;
 
-    }
+    public $status;
 
-    function construct(\Hazaar\Application\Config $config){
+    function __construct($id, $type, $application, $tag = null){
 
-        $this->config = $config;
+        $this->name = $id;
 
         $this->log = Master::$instance->log;
 
@@ -85,10 +33,10 @@ class Process extends \Hazaar\Model\Strict {
         );
 
         $env = array_filter(array_merge($_SERVER, array(
-            'APPLICATION_PATH' => APPLICATION_PATH,
-            'APPLICATION_ENV' => $this->application['env'],
-            'HAZAAR_SID' => $this->config->sys->id,
-            'HAZAAR_ADMIN_KEY' => $this->config->admin->key,
+            'APPLICATION_PATH' => ake($application, 'path', APPLICATION_PATH),
+            'APPLICATION_ENV' => ake($application, 'env', APPLICATION_ENV),
+            'HAZAAR_SID' => Master::$instance->config->sys['id'],
+            'HAZAAR_ADMIN_KEY' => Master::$instance->config->admin->key,
             'USERNAME' => (array_key_exists('USERNAME', $_SERVER) ? $_SERVER['USERNAME'] : null)
         )), 'is_string');
 
@@ -97,7 +45,7 @@ class Process extends \Hazaar\Model\Strict {
         if (!$cmd || !file_exists($cmd))
             throw new \Exception('Application command runner could not be found!');
 
-        $php_binary = $this->config->sys['php_binary'];
+        $php_binary = Master::$instance->config->runner->process['php_binary'];
 
         if (!file_exists($php_binary))
             throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
@@ -115,11 +63,25 @@ class Process extends \Hazaar\Model\Strict {
 
             $this->pipes = $pipes;
 
-            $this->status = proc_get_status($this->process);
+            $this->process_status = proc_get_status($this->process);
 
-            $this->log->write(W_NOTICE, 'PID: ' . $this->pid, $this->id);
+            $this->log->write(W_NOTICE, 'PID: ' . $this->process_status['pid'], $this->id);
+
+            $conn = new \Hazaar\Warlock\Server\Connection($this->pipes);
+
+            $conn->setNode($this);
+
+            parent::__construct($conn, $type);
+
+            $this->start = time();
 
         }
+
+    }
+
+    function __destruct(){
+
+        $this->log->write(W_DEBUG, "PROCESS->DESTROY: HOST=$this->id", $this->name);
 
     }
 
@@ -129,9 +91,24 @@ class Process extends \Hazaar\Model\Strict {
 
     }
 
-    public function getReadPipe(){
+    public function getPID(){
 
-        return $this->pipes[1];
+        return ake($this->getStatus(), 'pid');
+
+    }
+
+    public function  getExitCode(){
+
+        return ake($this->getStatus(), 'exitcode');
+
+    }
+
+    public function getStatus(){
+
+        if(!is_resource($this->process))
+            return false;
+
+        return proc_get_status($this->process);
 
     }
 
@@ -145,28 +122,30 @@ class Process extends \Hazaar\Model\Strict {
 
         stream_set_blocking($this->pipes[2], false);
 
+        return true;
+
     }
 
     public function terminate(){
 
-        $pids = preg_split('/\s+/', `ps -o pid --no-heading --ppid $this->pid`);
+        $pid = $this->getPID();
 
-        foreach($pids as $pid){
+        $all_pids = preg_split('/\s+/', `ps -o pid --no-heading --ppid $pid`);
 
-            if(!is_numeric($pid))
+        foreach($all_pids as $running_pid){
+
+            if(!is_numeric($running_pid))
                 continue;
 
-            $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $pid, $this->tag);
+            $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $running_pid, $this->tag);
 
-            posix_kill($pid, 15);
+            posix_kill($running_pid, 15);
 
         }
 
-        $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $this->pid, $this->tag);
+        $this->log->write(W_DEBUG, 'TERMINATE: PID=' . $pid, $this->tag);
 
-        $result = proc_terminate($this->process, 15);
-
-        return $result;
+        return posix_kill($pid);
 
     }
 
@@ -245,6 +224,26 @@ class Process extends \Hazaar\Model\Strict {
         }
 
         proc_close($this->process);
+
+    }
+
+    public function processCommand($command, $payload = null){
+
+        switch($command){
+
+            case 'STATUS':
+
+                $this->status = $payload;
+
+                return true;
+
+            default:
+
+                $this->log->write(W_INFO, 'Got unknown command: ' . $command, $this->name);
+
+        }
+
+        return false;
 
     }
 

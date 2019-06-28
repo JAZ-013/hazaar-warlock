@@ -39,10 +39,11 @@
     <Compile Include="src\Server\CommInterface.php" />
     <Compile Include="src\Server\Job.php" />
     <Compile Include="src\Server\Kvstore.php" />
+    <Compile Include="src\Server\Runner.php" />
     <Compile Include="src\Server\Service.php" />
     <Compile Include="src\Server\Job\Runner.php" />
     <Compile Include="src\Server\Job\Service.php" />
-    <Compile Include="src\Server\Process.php" />
+    <Compile Include="src\Server\Node\Process.php" />
     <Compile Include="src\Server\Logger.php" />
     <Compile Include="src\Server\Node\Client.php" />
     <Compile Include="src\Server\Master.php" />
@@ -77,6 +78,7 @@
     <Content Include="docs\delayed-exec.md" />
     <Content Include="docs\kvstore.md" />
     <Content Include="docs\realtime-signalling.md" />
+    <Content Include="docs\configuration.md" />
     <Content Include="docs\services.md" />
     <Content Include="docs\index.md" />
     <Content Include="libs\client.js" />
