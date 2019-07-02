@@ -200,9 +200,9 @@ var HazaarWarlock = function (options) {
         return this;
     };
     /* Client Commands */
-    this.sync = function (admin_key) {
+    this.authorise = function (admin_key) {
         this.admin_key = admin_key;
-        this.__send('sync', { 'access_key': this.admin_key }, true);
+        this.__send('auth', { 'access_key': this.admin_key }, true);
         return this;
     };
     this.subscribe = function (event_id, callback, filter) {

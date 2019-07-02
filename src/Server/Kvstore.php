@@ -16,21 +16,23 @@ class Kvstore {
 
     private $last_compact = 0;
 
-    function __construct($persistent = false, $compact_time = null) {
+    function __construct(\Hazaar\Map $config) {
+
+        $this->log->write(W_NOTICE, 'Initialising KV Store');
 
         $this->log = Master::$instance->log;
 
-        if($persistent === true){
+        if($config->persist === true){
 
             $db_file = new \Hazaar\File(\Hazaar\Warlock\Server\Master::$instance->runtimePath('kvstore.db'));
 
             $this->db = new \Hazaar\Btree($db_file);
 
-            if($compact_time > 0){
+            if($config['compact'] > 0){
 
                 $this->log->write(W_NOTICE, 'KV Store persistent storage compaction enabled');
 
-                $this->compact_time = $compact_time;
+                $this->compact_time = $config['compact'];
 
                 $this->last_compact = $db_file->ctime();
 

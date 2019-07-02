@@ -25,7 +25,7 @@ class Protocol {
     static public $typeCodes = array(
         //SYSTEM MESSAGES
         0x00 => 'NOOP',         //Null Opperation
-        0x01 => 'SYNC',         //Sync client
+        0x01 => 'AUTH',         //Sync client
         0x02 => 'OK',           //OK response
         0x03 => 'ERROR',        //Error response
         0x04 => 'STATUS',       //Status request/response
@@ -64,12 +64,12 @@ class Protocol {
         0x47 => 'KVPUSH',         //Append one or more elements on to the end of a list
         0x48 => 'KVPOP',          //Remove and return the last element in a list
         0x49 => 'KVSHIFT',        //Remove and return the first element in a list
-        0x50 => 'KVUNSHIFT',      //Prepend one or more elements to the beginning of a list
-        0x51 => 'KVCOUNT',        //Count number of elements in a list
-        0x52 => 'KVINCR',         //Increment an integer value
-        0x53 => 'KVDECR',         //Decrement an integer value
-        0x54 => 'KVKEYS',         //Return all keys in the selected namespace
-        0x55 => 'KVVALS',         //Return all values in the selected namespace
+        0x4A => 'KVUNSHIFT',      //Prepend one or more elements to the beginning of a list
+        0x4B => 'KVCOUNT',        //Count number of elements in a list
+        0x4C => 'KVINCR',         //Increment an integer value
+        0x4D => 'KVDECR',         //Decrement an integer value
+        0x4E => 'KVKEYS',         //Return all keys in the selected namespace
+        0x4F => 'KVVALS',         //Return all values in the selected namespace
 
         //LOGGING/OUTPUT MESSAGES
         0x90 => 'LOG',          //Generic log message

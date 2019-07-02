@@ -69,6 +69,13 @@ class Runner {
 
     public function start() {
 
+        $this->log->write(W_NOTICE, 'Starting job runner');
+
+        $options = $this->config->toDotNotation();
+
+        foreach($options as $key => $value)
+            $this->log->write(W_NOTICE, $key . ' = ' . $value);
+
         $services = new \Hazaar\Application\Config('service', APPLICATION_ENV);
 
         if (!$services->loaded())

@@ -2,8 +2,6 @@
 
 namespace Hazaar\Warlock\Server;
 
-define('STREAM_MAX_RECV_LEN', 65535);
-
 class Cluster  {
 
     private $config;
@@ -169,6 +167,9 @@ class Cluster  {
             }
 
         }
+
+        if($this->config->kvstore['enabled'] === true)
+            $this->kv_store = new Kvstore($this->config->kvstore);
 
         return $this->runner->start();
 
@@ -391,6 +392,10 @@ class Cluster  {
 
         switch($type){
 
+            case 'AUTH':
+
+                return $this->authorise($node, $payload);
+
             case 'SUBSCRIBE':
 
                 $filter = (property_exists($payload, 'filter') ? $payload->filter : NULL);
@@ -405,6 +410,19 @@ class Cluster  {
 
                 return $this->signal->trigger($node, $payload->id, ake($payload, 'data'), ake($payload, 'echo', false));
 
+            case 'EVENT':
+
+                if(!property_exists($payload, 'trigger'))
+                    throw new \Exception('Event triggered without trigger ID!');
+
+                if(array_key_exists($payload->id, $this->eventQueue)
+                    && array_key_exists($payload->trigger, $this->eventQueue[$payload->id]))
+                    $this->log->write(W_WARN, 'Received existing trigger ' . $payload->trigger . ' for event ' . $payload->id);
+                else
+                    $this->signal->trigger($payload->id, ake($payload, 'data'), $client->id, $payload->trigger);
+
+                break;
+
             case 'LOG':
 
                 $this->log->write(ake($payload, 'level', W_INFO), ake($payload, 'msg'));
@@ -416,6 +434,134 @@ class Cluster  {
                 $node->status = $payload;
 
                 return true;
+
+            case 'DELAY' :
+
+                $payload->when = time() + ake($payload, 'value', 0);
+
+                $this->log->write(W_DEBUG, "JOB->DELAY: INTERVAL={$payload->value}");
+
+            case 'SCHEDULE' :
+
+                if(!property_exists($payload, 'when'))
+                    throw new \Exception('Unable schedule code execution without an execution time!');
+
+                if(!($id = $this->runner->scheduleJob(
+                    $payload->when,
+                    $payload->exec,
+                    $payload->application,
+                    ake($payload, 'tag'),
+                    ake($payload, 'overwrite', false)
+                ))) throw new \Exception('Could not schedule delayed function');
+
+                $node->send('OK', array('command' => $type, 'job_id' => $id));
+
+                break;
+
+            case 'CANCEL' :
+
+                if (!$this->runner->cancelJob($payload))
+                    throw new \Exception('Error trying to cancel job');
+
+                $this->log->write(W_NOTICE, "Job successfully cancelled");
+
+                $node->send('OK', array('command' => $type, 'job_id' => $payload));
+
+                break;
+
+            case 'ENABLE' :
+
+                $this->log->write(W_NOTICE, "ENABLE: NAME=$payload CLIENT=$node->id");
+
+                if(!$this->runner->serviceEnable($payload))
+                    throw new \Exception('Unable to enable service ' . $payload);
+
+                $node->send('OK', array('command' => $type, 'name' => $payload));
+
+                break;
+
+            case 'DISABLE' :
+
+                $this->log->write(W_NOTICE, "DISABLE: NAME=$payload CLIENT=$node->id");
+
+                if(!$this->runner->serviceDisable($payload))
+                    throw new \Exception('Unable to disable service ' . $payload);
+
+                $node->send('OK', array('command' => $type, 'name' => $payload));
+
+                break;
+
+            case 'STATUS':
+
+                $this->log->write(W_NOTICE, "STATUS: CLIENT=$node->id");
+
+                $node->send('STATUS', $this->runner->getStatus());
+
+                break;
+
+            case 'SERVICE' :
+
+                $this->log->write(W_NOTICE, "SERVICE: NAME=$payload CLIENT=$node->id");
+
+                if(!array_key_exists($payload, $this->services))
+                    throw new \Exception('Service ' . $payload . ' does not exist!');
+
+                $node->send('SERVICE', $this->runner->services[$payload]);
+
+                break;
+
+            case 'SPAWN':
+
+                if(!($name = ake($payload, 'name')))
+                    throw new \Exception('Unable to spawn a service without a service name!');
+
+                if(!($id = $this->runner->spawn($node, $name, $payload)))
+                    throw new \Exception('Unable to spawn dynamic service: ' . $name);
+
+                $node->send('OK', array('command' => $type, 'name' => $name, 'job_id' => $id));
+
+                break;
+
+            case 'KILL':
+
+                if(!($name = ake($payload, 'name')))
+                    throw new \Exception('Can not kill dynamic service without a name!');
+
+                if(!$this->runner->kill($node, $name))
+                    throw new \Exception('Unable to kill dynamic service ' . $name);
+
+                $node->send('OK', array('command' => $type, 'name' => $payload));
+
+                break;
+
+            case 'SIGNAL':
+
+                if(!($event_id = ake($payload, 'id')))
+                    return false;
+
+                //Otherwise, send this signal to any child services for the requested type
+                if(!($service = ake($payload, 'service')))
+                    return false;
+
+                if(!$this->runner->signal($node, $event_id, $service, ake($payload, 'data')))
+                    throw new \Exception('Unable to signal dynamic service');
+
+                $node->send('OK', array('command' => $type, 'name' => $payload));
+
+                break;
+
+            case 'SHUTDOWN':
+
+                $delay = ake($payload, 'delay', 0);
+
+                $this->log->write(W_NOTICE, "Shutdown requested (Delay: $delay)");
+
+                if(!$this->shutdown($delay))
+                    throw new \Exception('Unable to initiate shutdown!');
+
+                $node->send('OK', array('command' => $type));
+
+                break;
 
             default:
 
@@ -510,11 +656,42 @@ class Cluster  {
 
     }
 
-    public function startKV(){
+    /**
+     * Returns the current server status
+     *
+     * @param mixed $full
+     * @return array
+     */
+    private function getStatus($full = true) {
 
-        $this->log->write(W_NOTICE, 'Initialising KV Store');
+        $status = array(
+            'state' => 'running',
+            'pid' => $this->pid,
+            'started' => $this->start,
+            'uptime' => time() - $this->start,
+            'memory' => memory_get_usage(),
+            'stats' => $this->stats,
+            'streams' => count($this->streams),
+            'connections' => count($this->connections)
+        );
 
-        $this->kv_store = new Kvstore($this->config->kvstore['persist'], $this->config->kvstore['compact']);
+        return $status;
+
+    }
+
+
+    public function authorise(Node $node, $payload){
+
+        if(!($payload instanceof \stdClass
+            && property_exists($payload, 'access_key')
+            && $payload->access_key === Master::$instance->config->client->admin['key']
+        )) return false;
+
+        $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $node->id, $node->name);
+
+        $this->admins[$node->id] = $node;
+
+        $node->send('OK');
 
         return true;
 

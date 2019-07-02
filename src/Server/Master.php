@@ -2,31 +2,87 @@
 
 namespace Hazaar\Warlock\Server;
 
+define('STREAM_MAX_RECV_LEN', 65535);
+
+/**
+ * Warlock Server Master Class
+ *
+ * The Master class is the root class of the Warlock server.  It is responsible for starting and managing the TCP socket
+ * server and connections.  It also creates and starts the Cluster class that is basically the brains of the server.  While
+ * the Master class handles all inbound streams, the data it grabs from these streams is passed to the Cluster class for
+ * processing.
+ *
+ */
 class Master {
 
     /**
-     * SERVER INSTANCE
+     * MASTER SERVER INSTANCE
+     *
+     * @var \Hazaar\Warlock\Server\Master
      */
     static public $instance;
 
-    // The Warlock protocol encoder/decoder.
+    /**
+     * The Warlock protocol encoder/decoder object.
+     *
+     * This object must be shared by all classes that want to encode/decode packets as it contains the system ID.
+     *
+     * @var \Hazaar\Warlock\Protocol
+     */
     static public $protocol;
 
+    /**
+     * The Warlock Cluster Manager
+     *
+     * @var \Hazaar\Warlock\Server\Cluster
+     */
     static public $cluster;
 
+    /**
+     * Enable silent mode
+     *
+     * When enabled, all output will be redirected to a file and nothing will be written to the console.
+     *
+     * @var boolean
+     */
     private $silent = false;
 
-    // Main loop state. On false, Warlock will exit the main loop and terminate
+    /**
+     * Main loop state.
+     *
+     * On false, Warlock will exit the main loop and terminate
+     *
+     * @var boolean
+     */
     private $running = NULL;
 
+    /**
+     * Shutdown delay timer
+     *
+     * If this value is a non-NULL epoch value in the past, then the server will shutdown.  Setting this to a value in
+     * the future allows a shutdown to be scheduled.
+     *
+     * @var int
+     */
     private $shutdown = NULL;
 
+    /**
+     * The Warlock Server configuration object
+     *
+     * @var \Hazaar\Application\Config
+     */
     public $config;
 
+    /**
+     * A Logger object
+     *
+     * @var \Hazaar\Warlock\Server\Logger
+     */
     public $log;
 
     /**
      * Job tags
+     *
      * @var mixed
      */
     private $tags = array();
@@ -36,20 +92,20 @@ class Master {
      *
      * @var mixed
      */
-    private $start = 0;
+    public $start = 0;
 
     /**
      * Epoch of the last time stuff was processed
      * @var mixed
      */
-    private $time = 0;
+    public $time = 0;
 
     /**
      * Current process id
      *
      * @var mixed
      */
-    private $pid = 0;
+    public $pid = 0;
 
     /**
      * Current process id file
@@ -59,29 +115,35 @@ class Master {
 
     /**
      * Default select() timeout
+     *
      * @var mixed
      */
     private $tv = 1;
-
-    private $stats = array(
-        'uptime' => 0
-    );
 
     /**
      * SOCKETS & STREAMS
      */
 
-    // The main socket for listening for incomming connections.
+    /**
+     * The main socket for listening for incomming connections.
+     *
+     * @var resource
+     */
     private $master = NULL;
 
-    // Currently connected stream resources we are listening for data on.
-    public $streams = array();
+    /**
+     * Currently connected stream resources we are listening for data on.
+     *
+     * @var array
+     */
+    private $streams = array();
 
+    /**
+     * Current connection objects that are linked to streams
+     *
+     * @var array
+     */
     private $connections = array();
-
-    private $admins = array();
-
-    private $kv_store;
 
     // Signals that we will capture
     public $pcntl_signals = array(
@@ -146,7 +208,7 @@ class Master {
 
         $this->silent = $silent;
 
-        if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
+        if(!$this->loadConfig())
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
         Logger::set_default_log_level($this->config->log->level);
@@ -219,12 +281,6 @@ class Master {
         $this->log->write(W_NOTICE, 'Listen address = ' . $this->config->server->listen);
 
         $this->log->write(W_NOTICE, 'Listen port = ' . $this->config->server->port);
-
-        //$this->log->write(W_NOTICE, 'Job expiry = ' . $this->config->job->expire . ' seconds');
-
-        //$this->log->write(W_NOTICE, 'Exec timeout = ' . $this->config->exec->timeout . ' seconds');
-
-        //$this->log->write(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
 
         Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded, true);
 
@@ -303,9 +359,15 @@ class Master {
 
     }
 
+    /**
+     * Load the server configuration file.
+     *
+     * @return \Hazaar\Application\Config
+     */
     public function loadConfig(){
 
-        $this->log->write(W_NOTICE, (($this->config instanceof \Hazaar\Application\Config) ? 'Re-l' : 'L' ) . "oading configuration");
+        if($this->log)
+            $this->log->write(W_NOTICE, (($this->config instanceof \Hazaar\Application\Config) ? 'Re-l' : 'L' ) . "oading configuration");
 
         $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
@@ -587,6 +649,12 @@ class Master {
 
     }
 
+    /**
+     * Add a new connection to stream input handler
+     *
+     * @param Connection $conn
+     * @return boolean|integer
+     */
     public function addConnection(Connection $conn){
 
         if(!($stream = $conn->getReadStream()))
@@ -604,6 +672,14 @@ class Master {
 
     }
 
+    /**
+     * Remove an existing connection from the stream input handler
+     *
+     * This should be done when a connection closes.
+     *
+     * @param Connection $conn
+     * @return boolean
+     */
     public function removeConnection(Connection $conn){
 
         $stream_id = intval($conn->stream);
@@ -629,7 +705,7 @@ class Master {
     }
 
     /**
-     * Retrieve a client object for a stream resource
+     * Retrieve a connection object for a stream resource
      *
      * @param resource $stream The stream resource
      *
@@ -666,6 +742,17 @@ class Master {
 
     }
 
+    /**
+     * Disconnect a stream resource
+     *
+     * If the resource is linked with an existing connection, then the connection object is used to handle
+     * the disconnect.  That way any closing frames are sent, subscriptions are cleared out, etc.
+     *
+     * Otherwise, we shutdown the connection immediately and close the stream resource.
+     *
+     * @param mixed $stream
+     * @return boolean
+     */
     public function disconnect($stream) {
 
         if ($conn = $this->getConnection($stream))
@@ -684,303 +771,6 @@ class Master {
         stream_socket_shutdown($stream, STREAM_SHUT_RDWR);
 
         return fclose($stream);
-
-    }
-
-    /*
-    public function authorise(CommInterface $client, $payload, &$response){
-
-    if(!($payload instanceof \stdClass
-    && property_exists($payload, 'access_key')
-    && $payload->access_key === $this->config->admin->key
-    )) return false;
-
-    $type = strtoupper(ake($payload, 'type', 'admin'));
-
-    $client->type = $type;
-
-    if($type === 'PEER'){
-
-    $response = self::$cluster->addPeer($client);
-
-    $stream_id = intval($client->socket);
-
-    if(!array_key_exists($stream_id, $this->streams))
-    $this->streams[$stream_id] = $client;
-
-    }else{
-
-    $this->log->write(W_NOTICE, 'Warlock control authorised to ' . $client->id, $client->name);
-
-    }
-
-    $this->admins[$client->id] = $client;
-
-    return true;
-
-
-    }*/
-
-    /*
-    private function addClient($stream) {
-
-    // If we don't have a stream or id, return false
-    if (!($stream && is_resource($stream)))
-    return false;
-
-    $stream_id = intval($stream);
-
-    // If the stream already has a client object, return it
-    if (array_key_exists($stream_id, $this->clients))
-    return $this->clients[$stream_id];
-
-    //Create the new client object
-    $client = new Node($stream, $this->config->client);
-
-    // Add it to the client array
-    $this->clients[$stream_id] = $client;
-
-    $this->stats['clients']++;
-
-    return $client;
-
-    }*/
-
-    /**
-     * Removes a client from a stream.
-     *
-     * Because a client can have multiple stream connections (in legacy mode) this removes the client reference
-     * for that stream. Once there are no more references left the client is completely removed.
-     *
-     * @param mixed $stream
-     *
-     * @return boolean
-     */
-    /*
-    public function removeClient($stream) {
-
-    if (!$stream)
-    return false;
-
-    $stream_id = intval($stream);
-
-    if (!array_key_exists($stream_id, $this->clients))
-    return false;
-
-    $client = $this->clients[$stream_id];
-
-    foreach($this->waitQueue as $event_id => &$queue){
-
-    if(!array_key_exists($client->id, $queue))
-    continue;
-
-    $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
-
-    unset($queue[$client->id]);
-
-    }
-
-    $this->log->write(W_DEBUG, "CLIENT->REMOVE: CLIENT=$client->id", $client->name);
-
-    unset($this->clients[$stream_id]);
-
-    unset($this->streams[$stream_id]);
-
-    $this->stats['clients']--;
-
-    return true;
-
-    }*/
-
-    private function getStatus($full = true) {
-
-        $status = array(
-            'state' => 'running',
-            'pid' => $this->pid,
-            'started' => $this->start,
-            'uptime' => time() - $this->start,
-            'memory' => memory_get_usage(),
-            'stats' => $this->stats,
-            'streams' => count($this->streams),
-            'connections' => count($this->connections)
-        );
-
-        return $status;
-
-    }
-
-    /**
-     * Process administative commands for a client
-     *
-     * @param Node $client
-     * @param mixed $command
-     * @param mixed $payload
-     *
-     * @return mixed
-     */
-    public function processCommand(Node $client, $command, &$payload) {
-
-        if(!$command)
-            return false;
-
-        if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
-            return $this->kv_store->process($client, $command, $payload);
-
-        if (!($client instanceof Node\Peer || array_key_exists($client->id, $this->admins)))
-            throw new \Exception('Admin commands only allowed by authorised clients!');
-
-        $this->log->write(W_DEBUG, "ADMIN_COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL));
-
-        switch ($command) {
-
-            case 'EVENT':
-
-                if(!property_exists($payload, 'trigger'))
-                    throw new \Exception('Event triggered without trigger ID!');
-
-                if(array_key_exists($payload->id, $this->eventQueue)
-                    && array_key_exists($payload->trigger, $this->eventQueue[$payload->id]))
-                    $this->log->write(W_WARN, 'Received existing trigger ' . $payload->trigger . ' for event ' . $payload->id);
-                else
-                    $this->trigger($payload->id, ake($payload, 'data'), $client->id, $payload->trigger);
-
-                break;
-
-            case 'SHUTDOWN':
-
-                $delay = ake($payload, 'delay', 0);
-
-                $this->log->write(W_NOTICE, "Shutdown requested (Delay: $delay)");
-
-                if(!$this->shutdown($delay))
-                    throw new \Exception('Unable to initiate shutdown!');
-
-                $client->send('OK', array('command' => $command));
-
-                break;
-
-            case 'DELAY' :
-
-                $payload->when = time() + ake($payload, 'value', 0);
-
-                $this->log->write(W_DEBUG, "JOB->DELAY: INTERVAL={$payload->value}");
-
-            case 'SCHEDULE' :
-
-                if(!property_exists($payload, 'when'))
-                    throw new \Exception('Unable schedule code execution without an execution time!');
-
-                if(!($id = $this->scheduleJob(
-                    $payload->when,
-                    $payload->exec,
-                    $payload->application,
-                    ake($payload, 'tag'),
-                    ake($payload, 'overwrite', false)
-                ))) throw new \Exception('Could not schedule delayed function');
-
-                $client->send('OK', array('command' => $command, 'job_id' => $id));
-
-                break;
-
-            case 'CANCEL' :
-
-                if (!$this->cancelJob($payload))
-                    throw new \Exception('Error trying to cancel job');
-
-                $this->log->write(W_NOTICE, "Job successfully cancelled");
-
-                $client->send('OK', array('command' => $command, 'job_id' => $payload));
-
-                break;
-
-            case 'ENABLE' :
-
-                $this->log->write(W_NOTICE, "ENABLE: NAME=$payload CLIENT=$client->id");
-
-                if(!$this->serviceEnable($payload))
-                    throw new \Exception('Unable to enable service ' . $payload);
-
-                $client->send('OK', array('command' => $command, 'name' => $payload));
-
-                break;
-
-            case 'DISABLE' :
-
-                $this->log->write(W_NOTICE, "DISABLE: NAME=$payload CLIENT=$client->id");
-
-                if(!$this->serviceDisable($payload))
-                    throw new \Exception('Unable to disable service ' . $payload);
-
-                $client->send('OK', array('command' => $command, 'name' => $payload));
-
-                break;
-
-            case 'STATUS':
-
-                $this->log->write(W_NOTICE, "STATUS: CLIENT=$client->id");
-
-                $client->send('STATUS', $this->getStatus());
-
-                break;
-
-            case 'SERVICE' :
-
-                $this->log->write(W_NOTICE, "SERVICE: NAME=$payload CLIENT=$client->id");
-
-                if(!array_key_exists($payload, $this->services))
-                    throw new \Exception('Service ' . $payload . ' does not exist!');
-
-                $client->send('SERVICE', $this->services[$payload]);
-
-                break;
-
-            case 'SPAWN':
-
-                if(!($name = ake($payload, 'name')))
-                    throw new \Exception('Unable to spawn a service without a service name!');
-
-                if(!($id = $this->spawn($client, $name, $payload)))
-                    throw new \Exception('Unable to spawn dynamic service: ' . $name);
-
-                $client->send('OK', array('command' => $command, 'name' => $name, 'job_id' => $id));
-
-                break;
-
-            case 'KILL':
-
-                if(!($name = ake($payload, 'name')))
-                    throw new \Exception('Can not kill dynamic service without a name!');
-
-                if(!$this->kill($client, $name))
-                    throw new \Exception('Unable to kill dynamic service ' . $name);
-
-                $client->send('OK', array('command' => $command, 'name' => $payload));
-
-                break;
-
-            case 'SIGNAL':
-
-                if(!($event_id = ake($payload, 'id')))
-                    return false;
-
-                //Otherwise, send this signal to any child services for the requested type
-                if(!($service = ake($payload, 'service')))
-                    return false;
-
-                if(!$this->signal($client, $event_id, $service, ake($payload, 'data')))
-                    throw new \Exception('Unable to signal dynamic service');
-
-                $client->send('OK', array('command' => $command, 'name' => $payload));
-
-                break;
-
-            default:
-
-                throw new \Exception('Unhandled command: ' . $command);
-
-        }
-
-        return true;
 
     }
 
