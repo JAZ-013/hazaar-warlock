@@ -7,8 +7,6 @@ namespace Hazaar\Warlock\Connection;
 
 final class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Interface {
 
-    protected $id;
-
     protected $key;
 
     protected $socket;
@@ -38,8 +36,6 @@ final class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Inter
         $this->start = time();
 
         $this->protocol = $protocol;
-
-        $this->id = ($guid === null ? guid() : $guid);
 
         $this->key = uniqid();
 
@@ -81,7 +77,7 @@ final class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Inter
         /**
          * Initiate a WebSockets connection
          */
-        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key, $headers);
+        $handshake = $this->createHandshake('/' . $application_name .'/warlock', $host, null, $this->key, $headers);
 
         @socket_write($this->socket, $handshake, strlen($handshake));
 

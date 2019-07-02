@@ -23,6 +23,8 @@ class Cluster  {
      */
     public $clients = array();
 
+    public $admins = array();
+
     private $last_check = 0;
 
     private $frames = array();
@@ -276,6 +278,9 @@ class Cluster  {
                 unset($this->clients[$node->id]);
             else return false;
 
+            if(array_key_exists($node->id, $this->admins))
+                unset($this->admins[$node->id]);
+
             $this->signal->disconnect($node);
 
             $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: CLIENT=$node->id", $this->name);
@@ -344,11 +349,11 @@ class Cluster  {
         try{
 
             /**
-             * Forward any non-subscribe events to all connected peers.  This is the whole "mesh-network" bit.
+             * Forward any trigger events to all connected peers.  This is the whole "mesh-network" bit.
              *
              * Notes:
              * * Frames with frame_ids will eventually be ignored and recorded.
-             * * I may need to come up with a better frame forwarding scheme.  Perhaps based on frame IDs or something.
+             * * I may need to come up with a better frame forwarding scheme.  Perhaps based on type IDs or something.
              */
             if($type === 'TRIGGER'){
 
@@ -385,191 +390,137 @@ class Cluster  {
 
     private function processCommand(Node $node, $type, $payload){
 
-        $this->log->write(W_DEBUG, $node->type . "<-$type: CLIENT=$node->id", $node->name);
+        $type_id = Master::$protocol->getType($type);
 
-        if($this->kv_store !== NULL && substr($type, 0, 2) === 'KV')
-            return $this->kv_store->process($node, $type, $payload);
+        $this->log->write(W_DEBUG, $node->type . "<-$type: ID=0x"
+            . strtoupper(str_pad(dechex($type_id), 2, STR_PAD_LEFT))
+            . " CLIENT=$node->id", $node->name);
+
+        if($type_id < 0x20){
+
+            switch($type){
+
+                case 'AUTH':
+
+                    return $this->authorise($node, $payload);
+
+                case 'OK':
+
+                    //No action
+                    return true;
+
+                case 'ERROR':
+
+                    $this->log->write(W_ERR, $payload, $node->name);
+
+                    return true;
+
+                case 'LOG':
+
+                    return $this->commandLog($node, $payload);
+
+                case 'DEBUG':
+
+                    $this->log->write(W_DEBUG, ake($payload, 'data'), $node->name);
+
+                    return true;
+
+                case 'SUBSCRIBE':
+
+                    return $this->signal->subscribe($node, $payload->id, ake($payload, 'filter'));
+
+                case 'UNSUBSCRIBE' :
+
+                    return $this->signal->unsubscribe($node, $payload->id);
+
+                case 'TRIGGER' :
+
+                    return $this->signal->trigger($node, $payload->id, ake($payload, 'data'), ake($payload, 'echo', false));
+
+            }
+
+            return $node->processCommand($type, $payload);
+
+        }
+
+        if(!array_key_exists($node->id, $this->admins))
+            return false;
+
+        if($type_id >= 0x20 && $type_id <= 0x29){
+
+            return $this->runner->processCommand($node, $type, $payload);
+
+        }elseif($type_id >= 0x40 && $type_id <= 0x4F){
+
+            if(!$this->kv_store instanceof Kvstore){
+
+                $this->log->write(W_WARN, 'KV Storage is currently disabled!');
+
+                return false;
+
+            }
+
+            return $this->kv_store->processCommand($node, $type, $payload);
+
+        }
 
         switch($type){
 
-            case 'AUTH':
-
-                return $this->authorise($node, $payload);
-
-            case 'SUBSCRIBE':
-
-                $filter = (property_exists($payload, 'filter') ? $payload->filter : NULL);
-
-                return $this->signal->subscribe($node, $payload->id, $filter);
-
-            case 'UNSUBSCRIBE' :
-
-                return $this->signal->unsubscribe($node, $payload->id);
-
-            case 'TRIGGER' :
-
-                return $this->signal->trigger($node, $payload->id, ake($payload, 'data'), ake($payload, 'echo', false));
-
-            case 'EVENT':
-
-                if(!property_exists($payload, 'trigger'))
-                    throw new \Exception('Event triggered without trigger ID!');
-
-                if(array_key_exists($payload->id, $this->eventQueue)
-                    && array_key_exists($payload->trigger, $this->eventQueue[$payload->id]))
-                    $this->log->write(W_WARN, 'Received existing trigger ' . $payload->trigger . ' for event ' . $payload->id);
-                else
-                    $this->signal->trigger($payload->id, ake($payload, 'data'), $client->id, $payload->trigger);
-
-                break;
-
-            case 'LOG':
-
-                $this->log->write(ake($payload, 'level', W_INFO), ake($payload, 'msg'));
-
-                return true;
-
             case 'STATUS':
 
-                $node->status = $payload;
+                $node->send('STATUS', $this->getStatus());
 
                 return true;
-
-            case 'DELAY' :
-
-                $payload->when = time() + ake($payload, 'value', 0);
-
-                $this->log->write(W_DEBUG, "JOB->DELAY: INTERVAL={$payload->value}");
-
-            case 'SCHEDULE' :
-
-                if(!property_exists($payload, 'when'))
-                    throw new \Exception('Unable schedule code execution without an execution time!');
-
-                if(!($id = $this->runner->scheduleJob(
-                    $payload->when,
-                    $payload->exec,
-                    $payload->application,
-                    ake($payload, 'tag'),
-                    ake($payload, 'overwrite', false)
-                ))) throw new \Exception('Could not schedule delayed function');
-
-                $node->send('OK', array('command' => $type, 'job_id' => $id));
-
-                break;
-
-            case 'CANCEL' :
-
-                if (!$this->runner->cancelJob($payload))
-                    throw new \Exception('Error trying to cancel job');
-
-                $this->log->write(W_NOTICE, "Job successfully cancelled");
-
-                $node->send('OK', array('command' => $type, 'job_id' => $payload));
-
-                break;
-
-            case 'ENABLE' :
-
-                $this->log->write(W_NOTICE, "ENABLE: NAME=$payload CLIENT=$node->id");
-
-                if(!$this->runner->serviceEnable($payload))
-                    throw new \Exception('Unable to enable service ' . $payload);
-
-                $node->send('OK', array('command' => $type, 'name' => $payload));
-
-                break;
-
-            case 'DISABLE' :
-
-                $this->log->write(W_NOTICE, "DISABLE: NAME=$payload CLIENT=$node->id");
-
-                if(!$this->runner->serviceDisable($payload))
-                    throw new \Exception('Unable to disable service ' . $payload);
-
-                $node->send('OK', array('command' => $type, 'name' => $payload));
-
-                break;
-
-            case 'STATUS':
-
-                $this->log->write(W_NOTICE, "STATUS: CLIENT=$node->id");
-
-                $node->send('STATUS', $this->runner->getStatus());
-
-                break;
-
-            case 'SERVICE' :
-
-                $this->log->write(W_NOTICE, "SERVICE: NAME=$payload CLIENT=$node->id");
-
-                if(!array_key_exists($payload, $this->services))
-                    throw new \Exception('Service ' . $payload . ' does not exist!');
-
-                $node->send('SERVICE', $this->runner->services[$payload]);
-
-                break;
-
-            case 'SPAWN':
-
-                if(!($name = ake($payload, 'name')))
-                    throw new \Exception('Unable to spawn a service without a service name!');
-
-                if(!($id = $this->runner->spawn($node, $name, $payload)))
-                    throw new \Exception('Unable to spawn dynamic service: ' . $name);
-
-                $node->send('OK', array('command' => $type, 'name' => $name, 'job_id' => $id));
-
-                break;
-
-            case 'KILL':
-
-                if(!($name = ake($payload, 'name')))
-                    throw new \Exception('Can not kill dynamic service without a name!');
-
-                if(!$this->runner->kill($node, $name))
-                    throw new \Exception('Unable to kill dynamic service ' . $name);
-
-                $node->send('OK', array('command' => $type, 'name' => $payload));
-
-                break;
-
-            case 'SIGNAL':
-
-                if(!($event_id = ake($payload, 'id')))
-                    return false;
-
-                //Otherwise, send this signal to any child services for the requested type
-                if(!($service = ake($payload, 'service')))
-                    return false;
-
-                if(!$this->runner->signal($node, $event_id, $service, ake($payload, 'data')))
-                    throw new \Exception('Unable to signal dynamic service');
-
-                $node->send('OK', array('command' => $type, 'name' => $payload));
-
-                break;
 
             case 'SHUTDOWN':
 
-                $delay = ake($payload, 'delay', 0);
-
-                $this->log->write(W_NOTICE, "Shutdown requested (Delay: $delay)");
-
-                if(!$this->shutdown($delay))
-                    throw new \Exception('Unable to initiate shutdown!');
-
-                $node->send('OK', array('command' => $type));
-
-                break;
-
-            default:
-
-                return $node->processCommand($type, $payload);
+                return $this->commandShutdown($node, $payload);
 
         }
 
         return false;
+
+    }
+
+    private function commandLog(Node $node, \stdClass $payload){
+
+        if(!property_exists($payload, 'msg'))
+            throw new \Exception('Unable to write to log without a log message!');
+
+        $level = ake($payload, 'level', W_INFO);
+
+        $name = ake($payload, 'name', $node->name);
+
+        if(is_array($payload->msg)){
+
+            foreach($payload->msg as $msg)
+                $this->commandLog($node, (object)array('level' => $level, 'msg' => $msg, 'name' => $name));
+
+        }else{
+
+            $this->log->write($level, ake($payload, 'msg', '--'), $name);
+
+        }
+
+        return true;
+
+    }
+
+    private function commandShutdown(Node $node, $payload){
+
+        if(!array_key_exists($node->id, $this->admins))
+            return false;
+
+        $delay = ake($payload, 'delay', 0);
+
+        $this->log->write(W_NOTICE, "Shutdown requested (Delay: $delay)");
+
+        if(!Master::$instance->shutdown($delay))
+            return false;
+
+        $node->send('OK', array('command' => 'SHUTDOWN'));
+
+        return true;
 
     }
 
@@ -666,13 +617,11 @@ class Cluster  {
 
         $status = array(
             'state' => 'running',
-            'pid' => $this->pid,
-            'started' => $this->start,
-            'uptime' => time() - $this->start,
+            'pid' => getmypid(),
+            'started' => Master::$instance->start,
+            'uptime' => time() - Master::$instance->start,
             'memory' => memory_get_usage(),
-            'stats' => $this->stats,
-            'streams' => count($this->streams),
-            'connections' => count($this->connections)
+            'stats' => $this->stats
         );
 
         return $status;

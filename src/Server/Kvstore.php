@@ -126,7 +126,7 @@ class Kvstore {
 
     }
 
-    public function process(Node $client, $command, &$payload){
+    public function processCommand(Node $client, $command, &$payload){
 
         if(!$payload)
             return false;

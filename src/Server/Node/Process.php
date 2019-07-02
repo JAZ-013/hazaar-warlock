@@ -229,6 +229,12 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
         switch($command){
 
+            case 'CHECK':
+
+                $this->status = $payload;
+
+                return true;
+
             default:
 
                 $this->log->write(W_INFO, 'Got unknown command: ' . $command, $this->name);

@@ -28,52 +28,55 @@ class Protocol {
         0x01 => 'AUTH',         //Sync client
         0x02 => 'OK',           //OK response
         0x03 => 'ERROR',        //Error response
-        0x04 => 'STATUS',       //Status request/response
-        0x05 => 'SHUTDOWN',     //Shutdown request
-        0x06 => 'PING',         //Typical PING
-        0x07 => 'PONG',         //Typical PONG
-
-        //CODE EXECUTION MESSAGES
-        0x10 => 'DELAY',        //Execute code after a period
-        0x11 => 'SCHEDULE',     //Execute code at a set time
-        0x12 => 'EXEC',         //Execute some code in the Warlock Runner.
-        0x13 => 'CANCEL',       //Cancel a pending code execution
-
-        //SIGNALLING MESSAGES
-        0x20 => 'SUBSCRIBE',    //Subscribe to an event
-        0x21 => 'UNSUBSCRIBE',  //Unsubscribe from an event
-        0x22 => 'TRIGGER',      //Trigger an event
-        0x23 => 'EVENT',        //An event
-
-        //SERVICE MESSAGES
-        0x30 => 'ENABLE',       //Start a service
-        0x31 => 'DISABLE',      //Stop a service
-        0x32 => 'SERVICE',      //Service status
-        0x33 => 'SPAWN',        //Spawn a dynamic service
-        0x34 => 'KILL',         //Kill a dynamic service instance
-        0x35 => 'SIGNAL',       //Signal between a dyanmic service and it's client
-
-        //KV STORAGE MESSAGES
-        0x40 => 'KVGET',          //Get a value by key
-        0x41 => 'KVSET',          //Set a value by key
-        0x42 => 'KVHAS',          //Test if a key has a value
-        0x43 => 'KVDEL',          //Delete a value
-        0x44 => 'KVLIST',         //List all keys/values in the selected namespace
-        0x45 => 'KVCLEAR',        //Clear all values in the selected namespace
-        0x46 => 'KVPULL',         //Return and remove a key value
-        0x47 => 'KVPUSH',         //Append one or more elements on to the end of a list
-        0x48 => 'KVPOP',          //Remove and return the last element in a list
-        0x49 => 'KVSHIFT',        //Remove and return the first element in a list
-        0x4A => 'KVUNSHIFT',      //Prepend one or more elements to the beginning of a list
-        0x4B => 'KVCOUNT',        //Count number of elements in a list
-        0x4C => 'KVINCR',         //Increment an integer value
-        0x4D => 'KVDECR',         //Decrement an integer value
-        0x4E => 'KVKEYS',         //Return all keys in the selected namespace
-        0x4F => 'KVVALS',         //Return all values in the selected namespace
+        0x04 => 'CHECK',        //Status message
+        0x05 => 'PING',         //Typical PING
+        0x06 => 'PONG',         //Typical PONG
 
         //LOGGING/OUTPUT MESSAGES
-        0x90 => 'LOG',          //Generic log message
-        0x91 => 'DEBUG'
+        0x0A => 'LOG',          //Generic log message
+        0x0B => 'DEBUG',        //Special purpose debug message
+
+        //SIGNALLING MESSAGES
+        0x10 => 'SUBSCRIBE',    //Subscribe to an event
+        0x11 => 'UNSUBSCRIBE',  //Unsubscribe from an event
+        0x12 => 'TRIGGER',      //Trigger an event
+        0x13 => 'EVENT',        //An event
+
+        //JOB CONTROL MESSAGES
+        0x20 => 'DELAY',        //Execute code after a period
+        0x21 => 'SCHEDULE',     //Execute code at a set time
+        0x22 => 'EXEC',         //Execute some code in the Warlock Runner.
+        0x23 => 'CANCEL',       //Cancel a pending code execution
+        0x24 => 'ENABLE',       //Start a service
+        0x25 => 'DISABLE',      //Stop a service
+        0x26 => 'SERVICE',      //Service status
+        0x27 => 'SPAWN',        //Spawn a dynamic service
+        0x28 => 'KILL',         //Kill a dynamic service instance
+        0x29 => 'SIGNAL',       //Signal between a dyanmic service and it's client
+
+        //KV STORAGE MESSAGES
+        0x40 => 'KVGET',        //Get a value by key
+        0x41 => 'KVSET',        //Set a value by key
+        0x42 => 'KVHAS',        //Test if a key has a value
+        0x43 => 'KVDEL',        //Delete a value
+        0x44 => 'KVLIST',       //List all keys/values in the selected namespace
+        0x45 => 'KVCLEAR',      //Clear all values in the selected namespace
+        0x46 => 'KVPULL',       //Return and remove a key value
+        0x47 => 'KVPUSH',       //Append one or more elements on to the end of a list
+        0x48 => 'KVPOP',        //Remove and return the last element in a list
+        0x49 => 'KVSHIFT',      //Remove and return the first element in a list
+        0x4A => 'KVUNSHIFT',    //Prepend one or more elements to the beginning of a list
+        0x4B => 'KVCOUNT',      //Count number of elements in a list
+        0x4C => 'KVINCR',       //Increment an integer value
+        0x4D => 'KVDECR',       //Decrement an integer value
+        0x4E => 'KVKEYS',       //Return all keys in the selected namespace
+        0x4F => 'KVVALS',       //Return all values in the selected namespace
+
+        //CLUSTER MESSAGES
+        0xA0 => 'STATUS',       //System status
+        0xA1 => 'ONLINE',       //Peer online notification
+        0xA2 => 'OFFLINE',      //Peer offline notification
+        0xA3 => 'SHUTDOWN'      //Shutdown request
     );
 
     private $id;

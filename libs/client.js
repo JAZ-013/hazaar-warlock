@@ -106,8 +106,8 @@ var HazaarWarlock = function (options) {
                     if (this.__callbacks.error) this.__callbacks.error(packet.PLD);
                     else console.error('Command: ' + packet.PLD.command + ' Reason: ' + packet.PLD.reason);
                     return false;
-                case this.p.status:
-                    if (this.__callbacks.status) this.__callbacks.status(packet.PLD);
+                case this.p.check:
+                    if (this.__callbacks.check) this.__callbacks.check(packet.PLD);
                     break;
                 case this.p.ping:
                     this.__send('pong');
@@ -187,8 +187,8 @@ var HazaarWarlock = function (options) {
         this.__callbacks.error = callback;
         return this;
     };
-    this.onstatus = function (callback) {
-        this.__callbacks.status = callback;
+    this.oncheck = function (callback) {
+        this.__callbacks.check = callback;
         return this;
     };
     this.onpong = function (callback) {
@@ -227,7 +227,7 @@ var HazaarWarlock = function (options) {
         }, true);
         return this;
     };
-    /* Admin Commands (These require sync with admin key) */
+    /* Admin Commands (These require auth with admin key) */
     this.stop = function (delay_sec) {
         this.__send('shutdown', delay_sec > 0 ? { delay: delay_sec } : null);
         return this;
@@ -248,8 +248,8 @@ var HazaarWarlock = function (options) {
         this.__options.encoded = true;
         return this;
     };
-    this.status = function () {
-        this.__send('status');
+    this.check = function () {
+        this.__send('check');
         return this;
     };
     this.spawn = function (service, params) {

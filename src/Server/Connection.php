@@ -414,7 +414,7 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
         $this->log->write(W_NOTICE, "WebSockets connection from $this->address:$this->port");
 
-        return $node->init($results);
+        return $node->init($headers);
 
     }
 

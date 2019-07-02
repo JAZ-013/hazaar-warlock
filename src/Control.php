@@ -102,8 +102,8 @@ class Control extends Process {
 
         $headers = array();
 
-        if($this->config->admin->key !== null)
-            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($this->config->admin->key);
+        if($this->config->client->admin['key'] !== null)
+            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($this->config->client->admin['key']);
 
         if($this->config->client['port'] === null)
             $this->config->client['port'] = $this->config->server['port'];

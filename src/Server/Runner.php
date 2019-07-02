@@ -158,46 +158,12 @@ class Runner {
 
     }
 
-    public function processCommand(Node $client, $command, &$payload) {
+    public function processCommand(Node $node, $command, &$payload) {
 
         if(!$command)
             return false;
 
-        if($this->kv_store !== NULL && substr($command, 0, 2) === 'KV')
-            return $this->kv_store->process($client, $command, $payload);
-
-        if (!($client instanceof Node\Peer || array_key_exists($client->id, $this->admins)))
-            throw new \Exception('Admin commands only allowed by authorised clients!');
-
-        $this->log->write(W_DEBUG, "ADMIN_COMMAND: $command" . ($client->id ? " CLIENT=$client->id" : NULL));
-
         switch ($command) {
-
-            case 'EVENT':
-
-                if(!property_exists($payload, 'trigger'))
-                    throw new \Exception('Event triggered without trigger ID!');
-
-                if(array_key_exists($payload->id, $this->eventQueue)
-                    && array_key_exists($payload->trigger, $this->eventQueue[$payload->id]))
-                    $this->log->write(W_WARN, 'Received existing trigger ' . $payload->trigger . ' for event ' . $payload->id);
-                else
-                    $this->trigger($payload->id, ake($payload, 'data'), $client->id, $payload->trigger);
-
-                break;
-
-            case 'SHUTDOWN':
-
-                $delay = ake($payload, 'delay', 0);
-
-                $this->log->write(W_NOTICE, "Shutdown requested (Delay: $delay)");
-
-                if(!$this->shutdown($delay))
-                    throw new \Exception('Unable to initiate shutdown!');
-
-                $client->send('OK', array('command' => $command));
-
-                break;
 
             case 'DELAY' :
 
@@ -218,7 +184,7 @@ class Runner {
                     ake($payload, 'overwrite', false)
                 ))) throw new \Exception('Could not schedule delayed function');
 
-                $client->send('OK', array('command' => $command, 'job_id' => $id));
+                $node->send('OK', array('command' => $command, 'job_id' => $id));
 
                 break;
 
@@ -229,48 +195,40 @@ class Runner {
 
                 $this->log->write(W_NOTICE, "Job successfully cancelled");
 
-                $client->send('OK', array('command' => $command, 'job_id' => $payload));
+                $node->send('OK', array('command' => $command, 'job_id' => $payload));
 
                 break;
 
             case 'ENABLE' :
 
-                $this->log->write(W_NOTICE, "ENABLE: NAME=$payload CLIENT=$client->id");
+                $this->log->write(W_NOTICE, "ENABLE: NAME=$payload CLIENT=$node->id");
 
                 if(!$this->serviceEnable($payload))
                     throw new \Exception('Unable to enable service ' . $payload);
 
-                $client->send('OK', array('command' => $command, 'name' => $payload));
+                $node->send('OK', array('command' => $command, 'name' => $payload));
 
                 break;
 
             case 'DISABLE' :
 
-                $this->log->write(W_NOTICE, "DISABLE: NAME=$payload CLIENT=$client->id");
+                $this->log->write(W_NOTICE, "DISABLE: NAME=$payload CLIENT=$node->id");
 
                 if(!$this->serviceDisable($payload))
                     throw new \Exception('Unable to disable service ' . $payload);
 
-                $client->send('OK', array('command' => $command, 'name' => $payload));
-
-                break;
-
-            case 'STATUS':
-
-                $this->log->write(W_NOTICE, "STATUS: CLIENT=$client->id");
-
-                $client->send('STATUS', $this->getStatus());
+                $node->send('OK', array('command' => $command, 'name' => $payload));
 
                 break;
 
             case 'SERVICE' :
 
-                $this->log->write(W_NOTICE, "SERVICE: NAME=$payload CLIENT=$client->id");
+                $this->log->write(W_NOTICE, "SERVICE: NAME=$payload CLIENT=$node->id");
 
                 if(!array_key_exists($payload, $this->services))
                     throw new \Exception('Service ' . $payload . ' does not exist!');
 
-                $client->send('SERVICE', $this->services[$payload]);
+                $node->send('SERVICE', $this->services[$payload]);
 
                 break;
 
@@ -279,10 +237,10 @@ class Runner {
                 if(!($name = ake($payload, 'name')))
                     throw new \Exception('Unable to spawn a service without a service name!');
 
-                if(!($id = $this->spawn($client, $name, $payload)))
+                if(!($id = $this->spawn($node, $name, $payload)))
                     throw new \Exception('Unable to spawn dynamic service: ' . $name);
 
-                $client->send('OK', array('command' => $command, 'name' => $name, 'job_id' => $id));
+                $node->send('OK', array('command' => $command, 'name' => $name, 'job_id' => $id));
 
                 break;
 
@@ -291,10 +249,10 @@ class Runner {
                 if(!($name = ake($payload, 'name')))
                     throw new \Exception('Can not kill dynamic service without a name!');
 
-                if(!$this->kill($client, $name))
+                if(!$this->kill($node, $name))
                     throw new \Exception('Unable to kill dynamic service ' . $name);
 
-                $client->send('OK', array('command' => $command, 'name' => $payload));
+                $node->send('OK', array('command' => $command, 'name' => $payload));
 
                 break;
 
@@ -307,10 +265,10 @@ class Runner {
                 if(!($service = ake($payload, 'service')))
                     return false;
 
-                if(!$this->signal($client, $event_id, $service, ake($payload, 'data')))
+                if(!$this->signal($node, $event_id, $service, ake($payload, 'data')))
                     throw new \Exception('Unable to signal dynamic service');
 
-                $client->send('OK', array('command' => $command, 'name' => $payload));
+                $node->send('OK', array('command' => $command, 'name' => $payload));
 
                 break;
 
@@ -566,7 +524,7 @@ class Runner {
 
                     $this->stats['limitHits']++;
 
-                    $this->log->write(W_WARN, 'Process limit of ' . $this->config->exec->limit . ' processes reached!');
+                    $this->log->write(W_WARN, 'Process limit of ' . $this->config->process['limit'] . ' processes reached!');
 
                     break;
 
@@ -957,6 +915,9 @@ class Runner {
             return false;
 
         $service = $this->services[$name];
+
+        if($service->job !== null)
+            return false;
 
         $this->log->write(W_INFO, 'Enabling service: ' . $name . (($service->delay > 0) ? ' (delay=' . $service->delay . ')': null));
 
