@@ -435,7 +435,7 @@ class Runner {
 
         $this->log->write(W_DEBUG, "JOB: ID=$job->id");
 
-        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $job->id);
+        $this->log->write(W_DEBUG, 'WHEN: ' . date(Master::$instance->config->sys['date_format'], $job->start), $job->id);
 
         $this->log->write(W_DEBUG, 'APPLICATION_ENV:  ' . $application->env, $job->id);
 
@@ -455,7 +455,7 @@ class Runner {
 
         }
 
-        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date($this->config->sys['date_format'], $when), $job->id);
+        $this->log->write(W_NOTICE, 'Scheduling job for execution at ' . date(Master::$instance->config->sys['date_format'], $when), $job->id);
 
         $this->queueAddJob($job);
 
@@ -539,9 +539,9 @@ class Runner {
 
                         $this->log->write(W_NOTICE, "Starting job execution", $id);
 
-                        $this->log->write(W_DEBUG, 'NOW:  ' . date($this->config->sys['date_format'], $now), $id);
+                        $this->log->write(W_DEBUG, 'NOW:  ' . date(Master::$instance->config->sys['date_format'], $now), $id);
 
-                        $this->log->write(W_DEBUG, 'WHEN: ' . date($this->config->sys['date_format'], $job->start), $id);
+                        $this->log->write(W_DEBUG, 'WHEN: ' . date(Master::$instance->config->sys['date_format'], $job->start), $id);
 
                         if ($job->retries > 0)
                             $this->log->write(W_DEBUG, 'RETRIES: ' . $job->retries, $id);
@@ -615,7 +615,7 @@ class Runner {
 
                         $job->status = STATUS_ERROR;
 
-                        $job->process = null;
+                        $job->disconnect();
 
                         unset($this->processes[$id]);
 
@@ -671,7 +671,7 @@ class Runner {
 
                 if ($status['running'] === false) {
 
-                    $this->log->write(W_DEBUG, "PROCESS->STOP: PID=$status[pid] ID=" . $job->process->id);
+                    $this->log->write(W_DEBUG, "PROCESS->STOP: PID=$status[pid] ID=" . $job->process->id, $job->id);
 
                     $pipe = $job->process->conn->getReadStream();
 
@@ -684,7 +684,7 @@ class Runner {
                         $this->log->write(W_ERR, "PROCESS ERROR:\n$output");
 
                     //Now remove everything and clean up
-                    unset($this->processes[$job->process->id]);
+                    unset($this->processes[$job->process->name]);
 
                     $this->stats['processes']--;
 
@@ -827,7 +827,7 @@ class Runner {
 
                                 $job->retries = 0;
 
-                                $this->log->write(W_NOTICE, 'Next execution at: ' . date($this->config->sys['date_format'], $next), $id);
+                                $this->log->write(W_NOTICE, 'Next execution at: ' . date(Master::$instance->config->sys['date_format'], $next), $id);
 
                             }else{
 

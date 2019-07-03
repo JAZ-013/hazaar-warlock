@@ -272,7 +272,17 @@ class Cluster  {
      */
     public function removeNode(Node $node) {
 
-        if($node instanceof Node\Client){
+        if($node instanceof Node\Peer){
+
+            if(array_key_exists($node->id, $this->peers))
+                unset($this->peers[$node->id]);
+            else return false;
+
+            $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: PEER=$node->id", $this->name);
+
+            $this->stats['peers']--;
+
+        }else{
 
             if(array_key_exists($node->id, $this->clients))
                 unset($this->clients[$node->id]);
@@ -286,16 +296,6 @@ class Cluster  {
             $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: CLIENT=$node->id", $this->name);
 
             $this->stats['clients']--;
-
-        }elseif($node instanceof Node\Peer){
-
-            if(array_key_exists($node->id, $this->peers))
-                unset($this->peers[$node->id]);
-            else return false;
-
-            $this->log->write(W_DEBUG, "CLUSTER->REMOVENODE: PEER=$node->id", $this->name);
-
-            $this->stats['peers']--;
 
         }
 

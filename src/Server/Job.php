@@ -29,42 +29,18 @@ abstract class Job extends \Hazaar\Model\Strict {
 
     protected $log;
 
-    static private $job_ids = array();
-
     private $__buffer;
 
     private $__status;
 
     public $subscriptions = array();
 
-    /*
-     * This method simple increments the jids integer but makes sure it is unique before returning it.
-     */
-    public function getJobId() {
-
-        $count = 0;
-
-        $jid = NULL;
-
-        while(in_array($jid = uniqid(), Job::$job_ids)) {
-
-            if ($count >= 10)
-                throw new \Exception("Unable to generate job ID after $count attempts . Giving up . This is bad! ");
-
-        }
-
-        Job::$job_ids[] = $jid;
-
-        return $jid;
-
-    }
-
     public function init(){
 
         return array(
             'id' => array(
                 'type' => 'string',
-                'default' => $this->getJobID()
+                'default' => uniqid()
             ),
             'type' => 'string',
             'status' => array(
@@ -144,20 +120,26 @@ abstract class Job extends \Hazaar\Model\Strict {
 
         $this->log = Master::$instance->log;
 
+        $this->log->write(W_DEBUG, "JOB->CREATE", $this->id);
+
     }
 
     final public function destruct(){
 
-        if(($index = array_search($this->id, Job::$job_ids)) !== false)
-            unset(Job::$job_ids[$index]);
+        $this->log->write(W_DEBUG, "JOB->DESTROY", $this->id);
 
     }
 
     public function disconnect(){
 
+        if(!$this->process instanceof Node\Process)
+            return false;
+
         $this->process->close();
 
         $this->process = null;
+
+        return true;
 
     }
 

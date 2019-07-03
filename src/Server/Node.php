@@ -73,7 +73,7 @@ abstract class Node {
 
     public function disconnect(){
 
-        $this->log->write(W_DEBUG, $this->type . "->DISCONNECT: HOST={$this->conn->address} PORT={$this->conn->port}", $this->name);
+        $this->log->write(W_DEBUG, $this->type . "->DISCONNECT: ID=$this->id", $this->name);
 
         $this->conn->disconnect();
 

@@ -106,7 +106,9 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
 
     function __destruct(){
 
-        $this->log->write(W_DEBUG, "CONNECTION->DESTROY: HOST=$this->address PORT=$this->port", $this->name);
+        $desc = is_array($this->stream) ? 'PIPES' : "HOST=$this->address PORT=$this->port";
+
+        $this->log->write(W_DEBUG, "CONNECTION->DESTROY: $desc", $this->name);
 
     }
 
@@ -278,41 +280,67 @@ class Connection extends \Hazaar\Warlock\Protocol\WebSockets implements CommInte
      */
     public function disconnect($remove_node = false) {
 
-        if(!is_resource($this->stream))
-            return false;
-
-        if($this->status === WARLOCK_CONN_ONLINE){
-
-            $this->log->write(W_DEBUG, "WEBSOCKET->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
-
-            $frame = $this->frame('', 'close', false);
-
-            @fwrite($this->stream, $frame, strlen($frame));
-
-        }
-
         Master::$instance->removeConnection($this);
 
-        if($this->node){
+        if(is_resource($this->stream)){
 
-            Master::$cluster->removeNode($this->node);
+            if($this->status === WARLOCK_CONN_ONLINE){
 
-            if($remove_node === true)
-                $this->node = null;
+                $this->log->write(W_DEBUG, "WEBSOCKET->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
+
+                $frame = $this->frame('', 'close', false);
+
+                @fwrite($this->stream, $frame, strlen($frame));
+
+            }
+
+            if($this->node){
+
+                Master::$cluster->removeNode($this->node);
+
+                if($remove_node === true)
+                    $this->node = null;
+
+            }
+
+            stream_socket_shutdown($this->stream, STREAM_SHUT_RDWR);
+
+            $this->log->write(W_DEBUG, "CONNECTION->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
+
+            fclose($this->stream);
+
+            $this->stream = $this->name = null;
+
+            $this->status = WARLOCK_CONN_OFFLINE;
+
+            return true;
+
+        }elseif(is_array($this->stream) && is_resource($this->stream[0])){
+
+            $this->log->write(W_DEBUG, "CONNECTION->CLOSE: PIPES", $this->name);
+
+            //Make sure we close all the pipes
+            foreach($this->stream as $sid => $pipe) {
+
+                if($sid > 0){
+
+                    if($input = stream_get_contents($pipe)){
+
+                        $this->log->write(W_WARN, 'Excess output content on closing process', $this->name);
+
+                        echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30) . "\n";
+
+                    }
+
+                }
+
+                fclose($pipe);
+
+            }
 
         }
 
-        stream_socket_shutdown($this->stream, STREAM_SHUT_RDWR);
-
-        $this->log->write(W_DEBUG, "CONNECTION->CLOSE: HOST=$this->address PORT=$this->port", $this->name);
-
-        fclose($this->stream);
-
-        $this->stream = $this->name = null;
-
-        $this->status = WARLOCK_CONN_OFFLINE;
-
-        return true;
+        return false;
 
     }
 

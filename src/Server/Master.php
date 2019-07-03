@@ -682,7 +682,10 @@ class Master {
      */
     public function removeConnection(Connection $conn){
 
-        $stream_id = intval($conn->stream);
+        if(!($stream = $conn->getReadStream()))
+            return false;
+
+        $stream_id = intval($stream);
 
         if(array_key_exists($stream_id, $this->streams)){
 

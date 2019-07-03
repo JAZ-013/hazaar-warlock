@@ -53,7 +53,7 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
         $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
 
-        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->id);
+        $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->name);
 
         $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
 
@@ -63,7 +63,7 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
             $this->process_status = proc_get_status($this->process);
 
-            $this->log->write(W_NOTICE, 'PID: ' . $this->process_status['pid'], $this->id);
+            $this->log->write(W_NOTICE, 'PID: ' . $this->process_status['pid'], $this->name);
 
             $conn = new \Hazaar\Warlock\Server\Connection($this->pipes);
 
@@ -203,25 +203,15 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
     public function close(){
 
-        //Make sure we close all the pipes
-        foreach($this->pipes as $sid => $pipe) {
+        $this->log->write(W_DEBUG, "PROCESS->CLOSE: PID=$this->pid ID=$this->id", $this->name);
 
-            if($sid === 0)
-                continue;
-
-            if($input = stream_get_contents($pipe)){
-
-                $this->log->write(W_WARN, 'Excess output content on closing process', $this->tag);
-
-                echo str_repeat('-', 30) . "\n" . $input . "\n" . str_repeat('-', 30) . "\n";
-
-            }
-
-            fclose($pipe);
-
-        }
+        $this->conn->disconnect();
 
         proc_close($this->process);
+
+        $this->conn = null;
+
+        $this->process = null;
 
     }
 
