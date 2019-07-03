@@ -18,6 +18,8 @@ class Process extends \Hazaar\Warlock\Server\Node {
 
     public $tag;
 
+    public $parent;
+
     function __construct($id, $type, $application, $tag = null){
 
         $this->name = $id;

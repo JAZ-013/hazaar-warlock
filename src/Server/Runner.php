@@ -261,7 +261,6 @@ class Runner {
                 if(!($event_id = ake($payload, 'id')))
                     return false;
 
-                //Otherwise, send this signal to any child services for the requested type
                 if(!($service = ake($payload, 'service')))
                     return false;
 
@@ -282,12 +281,12 @@ class Runner {
 
     }
 
-    private function spawn(Node $client, $name, $options){
+    private function spawn(Node\Client $node, $name, $options){
 
         if (!array_key_exists($name, $this->services))
             return false;
 
-        $service = & $this->services[$name];
+        $service =& $this->services[$name];
 
         $job = new Job\Service(array(
             'name' => $name,
@@ -301,14 +300,14 @@ class Runner {
             'dynamic' => true,
             'detach' => ake($options, 'detach', false),
             'respawn' => false,
-            'parent' => $client,
+            'parent' => $node,
             'params' => ake($options, 'params'),
             'loglevel' => $service->loglevel
         ));
 
         $this->log->write(W_NOTICE, 'Spawning dynamic service: ' . $name, $job->id);
 
-        $client->jobs[$job->id] = $this->queueAddJob($job);
+        $node->jobs[$job->id] = $this->queueAddJob($job);
 
         return $job->id;
 
@@ -336,38 +335,31 @@ class Runner {
 
     }
 
-    private function signal(Node $client, $event_id, $service, $data = null){
+    private function signal(Node $node, $event_id, $service, $data = null){
 
         $trigger_id = uniqid();
 
         //If this is a message coming from the service, send it back to it's parent client connection
-        if($client->type === 'SERVICE'){
+        if($node instanceof Node\Process){
 
-            if(count($client->jobs) === 0)
-                throw new \Exception('Client has no associated jobs!');
+            $this->log->write(W_NOTICE, "SERVICE->SIGNAL: SERVICE=$service JOB_ID=$node->name CLIENT={$node->id}");
 
-            foreach($client->jobs as $id => $job){
+            if(!$node->parent instanceof Node\Client)
+                throw new \Exception('Process has no parent node!');
 
-                if(!(array_key_exists($id, $this->jobQueue) && $job->name === $service && $job->parent instanceof Node))
-                    continue;
-
-                $this->log->write(W_NOTICE, "SERVICE->SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$client->id}");
-
-                $job->parent->sendEvent($event_id, $trigger_id, $data);
-
-            }
+            $node->parent->sendEvent($event_id, $trigger_id, $data);
 
         }else{
 
-            if(count($client->jobs) === 0)
+            if(count($node->jobs) === 0)
                 throw new \Exception('Client has no associated jobs!');
 
-            foreach($client->jobs as $id => $job){
+            foreach($node->jobs as $id => $job){
 
                 if(!(array_key_exists($id, $this->jobQueue) && $job->name === $service))
                     continue;
 
-                $this->log->write(W_NOTICE, "CLIENT->SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$client->id}");
+                $this->log->write(W_NOTICE, "CLIENT->SIGNAL: SERVICE=$service JOB_ID=$id CLIENT={$node->id}");
 
                 $job->sendEvent($event_id, $trigger_id, $data);
 
@@ -596,6 +588,9 @@ class Runner {
 
                         $packet = Master::$protocol->encode('service', $payload);
 
+                        if($job->parent !== null)
+                            $process->parent = $job->parent;
+
                     } elseif ($job instanceof Job\Runner) {
 
                         $payload['exec'] = $job->exec;
@@ -638,14 +633,6 @@ class Runner {
 
             } elseif ($job->expired()) { //Clean up any expired jobs (completed or errored)
 
-                if($job->status === STATUS_CANCELLED){
-
-                    $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
-
-                    $job->process->terminate();
-
-                }
-
                 $this->log->write(W_NOTICE, 'Cleaning up', $id);
 
                 $this->stats['queue']--;
@@ -664,6 +651,14 @@ class Runner {
                     $job->status = STATUS_ERROR;
 
                     continue;
+
+                }
+
+                if($job->status === STATUS_CANCELLED){
+
+                    $this->log->write(W_NOTICE, 'Killing cancelled process', $id);
+
+                    $job->process->terminate();
 
                 }
 

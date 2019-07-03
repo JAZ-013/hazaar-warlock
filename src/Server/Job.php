@@ -139,6 +139,14 @@ abstract class Job extends \Hazaar\Model\Strict {
 
         $this->process = null;
 
+        if($this->parent !== null && array_key_exists($this->id, $this->parent->jobs)){
+
+            $this->log->write(W_NOTICE, 'Removing job from parent node', $this->id);
+
+            unset($this->parent->jobs[$this->id]);
+
+        }
+
         return true;
 
     }
@@ -214,14 +222,6 @@ abstract class Job extends \Hazaar\Model\Strict {
     }
 
     public function sendEvent($event_id, $trigger_id, $data) {
-
-        if (!in_array($event_id, $this->subscriptions)) {
-
-            $this->log->write(W_WARN, "Client $this->id is not subscribe to event $event_id", $this->name);
-
-            return false;
-
-        }
 
         $packet = array(
             'id' => $event_id,

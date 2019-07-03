@@ -212,8 +212,6 @@ class Signal {
                 if ($this->filterEvent($event, $filter))
                     continue;
 
-                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client->id");
-
                 if (!$client->sendEvent($event['id'], $trigger_id, $event['data']))
                     return false;
 
@@ -269,8 +267,6 @@ class Signal {
                 if (in_array($client_id, $event['seen'])
                     || $this->filterEvent($event, $item['filter']))
                     continue;
-
-                $this->log->write(W_NOTICE, "Sending event '$event[id]' to $client_id");
 
                 if (!$item['client']->sendEvent($event_id, $trigger, $event['data']))
                     continue;

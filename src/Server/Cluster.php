@@ -297,6 +297,19 @@ class Cluster  {
 
             $this->stats['clients']--;
 
+            if($node instanceof Node\Client && ($count = count($node->jobs)) > 0){
+
+                $this->log->write(W_NOTICE, 'Disconnected WebSocket client has ' . $count . ' running/pending child jobs', $node->name);
+
+                foreach($node->jobs as $job){
+
+                    if($job->detach !== true)
+                        $job->status = STATUS_CANCELLED;
+
+                }
+
+            }
+
         }
 
         return true;
@@ -443,7 +456,7 @@ class Cluster  {
 
         }
 
-        if(!array_key_exists($node->id, $this->admins))
+        if($node instanceof Node\Client && !array_key_exists($node->id, $this->admins))
             return false;
 
         if($type_id >= 0x20 && $type_id <= 0x29){

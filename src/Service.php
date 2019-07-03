@@ -512,7 +512,7 @@ abstract class Service extends Process {
 
         $this->last_heartbeat = time();
 
-        $this->send('status', $status);
+        $this->send('check', $status);
 
         return true;
 

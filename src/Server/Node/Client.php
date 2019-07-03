@@ -59,25 +59,6 @@ class Client extends \Hazaar\Warlock\Server\Node {
 
     }
 
-    public function disconnect(){
-
-        if(($count = count($this->jobs)) > 0){
-
-            $this->log->write(W_NOTICE, 'Disconnected WebSocket client has ' . $count . ' running/pending child jobs', $this->name);
-
-            foreach($this->jobs as $job){
-
-                if($job->detach !== true)
-                    $job->status = STATUS_CANCELLED;
-
-            }
-
-        }
-
-        return parent::disconnect();
-
-    }
-
     public function processCommand($command, $payload = null){
 
         if (!$command)

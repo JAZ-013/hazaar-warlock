@@ -22,7 +22,7 @@ class Service extends \Hazaar\Warlock\Server\Job {
                 'default' => false
             ),
             'parent' => array(
-                'type' => 'Hazaar\Warlock\Server\Client'
+                'type' => 'Hazaar\Warlock\Server\Node\Client'
             )
         );
 
