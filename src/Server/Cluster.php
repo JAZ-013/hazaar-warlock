@@ -25,7 +25,9 @@ class Cluster  {
 
     public $admins = array();
 
-    private $last_check = 0;
+    public $next_announce = 0;
+
+    public $cluster_peers = array();
 
     private $frames = array();
 
@@ -327,20 +329,26 @@ class Cluster  {
      * @param Node $sourceNode
      * @return boolean
      */
-    private function forwardFrame(\stdClass $frame, Node $sourceNode){
+    private function forwardFrame(\stdClass $frame, Node $sourceNode = null){
+
+        if(!property_exists($frame, 'FID'))
+            $frame->FID = uniqid();
 
         $frame_id = $frame->FID;
 
         $this->frames[$frame_id] = array(
             'expires' => time() + $this->config['frame_lifetime'],
-            'peers' => array($sourceNode->id => time())
+            'peers' => array()
         );
+
+        if($sourceNode)
+            $this->frames[$frame_id]['peers'][$sourceNode->id] = time();
 
         $packet = json_encode($frame);
 
         foreach($this->peers as $peer){
 
-            if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->online() !== true)
+            if((array_key_exists($frame_id, $this->frames) && array_key_exists($peer->id, $this->frames[$frame_id]['peers'])) || $peer->online() !== true)
                 continue;
 
             if($peer->conn->send($packet))
@@ -370,27 +378,16 @@ class Cluster  {
 
         }
 
-        //If there is no frame ID, add one now.  This happens when the frame comes from a CLIENT and has not yet entered the network.
-        if(property_exists($frame, 'FID')){
-
-            //If we have seen this frame, then silently ignore it.
-            if(array_key_exists($frame->FID, $this->frames))
-                return true;
-
-        }else{
-
-            $frame->FID = uniqid();
-
-            $packet = Master::$protocol->encode($type, $payload, array('FID' => $frame->FID));
-
-        }
+        //If we have seen this frame, then silently ignore it.
+        if(property_exists($frame, 'FID') && array_key_exists($frame->FID, $this->frames))
+            return true;
 
         if(property_exists($frame, 'TME'))
             $this->offset = (time() - $frame->TME);
 
         try{
 
-            if($frame->TYP === 0x12)
+            if($frame->TYP === 0x12 || $frame->TYP === 0xA1)
                 $this->forwardFrame($frame, $node);
 
             if (!$this->processCommand($node, $type, $payload))
@@ -490,6 +487,28 @@ class Cluster  {
 
         switch($type){
 
+            case 'ANNOUNCE':
+
+                if(!property_exists($payload, 'name'))
+                    return false;
+
+                if(!array_key_exists($payload->name, $this->cluster_peers)){
+
+                    $this->log->write(W_INFO, "Peer '$payload->name' is now online!", $this->name);
+
+                    $this->next_announce = 0;
+
+                }
+
+                $this->cluster_peers[$payload->name] = array(
+                    'start' => $payload->start,
+                    'load' => $payload->load,
+                    'last' => time(),
+                    'status' => 'ONLINE'
+                );
+
+                return true;
+
             case 'STATUS':
 
                 $node->send('STATUS', $this->getStatus());
@@ -571,13 +590,36 @@ class Cluster  {
 
             foreach($this->peers as $peer){
 
-                //If the peer is already ONLINE, there's nothing to do
                 if(!$peer instanceof Node\Peer)
                     continue;
 
+                //If the peer is already ONLINE, there's nothing to do
                 while($peer->ping() !== true);
 
             }
+
+        }
+
+        if($this->next_announce <= time()){
+
+            $expire = time() - $this->config['peer_expire'];
+
+            foreach($this->cluster_peers as $name => $peer){
+
+                if($peer['status'] === 'ONLINE' && $peer['last'] >= $expire)
+                    continue;
+
+                $this->log->write(W_INFO, "Peer '$name' is now offline!", $this->name);
+
+                $this->cluster_peers[$name]['status'] = 'OFFLINE';
+
+            }
+
+            Master::$protocol->encode('announce', array('name' => $this->name, 'start' => Master::$instance->start, 'load' => sys_getloadavg()), $frame);
+
+            $this->forwardFrame($frame);
+
+            $this->next_announce = time() + $this->config['announce'];
 
         }
 
@@ -645,7 +687,8 @@ class Cluster  {
             'started' => Master::$instance->start,
             'uptime' => time() - Master::$instance->start,
             'memory' => memory_get_usage(),
-            'stats' => $this->stats
+            'stats' => $this->stats,
+            'peers' => $this->cluster_peers
         );
 
         return $status;

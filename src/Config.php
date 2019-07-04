@@ -28,6 +28,8 @@ class Config {
             'access_key' => '0000',
             'connect_timeout' => 5,
             'frame_lifetime' => 15,
+            'announce' => 30,
+            'peer_expire' => 60,
             'peers' => array()
          ),
          'kvstore' => array(

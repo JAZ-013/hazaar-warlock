@@ -105,6 +105,8 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         $this->log->write(W_INFO, "Link with peer '$this->id' is now online!");
 
+        Master::$cluster->next_announce = 0;
+
         return true;
 
     }

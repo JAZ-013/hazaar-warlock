@@ -74,9 +74,8 @@ class Protocol {
 
         //CLUSTER MESSAGES
         0xA0 => 'STATUS',       //System status
-        0xA1 => 'ONLINE',       //Peer online notification
-        0xA2 => 'OFFLINE',      //Peer offline notification
-        0xA3 => 'SHUTDOWN'      //Shutdown request
+        0xA1 => 'ANNOUNCE',     //Peer online notification
+        0xA2 => 'SHUTDOWN'      //Shutdown request
     );
 
     private $id;
@@ -155,28 +154,21 @@ class Protocol {
 
     }
 
-    public function encode($type, $payload = null, $extra = null) {
+    public function encode($type, $payload = null, &$frame = null) {
 
         if(($type = $this->check($type)) === false)
             return false;
 
-        $packet = (object) array(
+        $frame = (object) array(
             'TYP' => $type,
             'SID' => $this->id,
             'TME' => time()
         );
 
-        if(is_iterable($extra)){
-
-            foreach($extra as $k => $v)
-                $packet->$k = $v;
-
-        }
-
         if($payload !== null)
-            $packet->PLD = $payload;
+            $frame->PLD = $payload;
 
-        $packet = json_encode($packet);
+        $packet = json_encode($frame);
 
         return ($this->encoded ? base64_encode($packet) : $packet);
 
