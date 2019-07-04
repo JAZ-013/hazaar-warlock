@@ -103,7 +103,7 @@ class Peer extends \Hazaar\Warlock\Server\Node {
 
         $this->lastContact = time();
 
-        $this->log->write(W_INFO, "Peer '$this->id' is now online!");
+        $this->log->write(W_INFO, "Link with peer '$this->id' is now online!");
 
         return true;
 

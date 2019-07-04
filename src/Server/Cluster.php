@@ -316,6 +316,42 @@ class Cluster  {
 
     }
 
+    /**
+     * Forward any frames to all connected peers.  This is the whole "mesh-network" bit.
+     *
+     * Notes:
+     * * Frames with frame_ids will eventually be ignored and recorded.
+     * * I may need to come up with a better frame forwarding scheme.  Perhaps based on type IDs or something.
+     *
+     * @param mixed $frame
+     * @param Node $sourceNode
+     * @return boolean
+     */
+    private function forwardFrame(\stdClass $frame, Node $sourceNode){
+
+        $frame_id = $frame->FID;
+
+        $this->frames[$frame_id] = array(
+            'expires' => time() + $this->config['frame_lifetime'],
+            'peers' => array($sourceNode->id => time())
+        );
+
+        $packet = json_encode($frame);
+
+        foreach($this->peers as $peer){
+
+            if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->online() !== true)
+                continue;
+
+            if($peer->conn->send($packet))
+                $this->frames[$frame_id]['peers'][$peer->id] = time();
+
+        }
+
+        return true;
+
+    }
+
     public function processPacket(Node $node, $packet){
 
         $payload = null;
@@ -337,50 +373,25 @@ class Cluster  {
         //If there is no frame ID, add one now.  This happens when the frame comes from a CLIENT and has not yet entered the network.
         if(property_exists($frame, 'FID')){
 
-            $frame_id = $frame->FID;
-
             //If we have seen this frame, then silently ignore it.
             if(array_key_exists($frame->FID, $this->frames))
                 return true;
 
         }else{
 
-            $frame_id = uniqid();
+            $frame->FID = uniqid();
 
-            $packet = Master::$protocol->encode($type, $payload, array('FID' => $frame_id));
+            $packet = Master::$protocol->encode($type, $payload, array('FID' => $frame->FID));
 
         }
-
-        $this->frames[$frame_id] = array(
-            'expires' => time() + $this->config['frame_lifetime'],
-            'peers' => array($node->id => time())
-        );
 
         if(property_exists($frame, 'TME'))
             $this->offset = (time() - $frame->TME);
 
         try{
 
-            /**
-             * Forward any trigger events to all connected peers.  This is the whole "mesh-network" bit.
-             *
-             * Notes:
-             * * Frames with frame_ids will eventually be ignored and recorded.
-             * * I may need to come up with a better frame forwarding scheme.  Perhaps based on type IDs or something.
-             */
-            if($type === 'TRIGGER'){
-
-                foreach($this->peers as $peer){
-
-                    if(array_key_exists($peer->id, $this->frames[$frame_id]['peers']) || $peer->online() !== true)
-                        continue;
-
-                    if($peer->conn->send($packet))
-                        $this->frames[$frame_id]['peers'][$peer->id] = time();
-
-                }
-
-            }
+            if($frame->TYP === 0x12)
+                $this->forwardFrame($frame, $node);
 
             if (!$this->processCommand($node, $type, $payload))
                 throw new \Exception('Negative response returned while processing command!');
