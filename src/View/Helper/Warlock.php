@@ -52,7 +52,7 @@ class Warlock extends \Hazaar\View\Helper {
         if($config->client['server'] === null){
 
             if(trim($config->server['listen']) == '0.0.0.0')
-                $config->client['server'] = $_SERVER['SERVER_NAME'];
+                $config->client['server'] = ake(explode(':', $_SERVER['HTTP_HOST']), 0, $_SERVER['SERVER_NAME']);
             else
                 $config->client['server'] = $config->server['listen'];
 
