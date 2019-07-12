@@ -58,12 +58,19 @@ abstract class Service extends Process {
 
         $this->start = time();
 
-        if(preg_match('/^(\w*)Service$/', get_class($this), $matches))
-            $name = $matches[1];
-        else
-            throw new \Exception('Invalid service name ' . get_class($this));
+        $class = get_class($this);
 
-        $this->name = strtolower($name);
+        if((substr($class, -7) === 'Service')){
+
+            $this->name = strtolower(substr($class, 0, strlen($class) - 7));
+
+        }else{
+
+            $parts = explode('\\', $class);
+
+            $this->name = strtolower(array_pop($parts));
+
+        }
 
         $defaults = array(
             $this->name => array(
@@ -81,6 +88,24 @@ abstract class Service extends Process {
 
         $this->config = ake($config, $this->name);
 
+        $consts = get_defined_constants(TRUE);
+
+        //Load the warlock log levels into an array.
+        foreach($consts['user'] as $name => $value) {
+
+            if (substr($name, 0, 2) == 'W_'){
+
+                $len = strlen($this->__log_levels[$value] = substr($name, 2));
+
+                if($len > $this->__str_pad)
+                    $this->__str_pad = $len;
+
+            }
+
+        }
+
+        $this->__remote = $remote;
+
         if($this->config->has('loglevel') && defined($out_level = $this->config->get('loglevel')))
             $this->__local_log_level = constant($out_level);
 
@@ -88,6 +113,8 @@ abstract class Service extends Process {
             throw new \Exception("Warlock server required to run in remote service mode.\n");
 
         $this->__log_file = fopen($application->runtimePath($this->name . '.log'), 'a');
+
+        $this->log(W_LOCAL, 'Service ' . $this->name . ' starting up');
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
 
@@ -111,24 +138,6 @@ abstract class Service extends Process {
             $this->last_checkfile = time();
 
         }
-
-        $consts = get_defined_constants(TRUE);
-
-        //Load the warlock log levels into an array.
-        foreach($consts['user'] as $name => $value) {
-
-            if (substr($name, 0, 2) == 'W_'){
-
-                $len = strlen($this->__log_levels[$value] = substr($name, 2));
-
-                if($len > $this->__str_pad)
-                    $this->__str_pad = $len;
-
-            }
-
-        }
-
-        $this->__remote = $remote;
 
         parent::__construct($application, $protocol, getmypid());
 
@@ -167,6 +176,8 @@ abstract class Service extends Process {
 
             $conn = new Connection\Socket($protocol);
 
+            $this->log(W_LOCAL, 'Connecting to Warlock server at ' . $this->config->server['host'] . ':' . $this->config->server['port']);
+
             if(!$conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
                 return false;
 
@@ -185,6 +196,9 @@ abstract class Service extends Process {
 
     public function log($level, $message, $name = null){
 
+        if(!is_resource($this->__log_file))
+            return false;
+
         if($name === null)
             $name = $this->name;
 
@@ -197,7 +211,7 @@ abstract class Service extends Process {
 
             foreach($message as $m){
 
-                $msg = date('Y-m-d H:i:s') . " - $this->id - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+                $msg = date('Y-m-d H:i:s') . " - $this->name - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
 
                 fwrite($this->__log_file, $msg);
 
@@ -859,7 +873,7 @@ abstract class Service extends Process {
 
         if($result === false){
 
-            $this->log(W_LOCAL, 'An error occured while sending data.  Stopping.');
+            $this->log(W_LOCAL, 'An error occured while sending command.  Stopping.');
 
             $this->stop();
 
