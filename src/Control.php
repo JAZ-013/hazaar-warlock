@@ -33,6 +33,8 @@ class Control extends Process {
 
         Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
 
+        Config::$default_config['sys']['pid'] = 'warlock-' . APPLICATION_ENV . '.pid';
+
         $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
 
         if(!$this->config->loaded())
