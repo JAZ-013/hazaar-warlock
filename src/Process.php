@@ -450,7 +450,7 @@ abstract class Process {
      *
      * @since 1.0.0
      */
-    static public function runner(\Hazaar\Application $application, $service = null) {
+    static public function runner(\Hazaar\Application $application, $service_name = null) {
 
         if(!class_exists('\Hazaar\Warlock\Config'))
             throw new \Exception('Could not find default warlock config.  How is this even working!!?');
@@ -465,11 +465,12 @@ abstract class Process {
 
         $protocol = new Protocol($warlock->sys->id, $warlock->server->encoded);
 
-        if(is_string($service)){
+        if(is_string($service_name)){
 
-            $serviceClass = ucfirst($service) . 'Service';
+            $service = self::getServiceClass($service_name, $application, $protocol);
 
-            $service = new $serviceClass($application, $protocol, true);
+            if(!$service instanceof \Hazaar\Warlock\Service)
+                die("Could not find service named '$service_name'.\n");
 
             $code = call_user_func(array($service, 'main'));
 
@@ -511,14 +512,12 @@ abstract class Process {
 
                         }
 
-                        $serviceClass = ucfirst($payload->name) . 'Service';
+                        if($config = ake($payload, 'config'))
+                            $application->config->extend($config);
 
-                        if(class_exists($serviceClass)) {
+                        $service = self::getServiceClass($payload->name, $application, $protocol);
 
-                            if($config = ake($payload, 'config'))
-                                $application->config->extend($config);
-
-                            $service = new $serviceClass($application, $protocol);
+                        if($service instanceof \Hazaar\Warlock\Service){
 
                             $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
 
@@ -543,6 +542,28 @@ abstract class Process {
         }
 
         return $code;
+
+    }
+
+    static public function getServiceClass($service_name, \Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol){
+
+        $class_search = array(
+            'Application\\Service\\' . ucfirst($service_name),
+            ucfirst($service_name) . 'Service'
+        );
+
+        $service = null;
+
+        foreach($class_search as $service_class){
+
+            if(!class_exists($service_class))
+                continue;
+
+            $service = new $service_class($application, $protocol, true);
+
+        }
+
+        return $service;
 
     }
 

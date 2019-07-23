@@ -76,7 +76,7 @@ class Control extends Process {
             if($autostart === true){
 
                 if(!$this->config->sys['php_binary'])
-                    $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '' ) . 'php' . ($this->isWindowsOS()?'.exe':'');
+                    $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '') . 'php';
 
                 $this->pidfile = $application->runtimePath($this->config->sys->pid);
 
@@ -296,10 +296,10 @@ class Control extends Process {
         foreach($env as $name => $value)
             putenv($name . '=' . $value);
 
-        //Start the server.  This should work on Linux and Windows
-        pclose(popen($this->cmd, "r"));
-
         $start_check = time();
+
+        //Start the server.  This should work on Linux and Windows
+        shell_exec($this->cmd);
 
         if(! $timeout)
             $timeout = $this->config->timeouts->connect;
