@@ -72,6 +72,14 @@ abstract class Service extends Process {
 
         }
 
+        Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
+
+        Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
+
+        $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
+
+        $this->log(W_LOCAL, 'Loaded config for ' . APPLICATION_ENV);
+
         $defaults = array(
             $this->name => array(
                 'enabled'   => false,
@@ -79,8 +87,13 @@ abstract class Service extends Process {
                 'checkfile' => 1,
                 'connect_retries' => 3,        //When establishing a control channel, make no more than this number of attempts before giving up
                 'connect_retry_delay' => 100,  //When making multiple attempts to establish the control channel, wait this long between each
-                'server' => array('host' => '127.0.0.1', 'port' => 8000),
-                'silent' => false
+                'server' => array(
+                    'host' => '127.0.0.1',
+                    'port' => $warlock->server['port'],
+                    'access_key' => $warlock->admin->get('key')
+                ),
+                'silent' => false,
+                'application_name' => $warlock->sys['application_name']
             )
         );
 
@@ -161,16 +174,7 @@ abstract class Service extends Process {
 
             $headers = array();
 
-            Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
-
-            Config::$default_config['sys']['application_name'] = APPLICATION_NAME;
-
-            $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, Config::$default_config);
-
-            if(!($key = $this->config->get('access_key')))
-                $key = $warlock->admin->get('key');
-
-            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($key);
+            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($this->config->server['access_key']);
 
             $headers['X-WARLOCK-CLIENT-TYPE'] = 'service';
 
@@ -178,7 +182,7 @@ abstract class Service extends Process {
 
             $this->log(W_LOCAL, 'Connecting to Warlock server at ' . $this->config->server['host'] . ':' . $this->config->server['port']);
 
-            if(!$conn->connect($warlock->sys['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
+            if(!$conn->connect($this->config['application_name'], $this->config->server['host'], $this->config->server['port'], $headers))
                 return false;
 
             if(($type = $conn->recv($payload)) === false || $type !== 'OK')
