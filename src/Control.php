@@ -282,7 +282,7 @@ class Control extends Process {
             if(!file_exists($server))
                 throw new \Exception('Warlock server script could not be found!');
 
-            $this->cmd = $this->config->sys['php_binary'] . ' ' .  implode(' ', $php_options);
+            $this->cmd = $this->config->sys['php_binary'] . ' ' .  implode(' ', $php_options) . '&';
 
             $env['WARLOCK_OUTPUT'] = 'file';
 
