@@ -93,7 +93,8 @@ class Control extends Process {
             if($autostart === true){
 
                 if(!$this->config->sys['php_binary'])
-                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+                    $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '') . 'php'
+                    . ((substr(PHP_OS, 0, 3) === 'WIN') ? '.exe' : '');
 
                 $this->pidfile = $app->runtimePath($this->config->sys->pid);
 
@@ -208,6 +209,9 @@ class Control extends Process {
 
         $php_binary = $this->config->sys['php_binary'];
 
+        if(substr(PHP_OS, 0, 3) !== 'WIN' && substr(trim($php_binary), 0, 1) !== '/')
+            $php_binary = trim(shell_exec('which ' . $php_binary));
+
         if(! file_exists($php_binary))
             throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
 
@@ -222,7 +226,7 @@ class Control extends Process {
         if(substr(PHP_OS, 0, 3) == 'WIN')
             $this->cmd = 'start ' . (($this->config->server['win_bg'] === true)?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
         else
-            $this->cmd = $php_binary . ' ' . $server;
+            $this->cmd = $php_binary . ' ' . $server . '&';
 
         $env = $_SERVER;
 
