@@ -171,6 +171,8 @@ class Master {
 
         \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
+        \Hazaar\Application\Config::$override_paths = array('host' . DIRECTORY_SEPARATOR . ake($_SERVER, 'SERVER_NAME'), 'local');
+
         global $STDOUT;
 
         global $STDERR;
