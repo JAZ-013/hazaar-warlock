@@ -238,8 +238,17 @@ class Control extends Process {
 
         $env['WARLOCK_EXEC'] = 1;
 
-        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active())
-            $env['XDEBUG_CONFIG'] = 'profiler_enable=1';
+        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active()){
+
+            $env['XDEBUG_CONFIG'] = 'remote_enable=' . ini_get('xdebug.remote_enable')
+                . ' remote_handler='                 . ini_get('xdebug.remote_handler')
+                . ' remote_mode='                    . ini_get('xdebug.remote_mode')
+                . ' remote_port='                    . ini_get('xdebug.remote_port')
+                . ' remote_host='                    . ini_get('xdebug.remote_host')
+                . ' remote_cookie_expire_time='      . ini_get('xdebug.remote_cookie_expire_time')
+                . ' profiler_enable='                . ini_get('xdebug.profiler_enable');
+
+        }
 
         if(substr(PHP_OS, 0, 3) !== 'WIN')
             $env['WARLOCK_OUTPUT'] = 'file';
