@@ -204,7 +204,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function ready(){
 
-        return (($this->status === STATUS_QUEUED || $this->status === STATUS_QUEUED_RETRY) && time() >= $this->start);
+        return (($this->status === STATUS_QUEUED || $this->status === STATUS_QUEUED_RETRY) && $this->start && time() >= $this->start);
 
     }
 

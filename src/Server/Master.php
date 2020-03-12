@@ -320,6 +320,14 @@ class Master {
 
         Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
 
+        if($this->config->log->rotate === true){
+
+            $this->queueAddJob(new Job\Internal(array(
+                'when' => '* * * * *',
+                'exec' => (object)['callable' => [$this, 'rotateLogFiles']]
+            )));
+
+        }
     }
 
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
@@ -1626,6 +1634,20 @@ class Master {
 
                 $now = time();
 
+                if($job instanceof Job\Internal){
+
+                    $job->touch();
+
+                    $job->status = STATUS_RUNNING;
+
+                    call_user_func_array($job->exec->callable, (array)ake($job->exec, 'params'));
+
+                    $job->status = STATUS_QUEUED;
+
+                    continue;
+
+                }
+
                 if (count($this->processes) >= $this->config->exec->limit) {
 
                     $this->stats['limitHits']++;
@@ -2325,6 +2347,12 @@ class Master {
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
+
+    }
+
+    private function rotateLogFiles(){
+
+        $this->log->write(W_INFO, 'Rotating log files');
 
     }
 
