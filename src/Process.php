@@ -467,7 +467,7 @@ abstract class Process {
 
         if(is_string($service_name)){
 
-            $service = self::getServiceClass($service_name, $application, $protocol);
+            $service = self::getServiceClass($service_name, $application, $protocol, true);
 
             if(!$service instanceof \Hazaar\Warlock\Service)
                 die("Could not find service named '$service_name'.\n");
@@ -515,7 +515,7 @@ abstract class Process {
                         if($config = ake($payload, 'config'))
                             $application->config->extend($config);
 
-                        $service = self::getServiceClass($payload->name, $application, $protocol);
+                        $service = self::getServiceClass($payload->name, $application, $protocol, false);
 
                         if($service instanceof \Hazaar\Warlock\Service){
 
@@ -545,7 +545,7 @@ abstract class Process {
 
     }
 
-    static public function getServiceClass($service_name, \Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol){
+    static public function getServiceClass($service_name, \Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $remote = false){
 
         $class_search = array(
             'Application\\Service\\' . ucfirst($service_name),
@@ -559,7 +559,7 @@ abstract class Process {
             if(!class_exists($service_class))
                 continue;
 
-            $service = new $service_class($application, $protocol, true);
+            $service = new $service_class($application, $protocol, $remote);
 
         }
 
