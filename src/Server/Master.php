@@ -155,6 +155,11 @@ class Master {
             'msg' => 'Service exited because it\'s source file was modified.',
             'restart' => true,
             'reset' => true
+        ),
+        7 => array(
+            'lvl' => W_WARN,
+            'msg' => 'Service exited due to an exception.',
+            'restart' => true
         )
     );
 
