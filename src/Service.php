@@ -273,7 +273,7 @@ abstract class Service extends Process {
 
             $this->state = (($init === FALSE) ? HAZAAR_SERVICE_ERROR : HAZAAR_SERVICE_READY);
 
-            if($this->state != HAZAAR_SERVICE_READY)
+            if($this->state !== HAZAAR_SERVICE_READY)
                 return 1;
 
             $this->state = HAZAAR_SERVICE_RUNNING;
@@ -314,36 +314,40 @@ abstract class Service extends Process {
                 if($ret === false)
                     $this->state = HAZAAR_SERVICE_STOPPING;
 
+                /*
+                * If sleep was not executed in the last call to run(), then execute it now.  This protects bad services
+                * from not sleeping as the sleep() call is where new signals are processed.
+                */
+                if(!$this->slept)
+                    $this->sleep(0);
+
+                if($this->service_file_mtime > 0 && time() >= ($this->last_checkfile + $this->config['checkfile'])){
+
+                    $this->last_checkfile = time();
+
+                    clearstatcache(true, $this->service_file);
+
+                    //Check if the service file has been modified and initiate a restart
+                    if(filemtime($this->service_file) > $this->service_file_mtime){
+
+                        $this->log(W_INFO, 'Service file modified. Initiating restart.');
+
+                        $this->state = HAZAAR_SERVICE_STOPPING;
+
+                        $code = 6;
+
+                    }
+
+                }
+
             }
             catch(\Throwable $e){
 
                 $this->__exceptionHandler($e);
 
-            }
+                $this->state = HAZAAR_SERVICE_ERROR;
 
-            /*
-             * If sleep was not executed in the last call to run(), then execute it now.  This protects bad services
-             * from not sleeping as the sleep() call is where new signals are processed.
-             */
-            if(! $this->slept)
-                $this->sleep(0);
-
-            if($this->service_file_mtime > 0 && time() >= ($this->last_checkfile + $this->config['checkfile'])){
-
-                $this->last_checkfile = time();
-
-                clearstatcache(true, $this->service_file);
-
-                //Check if the service file has been modified and initiate a restart
-                if(filemtime($this->service_file) > $this->service_file_mtime){
-
-                    $this->log(W_INFO, 'Service file modified. Initiating restart.');
-
-                    $this->state = HAZAAR_SERVICE_STOPPING;
-
-                    $code = 6;
-
-                }
+                $code = 7;
 
             }
 
@@ -392,9 +396,6 @@ abstract class Service extends Process {
         $msg .= ob_get_clean();
 
         $this->log(W_LOCAL, 'EXCEPTION ' . $msg);
-
-        if(($code = $e->getCode()) < 100)
-            exit($code);
 
         $this->send('ERROR', $msg);
 
