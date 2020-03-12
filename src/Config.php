@@ -63,11 +63,15 @@ class Config {
              'key' => '0000'                        //The admin key.  This is a simple passcode that allows admin clients to do a few more things, like start/stop services, subscribe to admin events, etc.
          ),
          'log' => array(
+             'rrd' => 'server.rrd',                 //The RRD data file.  Used to store RRD data for graphing realtime statistics.
              'level' => 'W_ERR',                    //Default log level.  Allowed: W_INFO, W_WARN, W_ERR, W_NOTICE, W_DEBUG, W_DECODE, W_DECODE2.
              'path' => '%RUNTIME_PATH%%DIRECTORY_SEPARATOR%warlock',
              'file' => 'server.log',                //The log file to write to in the application runtime directory.
              'error' => 'server-error.log',         //The error log file to write to in the application runtime directory.  STDERR is redirected to this file.
-             'rrd' => 'server.rrd'                  //The RRD data file.  Used to store RRD data for graphing realtime statistics.
+             'rotate' => false,                     //Enable log file rotation
+             'logfiles' => 7,                       //The maximum number of log files to keep
+             'rotateAt' => '0 0 * * *'              //CRON schedule for when the log rotation will occur
+             
          ),
          'job' => array(
              'retries' => 5,                        //Retry jobs that failed this many times.

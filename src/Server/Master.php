@@ -248,6 +248,15 @@ class Master {
 
             }
 
+            if($this->config->log->rotate === true){
+
+                $this->queueAddJob(new Job\Internal(array(
+                    'when' => ake($this->config->log, 'rotateAt', '0 0 * * * *'),
+                    'exec' => (object)['callable' => [$this, 'rotateLogFiles'], 'params' => [ake($this->config->log, 'logfiles')]]
+                )))->touch();
+    
+            }
+
         }
 
         $this->log->write(W_INFO, 'Warlock starting up...');
@@ -320,14 +329,6 @@ class Master {
 
         Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
 
-        if($this->config->log->rotate === true){
-
-            $this->queueAddJob(new Job\Internal(array(
-                'when' => '* * * * *',
-                'exec' => (object)['callable' => [$this, 'rotateLogFiles']]
-            )));
-
-        }
     }
 
     final public function __errorHandler($errno , $errstr , $errfile = null, $errline  = null, $errcontext = array()){
@@ -2350,9 +2351,61 @@ class Master {
 
     }
 
-    private function rotateLogFiles(){
+    private function rotateLogFiles($logfiles = 0){
 
-        $this->log->write(W_INFO, 'Rotating log files');
+        if(!$this->silent) 
+            return false;
+
+        global $STDOUT;
+
+        global $STDERR;
+
+        $this->log->write(W_NOTICE, "ROTATING LOG FILES: MAX=$logfiles");
+
+        $log_path = rtrim($this->config->log->path);
+
+        if(!\is_dir($log_path))
+            return false;
+
+        if($this->config->log->file) {
+
+            $out = $log_path . DIRECTORY_SEPARATOR . $this->config->log->file;
+
+            fclose($STDOUT);
+
+            $this->rotateLogFile($out, $logfiles);
+
+            $STDOUT = fopen($out, 'a');
+
+        }
+
+        if($this->config->log->error) {
+
+            $err = $log_path . DIRECTORY_SEPARATOR . $this->config->log->error;
+
+            fclose($STDERR);
+
+            $this->rotateLogFile($err, $logfiles);
+
+            $STDERR = fopen($err, 'a');
+
+        }
+        
+    }
+
+    private function rotateLogFile($file, $logfiles, $i = 0){
+
+        $c = $file . (($i > 0) ? '.' . $i : '');
+
+        if(!\file_exists($c))
+            return false;
+
+        if($i < $logfiles)
+            $this->rotateLogFile($file, $logfiles, ++$i);
+
+        rename($c, $file . '.' . $i);  
+
+        return true;
 
     }
 
