@@ -42,6 +42,6 @@ require_once('HelperFunctions.php');
 
 $log_level = W_INFO;
 
-$warlock = new Server\Master(boolify(getenv('WARLOCK_OUTPUT') == 'file'));
+$warlock = new Server\Master((in_array('-s', $argv) ? true : boolify(getenv('WARLOCK_OUTPUT') === 'file')));
 
 exit($warlock->bootstrap()->run());

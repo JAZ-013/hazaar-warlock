@@ -74,6 +74,8 @@ class Master {
 
     private $rrdfile;
 
+    private $log;
+
     /**
      * JOBS & SERVICES
      */
@@ -174,6 +176,8 @@ class Master {
      */
     function __construct($silent = false) {
 
+        \Hazaar\Warlock\Config::$default_config['sys']['runtimepath'] = APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime';
+
         \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
         \Hazaar\Application\Config::$override_paths = array('host' . DIRECTORY_SEPARATOR . ake($_SERVER, 'SERVER_NAME'), 'local');
@@ -188,6 +192,9 @@ class Master {
 
         if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
+
+        if(!defined('RUNTIME_PATH'))
+            define('RUNTIME_PATH', $this->runtimePath(null, true));
 
         Logger::set_default_log_level($this->config->log->level);
 
@@ -214,23 +221,40 @@ class Master {
             $this->log->write(W_WARN, str_repeat('*', strlen($msg)));
 
         }
+        
+        $log_path = rtrim($this->config->log->path);
 
-        if ($this->silent) {
+        if($this->silent) {
 
-            if ($this->config->log->file) {
+            if(!\file_exists($log_path))
+                mkdir($log_path);
+
+            if(!is_dir($log_path))
+                throw new \Exception('Log path exists but is not a directory!');
+
+            if($this->config->log->file) {
 
                 fclose(STDOUT);
 
-                $STDOUT = fopen($this->runtimePath($this->config->log->file), 'a');
+                $STDOUT = fopen($log_path . DIRECTORY_SEPARATOR . $this->config->log->file, 'a');
 
             }
 
-            if ($this->config->log->error) {
+            if($this->config->log->error) {
 
                 fclose(STDERR);
 
-                $STDERR = fopen($this->runtimePath($this->config->log->error), 'a');
+                $STDERR = fopen($log_path . DIRECTORY_SEPARATOR . $this->config->log->error, 'a');
 
+            }
+
+            if($this->config->log->rotate === true){
+
+                $this->queueAddJob(new Job\Internal(array(
+                    'when' => ake($this->config->log, 'rotateAt', '0 0 * * * *'),
+                    'exec' => (object)['callable' => [$this, 'rotateLogFiles'], 'params' => [ake($this->config->log, 'logfiles')]]
+                )))->touch();
+    
             }
 
         }
@@ -239,9 +263,9 @@ class Master {
 
         $this->pid = getmypid();
 
-        $this->pidfile = $this->runtimePath($this->config->sys->pid);
+        $this->pidfile = $log_path . DIRECTORY_SEPARATOR . $this->config->sys->pid;
 
-        if ($this->rrdfile = $this->runtimePath($this->config->log->rrd)) {
+        if ($this->rrdfile = $log_path . DIRECTORY_SEPARATOR . $this->config->log->rrd) {
 
             $this->rrd = new \Hazaar\File\RRD($this->rrdfile, 60);
 
@@ -300,6 +324,8 @@ class Master {
         $this->log->write(W_NOTICE, 'Exec timeout = ' . $this->config->exec->timeout . ' seconds');
 
         $this->log->write(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
+
+        $this->log->write(W_INFO, 'Log dir = ' . $this->config->log->path);
 
         Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
 
@@ -425,7 +451,7 @@ class Master {
 
         if(count($this->processes) > 0) {
 
-            $this->log->write(W_WARN, 'Killing with processes with extreme prejudice!');
+            if($this->log) $this->log->write(W_WARN, 'Killing processes with extreme prejudice!');
 
             foreach($this->processes as $process)
                 $process->terminate();
@@ -435,7 +461,7 @@ class Master {
         if (file_exists($this->pidfile))
             unlink($this->pidfile);
 
-        $this->log->write(W_INFO, 'Exiting...');
+        if($this->log) $this->log->write(W_INFO, 'Exiting...');
 
     }
 
@@ -456,7 +482,7 @@ class Master {
      */
     public function runtimePath($suffix = NULL, $create_dir = false) {
 
-        $path = APPLICATION_PATH . DIRECTORY_SEPARATOR . ($this->config->app->has('runtimepath') ? $this->config->app->runtimepath : '.runtime');
+        $path = $this->config->sys->get('runtimepath');
 
         if(!file_exists($path)) {
 
@@ -1609,6 +1635,20 @@ class Master {
 
                 $now = time();
 
+                if($job instanceof Job\Internal){
+
+                    $job->touch();
+
+                    $job->status = STATUS_RUNNING;
+
+                    call_user_func_array($job->exec->callable, (array)ake($job->exec, 'params'));
+
+                    $job->status = STATUS_QUEUED;
+
+                    continue;
+
+                }
+
                 if (count($this->processes) >= $this->config->exec->limit) {
 
                     $this->stats['limitHits']++;
@@ -2308,6 +2348,64 @@ class Master {
         $this->log->write(W_INFO, 'Disabling service: ' . $name);
 
         return $service->disable($this->config->job->expire);
+
+    }
+
+    private function rotateLogFiles($logfiles = 0){
+
+        if(!$this->silent) 
+            return false;
+
+        global $STDOUT;
+
+        global $STDERR;
+
+        $this->log->write(W_NOTICE, "ROTATING LOG FILES: MAX=$logfiles");
+
+        $log_path = rtrim($this->config->log->path);
+
+        if(!\is_dir($log_path))
+            return false;
+
+        if($this->config->log->file) {
+
+            $out = $log_path . DIRECTORY_SEPARATOR . $this->config->log->file;
+
+            fclose($STDOUT);
+
+            $this->rotateLogFile($out, $logfiles);
+
+            $STDOUT = fopen($out, 'a');
+
+        }
+
+        if($this->config->log->error) {
+
+            $err = $log_path . DIRECTORY_SEPARATOR . $this->config->log->error;
+
+            fclose($STDERR);
+
+            $this->rotateLogFile($err, $logfiles);
+
+            $STDERR = fopen($err, 'a');
+
+        }
+        
+    }
+
+    private function rotateLogFile($file, $logfiles, $i = 0){
+
+        $c = $file . (($i > 0) ? '.' . $i : '');
+
+        if(!\file_exists($c))
+            return false;
+
+        if($i < $logfiles)
+            $this->rotateLogFile($file, $logfiles, ++$i);
+
+        rename($c, $file . '.' . $i);  
+
+        return true;
 
     }
 
