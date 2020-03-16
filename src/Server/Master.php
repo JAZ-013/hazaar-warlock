@@ -176,8 +176,6 @@ class Master {
      */
     function __construct($silent = false) {
 
-        \Hazaar\Warlock\Config::$default_config['sys']['runtimepath'] = APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime';
-
         \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
         \Hazaar\Application\Config::$override_paths = array('host' . DIRECTORY_SEPARATOR . ake($_SERVER, 'SERVER_NAME'), 'local');
@@ -194,7 +192,9 @@ class Master {
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
         if(!defined('RUNTIME_PATH'))
-            define('RUNTIME_PATH', $this->runtimePath(null, true));
+            define('RUNTIME_PATH', APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime');
+
+        $runtime_path = $this->runtimePath(null, true);
 
         Logger::set_default_log_level($this->config->log->level);
 
@@ -222,21 +222,15 @@ class Master {
 
         }
         
-        $log_path = rtrim($this->config->log->path);
+        $runtime_path = rtrim($this->config->sys->runtimepath);
 
         if($this->silent) {
-
-            if(!\file_exists($log_path))
-                mkdir($log_path);
-
-            if(!is_dir($log_path))
-                throw new \Exception('Log path exists but is not a directory!');
 
             if($this->config->log->file) {
 
                 fclose(STDOUT);
 
-                $STDOUT = fopen($log_path . DIRECTORY_SEPARATOR . $this->config->log->file, 'a');
+                $STDOUT = fopen($runtime_path . DIRECTORY_SEPARATOR . $this->config->log->file, 'a');
 
             }
 
@@ -244,7 +238,7 @@ class Master {
 
                 fclose(STDERR);
 
-                $STDERR = fopen($log_path . DIRECTORY_SEPARATOR . $this->config->log->error, 'a');
+                $STDERR = fopen($runtime_path . DIRECTORY_SEPARATOR . $this->config->log->error, 'a');
 
             }
 
@@ -263,9 +257,9 @@ class Master {
 
         $this->pid = getmypid();
 
-        $this->pidfile = $log_path . DIRECTORY_SEPARATOR . $this->config->sys->pid;
+        $this->pidfile = $runtime_path . DIRECTORY_SEPARATOR . $this->config->sys->pid;
 
-        if ($this->rrdfile = $log_path . DIRECTORY_SEPARATOR . $this->config->log->rrd) {
+        if ($this->rrdfile = $runtime_path . DIRECTORY_SEPARATOR . $this->config->log->rrd) {
 
             $this->rrd = new \Hazaar\File\RRD($this->rrdfile, 60);
 
@@ -309,6 +303,8 @@ class Master {
 
         $this->log->write(W_NOTICE, 'Application environment = ' . APPLICATION_ENV);
 
+        $this->log->write(W_NOTICE, 'Runtime path = ' . $runtime_path);
+
         $this->log->write(W_NOTICE, 'PID = ' . $this->pid);
 
         $this->log->write(W_NOTICE, 'PID file = ' . $this->pidfile);
@@ -324,8 +320,6 @@ class Master {
         $this->log->write(W_NOTICE, 'Exec timeout = ' . $this->config->exec->timeout . ' seconds');
 
         $this->log->write(W_NOTICE, 'Process limit = ' . $this->config->exec->limit . ' processes');
-
-        $this->log->write(W_INFO, 'Log dir = ' . $this->config->log->path);
 
         Master::$protocol = new \Hazaar\Warlock\Protocol($this->config->sys->id, $this->config->server->encoded);
 
@@ -2362,14 +2356,14 @@ class Master {
 
         $this->log->write(W_NOTICE, "ROTATING LOG FILES: MAX=$logfiles");
 
-        $log_path = rtrim($this->config->log->path);
+        $runtime_path = rtrim($this->config->sys->runtimepath);
 
-        if(!\is_dir($log_path))
+        if(!\is_dir($runtime_path))
             return false;
 
         if($this->config->log->file) {
 
-            $out = $log_path . DIRECTORY_SEPARATOR . $this->config->log->file;
+            $out = $runtime_path . DIRECTORY_SEPARATOR . $this->config->log->file;
 
             fclose($STDOUT);
 
@@ -2381,7 +2375,7 @@ class Master {
 
         if($this->config->log->error) {
 
-            $err = $log_path . DIRECTORY_SEPARATOR . $this->config->log->error;
+            $err = $runtime_path . DIRECTORY_SEPARATOR . $this->config->log->error;
 
             fclose($STDERR);
 
