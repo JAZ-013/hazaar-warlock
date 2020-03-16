@@ -22,7 +22,7 @@ class Config {
              'timezone' => 'UTC',                   //The timezone of the server.  This is mainly used for scheduled jobs.
              'php_binary' => NULL,                  //Override path to the PHP binary file to use when executing jobs.
              'date_format' => 'c',
-             'runtimepath' => null
+             'runtimepath' => '%RUNTIME_PATH%%DIRECTORY_SEPARATOR%warlock'
          ),
          'server' => array(
              'listen' => '127.0.0.1',               //Server IP to listen on.  127.0.0.1 by default which only accept connections from localhost.  Use 0.0.0.0 to listen on all addresses.
@@ -65,7 +65,6 @@ class Config {
          'log' => array(
              'rrd' => 'server.rrd',                 //The RRD data file.  Used to store RRD data for graphing realtime statistics.
              'level' => 'W_ERR',                    //Default log level.  Allowed: W_INFO, W_WARN, W_ERR, W_NOTICE, W_DEBUG, W_DECODE, W_DECODE2.
-             'path' => '%RUNTIME_PATH%%DIRECTORY_SEPARATOR%warlock',
              'file' => 'server.log',                //The log file to write to in the application runtime directory.
              'error' => 'server-error.log',         //The error log file to write to in the application runtime directory.  STDERR is redirected to this file.
              'rotate' => false,                     //Enable log file rotation

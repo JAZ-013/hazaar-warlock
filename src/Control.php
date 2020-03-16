@@ -53,9 +53,11 @@ class Control extends Process {
 
         $protocol = new Protocol($this->config->sys->id, $this->config->server->encoded);
 
+        $runtime_path = rtrim($this->config->sys['runtimepath'], '/') . DIRECTORY_SEPARATOR;
+
         if(!Control::$guid){
 
-            $guid_file = $application->runtimePath('warlock.guid');
+            $guid_file = $runtime_path . 'warlock.guid';
 
             if(!file_exists($guid_file) || (Control::$guid = file_get_contents($guid_file)) == FALSE) {
 
@@ -76,7 +78,7 @@ class Control extends Process {
                 if(!$this->config->sys['php_binary'])
                     $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '') . 'php';
 
-                $this->pidfile = $application->runtimePath($this->config->sys->pid);
+                $this->pidfile = $runtime_path . $this->config->sys['pid'];
 
                 if(!$this->start())
                     throw new \Exception('Autostart of Warlock server has failed!');
