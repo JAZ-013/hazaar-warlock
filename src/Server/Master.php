@@ -191,8 +191,17 @@ class Master {
         if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
-        if(!defined('RUNTIME_PATH'))
-            define('RUNTIME_PATH', APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime');
+        if(!defined('RUNTIME_PATH')){
+
+            $path = APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime';
+
+            if(($app_config = new \Hazaar\Application\Config('application', APPLICATION_ENV))
+                && $app_config->app->has('runtimepath'))
+                $path = $app_config->app['runtimepath'];
+
+            define('RUNTIME_PATH', $path);
+
+        }
 
         $runtime_path = $this->runtimePath(null, true);
 

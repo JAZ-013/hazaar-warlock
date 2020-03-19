@@ -17,7 +17,7 @@ class Config {
              'id' => 0,                             //Server ID is used to prevent clients from talking to the wrong server.
              'application_name' => NULL,            //The application is also used to prevent clients from talking to the wrong server.
              'autostart' => FALSE,                  //If TRUE the Warlock\Control class will attempt to autostart the server if it is not running.
-             'pid' => 'warlock.pid',                //The name of the warlock process ID file relative to the application runtime directory.  For absolute paths prefix with /.
+             'pid' => 'server.pid',                 //The name of the warlock process ID file relative to the application runtime directory.  For absolute paths prefix with /.
              'cleanup' => TRUE,                     //Enable/Disable message queue cleanup.
              'timezone' => 'UTC',                   //The timezone of the server.  This is mainly used for scheduled jobs.
              'php_binary' => NULL,                  //Override path to the PHP binary file to use when executing jobs.
