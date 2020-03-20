@@ -2,6 +2,8 @@
 
 namespace Hazaar\Warlock;
 
+require('Functions.php');
+
 define('W_LOCAL', -1);
 
 /**
@@ -50,6 +52,8 @@ abstract class Service extends Process {
 
     private   $__log_file;
 
+    private   $__log;
+    
     private   $__local_log_level = W_INFO;
 
     private   $__remote = false;
@@ -93,7 +97,8 @@ abstract class Service extends Process {
                     'access_key' => $warlock->admin->get('key')
                 ),
                 'silent' => false,
-                'application_name' => $warlock->sys['application_name']
+                'application_name' => $warlock->sys['application_name'],
+                'log' => $warlock->log
             )
         );
 
@@ -119,15 +124,17 @@ abstract class Service extends Process {
 
         $this->__remote = $remote;
 
-        if($this->config->has('loglevel') && defined($out_level = $this->config->get('loglevel')))
+        if($this->config->log->has('level') && defined($out_level = $this->config->log->get('level')))
             $this->__local_log_level = constant($out_level);
 
         if($remote === true && !$this->config->has('server'))
             throw new \Exception("Warlock server required to run in remote service mode.\n");
 
-        $this->__log_file = fopen($application->runtimePath($this->name . '.log'), 'a');
+        $this->__log_file = $warlock->sys['runtimepath'] . DIRECTORY_SEPARATOR . $this->name . '.log';
 
-        $this->log(W_LOCAL, 'Service ' . $this->name . ' starting up');
+        $this->__log = fopen($this->__log_file, 'a');
+
+        $this->log(W_LOCAL, "Service '{$this->name}' starting up");
 
         if(!$application->request instanceof \Hazaar\Application\Request\Http){
 
@@ -158,8 +165,8 @@ abstract class Service extends Process {
 
     function __destruct(){
 
-        if($this->__log_file)
-            fclose($this->__log_file);
+        if($this->__log)
+            fclose($this->__log);
 
         parent::__destruct();
 
@@ -200,7 +207,7 @@ abstract class Service extends Process {
 
     public function log($level, $message, $name = null){
 
-        if(!is_resource($this->__log_file))
+        if(!is_resource($this->__log))
             return false;
 
         if($name === null)
@@ -217,14 +224,14 @@ abstract class Service extends Process {
 
                 $msg = date('Y-m-d H:i:s') . " - $this->name - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
 
-                fwrite($this->__log_file, $msg);
+                fwrite($this->__log, $msg);
 
                 if($this->__remote === true && $this->config->silent !== true)
                     echo $msg;
 
             }
 
-            fflush($this->__log_file);
+            fflush($this->__log);
 
         }
 
@@ -263,6 +270,18 @@ abstract class Service extends Process {
     final public function main($params = array(), $dynamic = false) {
 
         $this->log(W_LOCAL, "Service started");
+
+        if($this->config->log->rotate === true){
+
+            $when = ake($this->config->log, 'rotateAt', '0 0 * * * *');
+
+            $logfiles = ake($this->config->log, 'logfiles');
+
+            $this->log(W_LOCAL, "Log rotation is enabled. WHEN=$when LOGFILES=$logfiles");
+
+            $this->cron($when, '__rotateLogFiles', [$logfiles]);
+
+        }
 
         $init = true;
 
@@ -553,6 +572,20 @@ abstract class Service extends Process {
         );
 
         return $strings[$state];
+
+    }
+
+    final private function __rotateLogFiles($logfiles = 0){
+
+        $this->log(W_LOCAL, 'ROTATING LOG FILES: MAX=' . $logfiles);
+
+        fclose($this->__log);
+
+        rotateLogFile($this->__log_file, $logfiles);
+
+        $this->__log = fopen($this->__log_file, 'a');
+
+        $this->log(W_LOCAL, 'New log file started');
 
     }
 

@@ -2,6 +2,8 @@
 
 namespace Hazaar\Warlock\Server;
 
+require('Functions.php');
+
 class Master {
 
     /**
@@ -191,8 +193,17 @@ class Master {
         if(($this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config)) === false)
             throw new \Exception('There is no warlock configuration file.  Warlock is disabled!');
 
-        if(!defined('RUNTIME_PATH'))
-            define('RUNTIME_PATH', APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime');
+        if(!defined('RUNTIME_PATH')){
+
+            $path = APPLICATION_PATH . DIRECTORY_SEPARATOR . '.runtime';
+
+            if(($app_config = new \Hazaar\Application\Config('application', APPLICATION_ENV))
+                && $app_config->app->has('runtimepath'))
+                $path = $app_config->app['runtimepath'];
+
+            define('RUNTIME_PATH', $path);
+
+        }
 
         $runtime_path = $this->runtimePath(null, true);
 
@@ -2367,7 +2378,7 @@ class Master {
 
             fclose($STDOUT);
 
-            $this->rotateLogFile($out, $logfiles);
+            rotateLogFile($out, $logfiles);
 
             $STDOUT = fopen($out, 'a');
 
@@ -2379,28 +2390,12 @@ class Master {
 
             fclose($STDERR);
 
-            $this->rotateLogFile($err, $logfiles);
+            rotateLogFile($err, $logfiles);
 
             $STDERR = fopen($err, 'a');
 
         }
         
-    }
-
-    private function rotateLogFile($file, $logfiles, $i = 0){
-
-        $c = $file . (($i > 0) ? '.' . $i : '');
-
-        if(!\file_exists($c))
-            return false;
-
-        if($i < $logfiles)
-            $this->rotateLogFile($file, $logfiles, ++$i);
-
-        rename($c, $file . '.' . $i);  
-
-        return true;
-
     }
 
 }

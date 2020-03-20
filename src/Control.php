@@ -57,7 +57,7 @@ class Control extends Process {
 
         if(!Control::$guid){
 
-            $guid_file = $runtime_path . 'warlock.guid';
+            $guid_file = $runtime_path . 'server.guid';
 
             if(!file_exists($guid_file) || (Control::$guid = file_get_contents($guid_file)) == FALSE) {
 
