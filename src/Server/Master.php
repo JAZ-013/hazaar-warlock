@@ -2378,7 +2378,7 @@ class Master {
 
             fclose($STDOUT);
 
-            $this->rotateLogFile($out, $logfiles);
+            rotateLogFile($out, $logfiles);
 
             $STDOUT = fopen($out, 'a');
 
@@ -2390,7 +2390,7 @@ class Master {
 
             fclose($STDERR);
 
-            $this->rotateLogFile($err, $logfiles);
+            rotateLogFile($err, $logfiles);
 
             $STDERR = fopen($err, 'a');
 

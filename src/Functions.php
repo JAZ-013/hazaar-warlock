@@ -21,10 +21,10 @@ function rotateLogFile($file, $file_count = 1, $offset = 0){
     if(!\file_exists($c))
         return false;
 
-    if($i < $logfiles)
-        rotateLogFile($file, $logfiles, ++$offset);
+    if($offset < $file_count)
+        rotateLogFile($file, $file_count, ++$offset);
 
-    rename($c, $file . '.' . $i);  
+    rename($c, $file . '.' . $offset);  
 
     return true;
 
