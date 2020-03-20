@@ -21,7 +21,7 @@ chdir(APPLICATION_PATH);
 
 define('APPLICATION_ENV', (getenv('APPLICATION_ENV') ? getenv('APPLICATION_ENV') : 'development'));
 
-define('LIBRAY_PATH', realpath(dirname(__FILE__) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'src'));
+define('SERVER_PATH', realpath(dirname(__FILE__) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'src'));
 
 include APPLICATION_PATH . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
 
@@ -32,7 +32,7 @@ $reflector = new \ReflectionClass('Hazaar\Loader');
 
 set_include_path(implode(PATH_SEPARATOR, array(
     realpath(dirname($reflector->getFileName())),
-    realpath(LIBRAY_PATH . DIRECTORY_SEPARATOR . '..'),
+    realpath(SERVER_PATH),
     get_include_path()
 )));
 

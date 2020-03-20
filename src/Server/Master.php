@@ -2,6 +2,8 @@
 
 namespace Hazaar\Warlock\Server;
 
+require('Functions.php');
+
 class Master {
 
     /**
@@ -2394,22 +2396,6 @@ class Master {
 
         }
         
-    }
-
-    private function rotateLogFile($file, $logfiles, $i = 0){
-
-        $c = $file . (($i > 0) ? '.' . $i : '');
-
-        if(!\file_exists($c))
-            return false;
-
-        if($i < $logfiles)
-            $this->rotateLogFile($file, $logfiles, ++$i);
-
-        rename($c, $file . '.' . $i);  
-
-        return true;
-
     }
 
 }

@@ -92,7 +92,7 @@ class Process extends \Hazaar\Model\Strict {
             'USERNAME' => (array_key_exists('USERNAME', $_SERVER) ? $_SERVER['USERNAME'] : null)
         )), 'is_string');
 
-        $cmd = realpath(LIBRAY_PATH . '/Runner.php');
+        $cmd = realpath(SERVER_PATH . '/Runner.php');
 
         if (!$cmd || !file_exists($cmd))
             throw new \Exception('Application command runner could not be found!');
