@@ -2115,11 +2115,9 @@ class Master {
      *
      * Returns true if the event should be filtered (skipped), and false if the event should be processed.
      *
-     * @param string $event
-     *            The event to check.
+     * @param Array $event The event to check.
      *
-     * @param Array $filter
-     *            The filter rule to test against.
+     * @param Array $filter The filter rule to test against.
      *
      * @return bool Returns true if the event should be filtered (skipped), and false if the event should be processed.
      */
@@ -2135,7 +2133,7 @@ class Master {
             $field = explode('.', $field);
 
             if (!$this->fieldExists($field, $event['data']))
-                return true;
+                return false;
 
             $field_value = $this->getFieldValue($field, $event['data']);
 
