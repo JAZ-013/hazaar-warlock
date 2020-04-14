@@ -10,9 +10,33 @@ class Kvstore {
 
     private $kv_expire = array();
 
-    function __construct(Logger $log) {
+    private $db;
+
+    private $compact_time = 0;
+
+    private $last_compact = 0;
+
+    function __construct(Logger $log, $persistent = false, $compact_time = null) {
 
         $this->log = $log;
+
+        if($persistent === true){
+
+            $db_file = new \Hazaar\File(\Hazaar\Warlock\Server\Master::$instance->runtimePath('kvstore.db'));
+
+            $this->db = new \Hazaar\Btree($db_file);
+
+            if($compact_time > 0){
+
+                $this->log->write(W_NOTICE, 'KV Store persistent storage compaction enabled');
+
+                $this->compact_time = $compact_time;
+
+                $this->last_compact = $db_file->ctime();
+
+            }
+
+        }
 
     }
 
@@ -46,21 +70,43 @@ class Kvstore {
 
         }
 
+        if($this->db !== null
+            && $this->compact_time > 0
+            && $this->last_compact + $this->compact_time <= ($now = time())){
+
+            $this->log->write(W_INFO, 'Compacting KV Persistent Storage');
+
+            $this->db->compact();
+
+            $this->last_compact = $now;
+
+        }
+
     }
 
     public function & touch($namespace, $key){
 
         if(!(array_key_exists($namespace, $this->kv_store) && array_key_exists($key, $this->kv_store[$namespace]))){
 
-            $this->kv_store[$namespace][$key] = array('v' => null);
+            if($this->db
+                && ($slot = $this->db->get($key))
+                && (array_key_exists('e', $slot) && $slot['e'] > time())){
 
-            return $this->kv_store[$namespace][$key];
+                $this->kv_store[$namespace][$key] =& $slot;
 
-        }
+            }else{
 
-        $slot =& $this->kv_store[$namespace][$key];
+                $this->kv_store[$namespace][$key] = array('v' => null);
+
+                return $this->kv_store[$namespace][$key];
+
+            }
+
+        }else $slot =& $this->kv_store[$namespace][$key];
 
         if(array_key_exists('e', $slot)
+            && array_key_exists($namespace, $this->kv_expire)
+            && array_key_exists($slot['e'], $this->kv_expire[$namespace])
             && ($index = array_search($key, $this->kv_expire[$namespace][$slot['e']])) !== false)
             unset($this->kv_expire[$namespace][$slot['e']][$index]);
 
@@ -70,13 +116,15 @@ class Kvstore {
 
             $this->kv_expire[$namespace][$slot['e']][] = $key;
 
+            $this->db->set($key, $slot);
+
         }
 
         return $slot;
 
     }
 
-    public function process(Client $client, $command, &$payload){
+    public function process(CommInterface $client, $command, &$payload){
 
         if(!$payload)
             return false;
@@ -157,19 +205,15 @@ class Kvstore {
 
     }
 
-    public function get(Client $client, $payload, $namespace){
+    public function get(CommInterface $client, $payload, $namespace){
 
         $value = null;
 
         if(property_exists($payload, 'k')){
 
-            if(array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])){
+            $slot = $this->touch($namespace, $payload->k);
 
-                $slot = $this->touch($namespace, $payload->k);
-
-                $value = $slot['v'];
-
-            }
+            $value = $slot['v'];
 
         }else{
 
@@ -181,7 +225,7 @@ class Kvstore {
 
     }
 
-    public function set(Client $client, $payload, $namespace){
+    public function set(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -214,6 +258,9 @@ class Kvstore {
 
             $result = true;
 
+            if($this->db)
+                $this->db->set($payload->k, $slot);
+
         }else{
 
             $this->log->write(W_ERR, 'KVSET requires \'k\'');
@@ -224,13 +271,25 @@ class Kvstore {
 
     }
 
-    public function has(Client $client, $payload, $namespace){
+    public function has(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
         if(property_exists($payload, 'k')){
 
-            $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
+            if(!($result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace])))){
+
+                if($this->db
+                    && ($slot = $this->db->get($payload->k))
+                    && (!array_key_exists('e', $slot) || $slot['e'] > time())){
+
+                    $result = true;
+
+                    $this->kv_store[$namespace][$payload->k] =& $slot;
+
+                }
+
+            }
 
         }else{
 
@@ -244,7 +303,7 @@ class Kvstore {
 
     }
 
-    public function del(Client $client, $payload, $namespace){
+    public function del(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -252,8 +311,14 @@ class Kvstore {
 
             $result = (array_key_exists($namespace, $this->kv_store) && array_key_exists($payload->k, $this->kv_store[$namespace]));
 
-            if($result === true)
+            if($result === true){
+
                 unset($this->kv_store[$namespace][$payload->k]);
+
+                if($this->db)
+                    $this->db->remove($payload->k);
+
+            }
 
         }else{
 
@@ -265,13 +330,17 @@ class Kvstore {
 
     }
 
-    public function list(Client $client, $payload, $namespace){
+    public function list(CommInterface $client, $payload, $namespace){
 
         $list = null;
 
         if(array_key_exists($namespace, $this->kv_store)){
 
             $list = array();
+
+            if($this->db){
+
+            }
 
             foreach($this->kv_store[$namespace] as $key => $data)
                 $list[$key] = $data['v'];
@@ -282,7 +351,7 @@ class Kvstore {
 
     }
 
-    public function clear(Client $client, $payload, $namespace){
+    public function clear(CommInterface $client, $payload, $namespace){
 
         $this->kv_store[$namespace] = array();
 
@@ -290,7 +359,7 @@ class Kvstore {
 
     }
 
-    public function pull(Client $client, $payload, $namespace){
+    public function pull(CommInterface $client, $payload, $namespace){
 
         $result = null;
 
@@ -314,7 +383,7 @@ class Kvstore {
 
     }
 
-    public function push(Client $client, $payload, $namespace){
+    public function push(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -335,7 +404,7 @@ class Kvstore {
 
     }
 
-    public function pop(Client $client, $payload, $namespace){
+    public function pop(CommInterface $client, $payload, $namespace){
 
         $result = null;
 
@@ -356,7 +425,7 @@ class Kvstore {
 
     }
 
-    public function shift(Client $client, $payload, $namespace){
+    public function shift(CommInterface $client, $payload, $namespace){
 
         $result = null;
 
@@ -377,7 +446,7 @@ class Kvstore {
 
     }
 
-    public function unshift(Client $client, $payload, $namespace){
+    public function unshift(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -398,7 +467,7 @@ class Kvstore {
 
     }
 
-    public function count(Client $client, $payload, $namespace){
+    public function count(CommInterface $client, $payload, $namespace){
 
         $result = null;
 
@@ -419,7 +488,7 @@ class Kvstore {
 
     }
 
-    public function incr(Client $client, $payload, $namespace){
+    public function incr(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -442,7 +511,7 @@ class Kvstore {
 
     }
 
-    public function decr(Client $client, $payload, $namespace){
+    public function decr(CommInterface $client, $payload, $namespace){
 
         $result = false;
 
@@ -465,7 +534,7 @@ class Kvstore {
 
     }
 
-    public function keys(Client $client, $payload, $namespace){
+    public function keys(CommInterface $client, $payload, $namespace){
 
         $result = null;
 
@@ -476,7 +545,7 @@ class Kvstore {
 
     }
 
-    public function values(Client $client, $payload, $namespace){
+    public function values(CommInterface $client, $payload, $namespace){
 
         $result = null;
 

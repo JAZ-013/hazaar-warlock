@@ -4,13 +4,52 @@ namespace Hazaar\Warlock;
 
 class Container extends Process {
 
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
+
+        return new Connection\Pipe($protocol);
+
+    }
+
     public function exec($function, $params){
 
-        $code = 1;
+        $exitcode = 1;
 
-        eval('$_function = ' . $function . ';');
+        $code = null;
 
-        if(isset($_function) && $_function instanceof \Closure) {
+        if(is_array($function)){
+
+            $class = new \ReflectionClass($function[0]);
+
+            $method = $class->getMethod($function[1]);
+
+            if(!$method->isPublic())
+                throw new \Exception('Method is not public!');
+
+            $file = file($method->getFileName());
+
+            $start_line = $method->getStartLine() - 1;
+
+            $end_line = $method->getEndLine();
+
+            if(preg_match('/function\s+\w+(\(.*)/', $file[$start_line], $matches))
+                $file[$start_line] = 'function' . $matches[1];
+
+            if($namespace = $class->getNamespaceName())
+                $code = "namespace $namespace;\n\n";
+
+            $code .= '$_function = ' . implode("\n", array_splice($file, $start_line, $end_line - $start_line)) . ';';
+
+        }else $code = '$_function = ' . $function . ';';
+
+        try{
+
+            if($code === null)
+                throw new \Exception('Unable to evaulate container code.');
+
+            eval($code);
+
+            if(!(isset($_function) && $_function instanceof \Closure))
+                throw new \Exception('Function is not callable!');
 
             if(!$params)
                 $params = array();
@@ -22,21 +61,24 @@ class Container extends Process {
             || $result === TRUE
             || $result == 0){
 
-                $code = 0;
+                $exitcode = 0;
 
             } else { //Anything else is an error and we display it.
 
-                $code = $result;
+                $exitcode = $result;
 
             }
 
-        } else {
+        }
+        catch(\Throwable $e){
 
-            $code = 2;
+            $this->log(W_ERR, $e->getMessage());
+
+            $exitcode = 2;
 
         }
 
-        return $code;
+        return $exitcode;
 
     }
 

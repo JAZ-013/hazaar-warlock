@@ -39,6 +39,10 @@
     "ext-sockets": "*",
     "hazaarlabs/hazaar-mvc": "^3.0.0"
   },
+  "bin": [
+    "bin/warlock",
+    "bin/service"
+  ],
   "extra": {
     "hazaar-console-class": "Hazaar\\Warlock\\Console"
   }

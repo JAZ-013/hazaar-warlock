@@ -25,9 +25,14 @@
     <Compile Include="src\Constants.php" />
     <Compile Include="src\Controller.php" />
     <Compile Include="src\Container.php" />
-    <Compile Include="src\Runner.php" />
+    <Compile Include="src\Connection\_Interface.php" />
+    <Compile Include="src\Connection\Socket.php" />
     <Compile Include="src\Process.php" />
+    <Compile Include="src\Protocol.php" />
+    <Compile Include="src\Runner.php" />
+    <Compile Include="src\Connection\Pipe.php" />
     <Compile Include="src\Server.php" />
+    <Compile Include="src\Server\CommInterface.php" />
     <Compile Include="src\Server\Job.php" />
     <Compile Include="src\Server\Kvstore.php" />
     <Compile Include="src\Server\Service.php" />
@@ -44,11 +49,14 @@
     <Compile Include="composer.json" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="bin\" />
+    <Folder Include="docs\" />
     <Folder Include="libs\" />
     <Folder Include="libs\console\" />
     <Folder Include="libs\console\css\" />
     <Folder Include="libs\console\images\" />
     <Folder Include="libs\console\js\" />
+    <Folder Include="src\Connection\" />
     <Folder Include="src\Protocol\" />
     <Folder Include="src\Server\" />
     <Folder Include="src\Server\Job\" />
@@ -57,6 +65,14 @@
     <Folder Include="src" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="bin\warlock" />
+    <Content Include="bin\service" />
+    <Content Include="docs\global-events.md" />
+    <Content Include="docs\delayed-exec.md" />
+    <Content Include="docs\kvstore.md" />
+    <Content Include="docs\realtime-signalling.md" />
+    <Content Include="docs\services.md" />
+    <Content Include="docs\index.md" />
     <Content Include="libs\client.js" />
     <Content Include="libs\console\connections.phtml" />
     <Content Include="libs\console\controlpanel.phtml" />
@@ -71,5 +87,6 @@
     <Content Include="libs\console\procs.phtml" />
     <Content Include="libs\console\services.phtml" />
     <Content Include="libs\console\stats.phtml" />
+    <Content Include="mkdocs.yml" />
   </ItemGroup>
 </Project>

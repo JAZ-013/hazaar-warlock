@@ -23,16 +23,11 @@ class Control extends Process {
 
     private $pidfile;
 
-    private $server_pid;
-
     static private $guid;
 
     static private $instance = array();
 
     function __construct($autostart = NULL, $config = null, $instance_key = null, $require_connect = true) {
-
-        if(! extension_loaded('sockets'))
-            throw new \Exception('The sockets extension is not loaded.');
 
         Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
@@ -46,18 +41,6 @@ class Control extends Process {
         if($config)
             $this->config->extend($config);
 
-        if($this->config->client['port'] === null)
-            $this->config->client['port'] = $this->config->server['port'];
-
-        if($this->config->client['server'] === null){
-
-            if(trim($this->config->server['listen']) == '0.0.0.0')
-                $this->config->client['server'] = '127.0.0.1';
-            else
-                $this->config->client['server'] = $this->config->server['listen'];
-
-        }
-
         if(!$instance_key)
             $instance_key = hash('crc32b', $this->config->client['server'] . $this->config->client['port']);
 
@@ -66,15 +49,15 @@ class Control extends Process {
 
         Control::$instance[$instance_key] = $this;
 
-        $app = \Hazaar\Application::getInstance();
+        $application = \Hazaar\Application::getInstance();
 
-        $protocol = new \Hazaar\Application\Protocol($this->config->sys->id, $this->config->server->encoded);
+        $protocol = new Protocol($this->config->sys->id, $this->config->server->encoded);
 
-        parent::__construct($app, $protocol, Control::$guid);
+        $runtime_path = rtrim($this->config->sys['runtimepath'], '/') . DIRECTORY_SEPARATOR;
 
         if(!Control::$guid){
 
-            $guid_file = $app->runtimePath('warlock.guid');
+            $guid_file = $runtime_path . 'server.guid';
 
             if(!file_exists($guid_file) || (Control::$guid = file_get_contents($guid_file)) == FALSE) {
 
@@ -93,9 +76,9 @@ class Control extends Process {
             if($autostart === true){
 
                 if(!$this->config->sys['php_binary'])
-                    $this->config->sys['php_binary'] = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'php' . ((substr(PHP_OS, 0, 3) == 'WIN')?'.exe':'');
+                    $this->config->sys['php_binary'] = (PHP_BINARY ? dirname(PHP_BINARY) . DIRECTORY_SEPARATOR : '') . 'php';
 
-                $this->pidfile = $app->runtimePath($this->config->sys->pid);
+                $this->pidfile = $runtime_path . $this->config->sys['pid'];
 
                 if(!$this->start())
                     throw new \Exception('Autostart of Warlock server has failed!');
@@ -104,14 +87,9 @@ class Control extends Process {
 
         }
 
-        $headers = array();
+        parent::__construct($application, $protocol, Control::$guid);
 
-        if($this->config->admin->key !== null)
-            $headers['X-WARLOCK-ADMIN-KEY'] = base64_encode($this->config->admin->key);
-
-        if(!$this->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers)) {
-
-            $this->disconnect(FALSE);
+        if(!$this->connected()){
 
             if($autostart)
                 throw new \Exception('Warlock was started, but we were unable to communicate with it.');
@@ -119,6 +97,34 @@ class Control extends Process {
                 throw new \Exception('Unable to communicate with Warlock.  Is it running?');
 
         }
+
+    }
+
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
+
+        $headers = array();
+
+        if($this->config->admin->key !== null)
+            $headers['X-WARLOCK-ACCESS-KEY'] = base64_encode($this->config->admin->key);
+
+        if($this->config->client['port'] === null)
+            $this->config->client['port'] = $this->config->server['port'];
+
+        if($this->config->client['server'] === null){
+
+            if(trim($this->config->server['listen']) == '0.0.0.0')
+                $this->config->client['server'] = '127.0.0.1';
+            else
+                $this->config->client['server'] = $this->config->server['listen'];
+
+        }
+
+        $conn = new Connection\Socket($protocol, Control::$guid);
+
+        if(!$conn->connect($this->config->sys['application_name'], $this->config->client['server'], $this->config->client['port'], $headers))
+            $conn->disconnect(FALSE);
+
+        return $conn;
 
     }
 
@@ -133,6 +139,49 @@ class Control extends Process {
 
     }
 
+    private function makeCallable($callable){
+
+        if(!is_callable($callable))
+            throw new \Exception('Function must be callable!');
+
+        if($callable instanceof \Closure){
+
+            $callable = (string)new \Hazaar\Closure($callable);
+
+        }elseif(is_array($callable) && is_object($callable[0])){
+
+            $reflectionMethod = new \ReflectionMethod($callable[0], $callable[1]);
+
+            $classname = get_class($callable[0]);
+
+            if(!$reflectionMethod->isStatic())
+                throw new \Exception('Method ' . $callable[1] . ' of class ' . $classname . ' must be static');
+
+            $callable[0] = $classname;
+
+        }elseif(is_string($callable) && strpos($callable, '::')){
+
+            $callable = explode('::', $callable);
+
+        }
+
+        return array('callable' => $callable);
+
+    }
+
+    private function isWindowsOS($except_on_wsl_missing = false){
+
+        if(substr(PHP_OS, 0, 3) !== 'WIN')
+            return false;
+
+        if($except_on_wsl_missing === true
+            && !file_exists(dirname(getenv('ComSpec')) . DIRECTORY_SEPARATOR . 'wsl.exe'))
+            throw new \Exception('Hazaar Warlock requires Windows Subsystem for Linux (WSL) in order to run on Windows.');
+
+        return true;
+
+    }
+
     public function isRunning() {
 
         if(!$this->pidfile)
@@ -144,27 +193,45 @@ class Control extends Process {
         if(!($pid = (int)file_get_contents($this->pidfile)))
             return false;
 
-        if(substr(PHP_OS, 0, 3) == 'WIN'){
+        if($this->isWindowsOS(true)){
 
-            //Uses windows "tasklist" command to look for $pid (FI PID eq) and output in CSV format (FO CSV) with no header (NH).
-            exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH', $tasklist, $return_var);
+            $descriptorspec = array(
+                0 => array("pipe", "r"),
+                1 => array("pipe", "w"),
+                2 => array("pipe", "w")
+            );
 
-            if($return_var !== 0 || count($tasklist) < 1)
+            //We have to use proc_open because WSL dies without a STDIN pipe.
+            $process = proc_open('wsl FILE=/proc/' . $pid . '/stat; if [ -e $FILE ] ; then cat $FILE; fi;', $descriptorspec, $pipes);
+
+            if(!is_resource($process))
+                throw new \Exception('Unable to inspect processes in WSL.');
+
+            do{
+
+                $status = proc_get_status($process);
+
+            }while($status['running'] === true);
+
+            if($error = stream_get_contents($pipes[2]))
+                throw new \Exception($error);
+
+            $proc = stream_get_contents($pipes[1]);
+
+            proc_close($process);
+
+        }else{
+
+            $proc_file = '/proc/' . $pid . '/stat';
+
+            if(!file_exists($proc_file))
                 return false;
 
-            $parts = str_getcsv($tasklist[0]);
-
-            if(count($parts) <= 1) //A non-CSV response was probably returned.  like a "not found" info line
-                return false;
-
-            return ($parts[1] == $pid && strpos(strtolower($parts[0]), 'php') !== false);
+            $proc = file_get_contents($proc_file);
 
         }
 
-        if(file_exists('/proc/' . $pid))
-            return (($this->server_pid = $pid) > 0);
-
-        return false;
+        return ($proc !== '' && preg_match('/^' . preg_quote($pid) . '\s+\(php\)/', $proc));
 
     }
 
@@ -176,42 +243,60 @@ class Control extends Process {
         if($this->isRunning())
             return true;
 
-        $php_binary = $this->config->sys['php_binary'];
+        $env = array(
+            'APPLICATION_PATH'  => APPLICATION_PATH,
+            'APPLICATION_ENV'   => APPLICATION_ENV,
+            'APPLICATION_ROOT'  => \Hazaar\Application::getRoot(),
+            'WARLOCK_EXEC'      => 1
+        );
 
-        if(! file_exists($php_binary))
-            throw new \Exception('The PHP CLI binary does not exist at ' . $php_binary);
+        $php_options = array();
 
-        if(! is_executable($php_binary))
-            throw new \Exception('The PHP CLI binary exists but is not executable!');
+        if(function_exists('xdebug_is_debugger_active') && xdebug_is_debugger_active()){
 
-        $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+            $env['XDEBUG_CONFIG'] = 'remote_enable=' . ini_get('xdebug.remote_enable')
+                . ' remote_handler='                 . ini_get('xdebug.remote_handler')
+                . ' remote_mode='                    . ini_get('xdebug.remote_mode')
+                . ' remote_port='                    . ini_get('xdebug.remote_port')
+                . ' remote_host='                    . ini_get('xdebug.remote_host')
+                . ' remote_cookie_expire_time='      . ini_get('xdebug.remote_cookie_expire_time')
+                . ' profiler_enable='                . ini_get('xdebug.profiler_enable');
 
-        if(!file_exists($server))
-            throw new \Exception('Warlock server script could not be found!');
+        }
 
-        if(substr(PHP_OS, 0, 3) == 'WIN')
-            $this->cmd = 'start ' . ($this->config->server['win_bg']?'/B':'') . ' "Hazaar Warlock" "' . $php_binary . '" "' . $server . '"';
-        else
-            $this->cmd = $php_binary . ' ' . $server;
+        if($this->isWindowsOS(true)){
 
-        $env = $_SERVER;
+            if(PHP_INT_SIZE !== 8)
+                throw new \Exception('Autostart of warlock is only supported on 64-bit environments.');
 
-        $env['APPLICATION_PATH'] = APPLICATION_PATH;
+            $php_options[] = str_replace(DIRECTORY_SEPARATOR, '/', '..'
+                . str_replace(realpath(getcwd() . DIRECTORY_SEPARATOR . '..'), '', dirname(__FILE__) . '/Server.php'));
 
-        $env['APPLICATION_ENV'] = APPLICATION_ENV;
+            $this->cmd = 'start /I /MAX /WAIT ' . (($this->config->server['win_bg'] === true)?'/B ':'') . '"Hazaar Warlock" "cmd" "/K wsl php'
+                . ' ' . implode(' ', $php_options);
 
-        $env['WARLOCK_EXEC'] = 1;
+            $env['WSLENV'] = 'APPLICATION_PATH/p:APPLICATION_ENV:APPLICATION_ROOT:WARLOCK_EXEC:WARLOCK_OUTPUT:XDEBUG_CONFIG';
 
-        if(substr(PHP_OS, 0, 3) !== 'WIN')
+        }else{
+
+            $php_options[] = $server = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Server.php';
+
+            if(!file_exists($server))
+                throw new \Exception('Warlock server script could not be found!');
+
+            $this->cmd = $this->config->sys['php_binary'] . ' ' .  implode(' ', $php_options) . '&';
+
             $env['WARLOCK_OUTPUT'] = 'file';
+
+        }
 
         foreach($env as $name => $value)
             putenv($name . '=' . $value);
 
-        //Start the server.  This should work on Linux and Windows
-        pclose(popen($this->cmd, "r"));
-
         $start_check = time();
+
+        //Start the server.  This should work on Linux and Windows
+        shell_exec($this->cmd);
 
         if(! $timeout)
             $timeout = $this->config->timeouts->connect;
@@ -260,57 +345,31 @@ class Control extends Process {
 
     }
 
-    public function runDelay($delay, \Closure $code, $params = NULL, $tag = NULL, $overwrite = FALSE) {
+    public function runDelay($delay, $callable, $params = null, $tag = null, $overwrite = false) {
 
-        $function = new \Hazaar\Closure($code);
-
-        $data = array(
-            'application' => array(
-                'path' => APPLICATION_PATH,
-                'env'  => APPLICATION_ENV
-            ),
-            'value'       => $delay,
-            'function'    => array(
-                'code' => (string)$function
-            )
-        );
-
-        if($tag) {
-
-            $data['tag'] = $tag;
-
-            $data['overwrite'] = strbool($overwrite);
-
-        }
-
-        if(! is_array($params))
-            $params = array($params);
-
-        $data['function']['params'] = $params;
-
-        $this->send('delay', $data);
-
-        if($this->recv($payload) == 'OK')
-            return $payload->job_id;
-
-        return FALSE;
+        return $this->sendExec('delay', array('value' => $delay), $callable, $params, $tag, $overwrite);
 
     }
 
-    public function schedule($when, \Closure $code, $params = NULL, $tag = NULL, $overwrite = FALSE) {
+    public function interval($value, $callable, $params = null, $tag = null, $overwrite = false) {
 
-        $function = new \Hazaar\Closure($code);
+        return $this->sendExec('interval', array('value' => $value), $callable, $params, $tag, $overwrite);
 
-        $data = array(
-            'application' => array(
-                'path' => APPLICATION_PATH,
-                'env'  => APPLICATION_ENV
-            ),
-            'when'        => strtotime($when),
-            'function'    => array(
-                'code' => (string)$function
-            )
+    }
+
+    public function schedule($when, $callable, $params = null, $tag = null, $overwrite = false) {
+
+        return $this->sendExec('schedule', array('when' => $when), $callable, $params, $tag, $overwrite);
+
+    }
+
+    private function sendExec($command, $data, $callable, $params = null, $tag = null, $overwrite = false){
+
+        $data['application'] = array(
+            'env'  => APPLICATION_ENV
         );
+
+        $data['exec'] = $this->makeCallable($callable);
 
         if($tag) {
 
@@ -320,18 +379,17 @@ class Control extends Process {
 
         }
 
-        if(is_array($params)) {
+        if($params !== null && !is_array($params))
+            $params = array($params);
 
-            $data['function']['params'] = $params;
+        $data['exec']['params'] = $params;
 
-        }
-
-        $this->send('schedule', $data);
+        $this->send($command, $data);
 
         if($this->recv($payload) == 'OK')
             return $payload->job_id;
 
-        return FALSE;
+        return false;
 
     }
 

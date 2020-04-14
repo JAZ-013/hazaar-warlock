@@ -5,38 +5,21 @@
  */
 namespace Hazaar\Warlock;
 
-require_once('Constants.php');
+abstract class Process {
 
-abstract class Process extends Protocol\WebSockets {
+    /**
+     * The connection object
+     * @var \Hazaar\Warlock\Connection\_Interface
+     */
+    protected $conn;
 
     protected $id;
-
-    protected $job_id;
-
-    protected $key;
-
-    protected $socket;
 
     protected $application;
 
     protected $protocol;
 
-    protected $subscriptions = array();
-
-    //WebSocket Buffers
-    protected $frameBuffer;
-
-    protected $payloadBuffer;
-
-    protected $closing            = false;
-
-    public    $bytes_received = 0;
-
-    public    $socket_last_error = null;
-
-    function __construct(\Hazaar\Application $application, \Hazaar\Application\Protocol $protocol, $guid = null) {
-
-        parent::__construct(array('warlock'));
+    function __construct(\Hazaar\Application $application, Protocol $protocol, $guid = null) {
 
         $this->start = time();
 
@@ -46,121 +29,15 @@ abstract class Process extends Protocol\WebSockets {
 
         $this->id = ($guid === null ? guid() : $guid);
 
-        $this->key = uniqid();
+        if(!($this->conn = $this->connect($protocol, $guid)) instanceof Connection\_Interface)
+            throw new \Exception('Process initialisation failed!', 1);
 
     }
 
-    final function __destruct(){
+    function __destruct(){
 
-        $this->disconnect(true);
-
-    }
-
-    public function connect($application_name, $host, $port, $extra_headers = null){
-
-        if(array_key_exists('X-WARLOCK-JOB-ID', $extra_headers))
-            $this->job_id = $extra_headers['X-WARLOCK-JOB-ID'];
-
-        if (!extension_loaded('sockets'))
-            throw new \Exception('The sockets extension is not loaded.');
-
-        $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-
-        if(!is_resource($this->socket))
-            throw new \Exception('Unable to create TCP socket!');
-
-        if(!@socket_connect($this->socket, $host, $port)){
-
-            $this->socket_last_error = socket_last_error($this->socket);
-
-            socket_close($this->socket);
-
-            $this->socket = null;
-
-            return false;
-
-        }
-
-        $headers = array(
-            'X-WARLOCK-PHP' => 'true',
-            'X-WARLOCK-USER' => base64_encode(get_current_user())
-        );
-
-        if(is_array($extra_headers))
-            $headers = array_merge($headers, $extra_headers);
-
-        /**
-         * Initiate a WebSockets connection
-         */
-        $handshake = $this->createHandshake('/' . $application_name .'/warlock?CID=' . $this->id, $host, null, $this->key, $headers);
-
-        @socket_write($this->socket, $handshake, strlen($handshake));
-
-        /**
-         * Wait for the response header
-         */
-        $read = array($this->socket);
-
-        $write = $except = null;
-
-        $sockets = socket_select($read, $write, $except, 3000);
-
-        if($sockets == 0) return false;
-
-        socket_recv($this->socket, $buf, 65536, 0);
-
-        $response = $this->parseHeaders($buf);
-
-        if($response['code'] != 101)
-            throw new \Exception('Walock server returned status: ' . $response['code'] . ' ' . $response['status']);
-
-        if(! $this->acceptHandshake($response, $responseHeaders, $this->key))
-            throw new \Exception('Warlock server denied our connection attempt!');
-
-        return true;
-
-    }
-
-    public function getLastSocketError($as_string = false){
-
-        return ($as_string ? socket_strerror($this->socket_last_error) : $this->socket_last_error);
-
-    }
-
-    public function disconnect() {
-
-        $this->frameBuffer = '';
-
-        if($this->socket) {
-
-            if($this->closing === false) {
-
-                $this->closing = true;
-
-                $frame = $this->frame('', 'close');
-
-                @socket_write($this->socket, $frame, strlen($frame));
-
-                $this->recv($payload);
-
-            }
-
-            if($this->socket)
-                socket_close($this->socket);
-
-            $this->socket = null;
-
-            return true;
-
-        }
-
-        return false;
-
-    }
-
-    public function connected() {
-
-        return is_resource($this->socket);
+        if($this->conn instanceof Connection\_Interface)
+            $this->conn->disconnect();
 
     }
 
@@ -182,196 +59,36 @@ abstract class Process extends Protocol\WebSockets {
 
     }
 
-    protected function processFrame(&$frameBuffer = null) {
-
-        if ($this->frameBuffer) {
-
-            $frameBuffer = $this->frameBuffer . $frameBuffer;
-
-            $this->frameBuffer = null;
-
-            return $this->processFrame($frameBuffer);
-
-        }
-
-        if (!$frameBuffer)
-            return false;
-
-        $opcode = $this->getFrame($frameBuffer, $payload);
-
-        /**
-         * If we get an opcode that equals false then we got a bad frame.
-         *
-         * If we get a opcode of -1 there are more frames to come for this payload. So, we return false if there are no
-         * more frames to process, or true if there are already more frames in the buffer to process.
-         */
-        if ($opcode === false) {
-
-            $this->disconnect(true);
-
-            return false;
-
-        } elseif ($opcode === -1) {
-
-            $this->frameBuffer .= $frameBuffer;
-
-            return (strlen($this->frameBuffer) > 0);
-
-        }
-
-        switch ($opcode) {
-
-            case 0 :
-            case 1 :
-            case 2 :
-
-                break;
-
-            case 8 :
-
-                if($this->closing === false)
-                    $this->disconnect();
-
-                return false;
-
-            case 9 :
-
-                $frame = $this->frame('', 'pong', false);
-
-                @socket_write($this->socket, $frame, strlen($frame));
-
-                return false;
-
-            case 10 :
-
-                return false;
-
-            default :
-
-                $this->disconnect();
-
-                return false;
-
-        }
-
-        if (strlen($frameBuffer) > 0) {
-
-            $this->frameBuffer = $frameBuffer;
-
-            $frameBuffer = '';
-
-        }
-
-        if ($this->payloadBuffer) {
-
-            $payload = $this->payloadBuffer . $payload;
-
-            $this->payloadBuffer = '';
-
-        }
-
-        return $payload;
-
-    }
-
-    protected function send($command, $payload = null) {
-
-        if(! $this->socket)
-            return false;
-
-        if(!($packet = $this->protocol->encode($command, $payload)))
-            return false;
-
-        $frame = $this->frame($packet, 'text');
-
-        $len = strlen($frame);
-
-        $attempts = 0;
-
-        $total_sent = 0;
-
-        while($frame){
-
-            $attempts++;
-
-            @$bytes_sent = socket_write($this->socket, $frame, $len);
-
-            if($bytes_sent === -1 || $bytes_sent === false)
-                throw new \Exception('An error occured while sending to the socket');
-
-            $total_sent += $bytes_sent;
-
-            if($total_sent === $len) //If all the bytes sent then don't waste time processing the leftover frame
-                break;
-
-            if($attempts >= 100)
-                throw new \Exception('Unable to write to socket.  Socket appears to be stuck.');
-
-            $frame = substr($frame, $bytes_sent);
-
-        }
-
-        return true;
-
-    }
-
-    protected function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
-
-        //Process any frames sitting in the local frame buffer first.
-        while($frame = $this->processFrame()){
-
-            if($frame === true)
-                break;
-
-            return $this->protocol->decode($frame, $payload);
-
-        }
-
-        if(!$this->socket)
-            exit(4);
-
-        if(socket_get_option($this->socket, SOL_SOCKET, SO_ERROR) > 0)
-            exit(4);
-
-        $read = array(
-            $this->socket
-        );
-
-        $write = $except = null;
-
-        $start = 0;//time();
-
-        while(socket_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
-
-            // will block to wait server response
-            $this->bytes_received += $bytes_received = socket_recv($this->socket, $buffer, 65536, 0);
-
-            if($bytes_received > 0) {
-
-                if(($frame = $this->processFrame($buffer)) === true)
-                    continue;
-
-                if($frame === false)
-                    break;
-
-                return $this->protocol->decode($frame, $payload);
-
-            }elseif($bytes_received == -1) {
-
-                throw new \Exception('An error occured while receiving from the socket');
-
-            } elseif($bytes_received == 0) {
-
-                return $this->disconnect();
-
-            }
-
-            if(($start++) > 5)
-                return false;
-
-        }
+    protected function connect(\Hazaar\Warlock\Protocol $protocol, $guid = null){
 
         return null;
+
+    }
+
+    protected function connected(){
+
+        if(!$this->conn)
+            return false;
+
+        return $this->conn->connected();
+
+    }
+
+    public function send($command, $payload = null) {
+
+        if(!$this->conn)
+            return false;
+
+        return $this->conn->send($command, $payload);
+
+    }
+
+    public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
+
+        if(!$this->conn)
+            return false;
+
+        return $this->conn->recv($payload, $tv_sec, $tv_usec);
 
     }
 
@@ -381,7 +98,7 @@ abstract class Process extends Protocol\WebSockets {
 
             case 'EVENT':
 
-                if(! (property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
+                if(!($payload && property_exists($payload, 'id') && array_key_exists($payload->id, $this->subscriptions)))
                     return false;
 
                 $func = $this->subscriptions[$payload->id];
@@ -493,10 +210,7 @@ abstract class Process extends Protocol\WebSockets {
 
     public function log($level, $message, $name = null){
 
-        if($name === null)
-            $name = $this->job_id;
-
-        if(!(is_int($level) && is_string($message)))
+        if(!is_int($level))
             return false;
 
         return $this->send('LOG', array('level' => $level, 'msg' => $message, 'name' => $name));
@@ -528,8 +242,16 @@ abstract class Process extends Protocol\WebSockets {
 
         $payload = null;
 
-        if(($ret = $this->recv($payload)) !== $command)
-            throw new \Exception('Invalid response from server: ' . $ret . (property_exists($payload, 'reason') ? ' (' . $payload->reason . ')' : null));
+        if(($ret = $this->recv($payload)) !== $command){
+
+            $msg = "KVSTORE: Invalid response to command $command from server: " . var_export($ret, true);
+
+            if(is_object($payload) && property_exists($payload, 'reason'))
+                $msg .= "\nError: $payload->reason";
+
+            throw new \Exception($msg);
+
+        }
 
         return $payload;
 
@@ -711,6 +433,137 @@ abstract class Process extends Protocol\WebSockets {
             $data['n'] = $namespace;
 
         return $this->__kv_send_recv('KVCOUNT', $data);
+
+    }
+
+    /**
+     * @brief Execute code from standard input in the application context
+     *
+     * @detail This method is will accept Hazaar Protocol commands from STDIN and execute them.
+     *
+     * Exit codes:
+     *
+     * * 1 - Bad Payload - The execution payload could not be decoded.
+     * * 2 - Unknown Payload Type - The payload execution type is unknown.
+     * * 3 - Service Class Not Found - The service could not start because the service class could not be found.
+     * * 4 - Unable to open control channel - The application was unable to open a control channel back to the execution server.
+     *
+     * @since 1.0.0
+     */
+    static public function runner(\Hazaar\Application $application, $service_name = null) {
+
+        if(!class_exists('\Hazaar\Warlock\Config'))
+            throw new \Exception('Could not find default warlock config.  How is this even working!!?');
+
+        $defaults = \Hazaar\Warlock\Config::$default_config;
+
+        $defaults['sys']['id'] = crc32(APPLICATION_PATH);
+
+        $warlock = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, $defaults);
+
+        define('RESPONSE_ENCODED', $warlock->server->encoded);
+
+        $protocol = new Protocol($warlock->sys->id, $warlock->server->encoded);
+
+        if(is_string($service_name)){
+
+            $service = self::getServiceClass($service_name, $application, $protocol, true);
+
+            if(!$service instanceof \Hazaar\Warlock\Service)
+                die("Could not find service named '$service_name'.\n");
+
+            $code = call_user_func(array($service, 'main'));
+
+        }else{
+
+            //Execution should wait here until we get a command
+            $line = fgets(STDIN);
+
+            $code = 1;
+
+            $payload = null;
+
+            if($type = $protocol->decode($line, $payload)){
+
+                if(!$payload instanceof \stdClass)
+                    throw new \Exception('Got Hazaar protocol packet without payload!');
+
+                //Synchronise the timezone with the server
+                if($tz = ake($payload, 'timezone'))
+                    date_default_timezone_set($tz);
+
+                switch ($type) {
+
+                    case 'EXEC' :
+
+                        $container = new \Hazaar\Warlock\Container($application, $protocol);
+
+                        $code = $container->exec($payload->exec, ake($payload, 'params'));
+
+                        break;
+
+                    case 'SERVICE' :
+
+                        if(!property_exists($payload, 'name')) {
+
+                            $code = 3;
+
+                            break;
+
+                        }
+
+                        if($config = ake($payload, 'config'))
+                            $application->config->extend($config);
+
+                        $service = self::getServiceClass($payload->name, $application, $protocol, false);
+
+                        if($service instanceof \Hazaar\Warlock\Service){
+
+                            $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
+
+                        } else {
+
+                            $code = 3;
+
+                        }
+
+                        break;
+
+                    default:
+
+                        $code = 2;
+
+                        break;
+
+                }
+
+            }
+
+        }
+
+        return $code;
+
+    }
+
+    static public function getServiceClass($service_name, \Hazaar\Application $application, \Hazaar\Warlock\Protocol $protocol, $remote = false){
+
+        $class_search = array(
+            'Application\\Service\\' . ucfirst($service_name),
+            ucfirst($service_name) . 'Service'
+        );
+
+        $service = null;
+
+        foreach($class_search as $service_class){
+
+            if(!class_exists($service_class))
+                continue;
+
+            $service = new $service_class($application, $protocol, $remote);
+
+        }
+
+        return $service;
 
     }
 

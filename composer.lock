@@ -1,0 +1,65 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "d4ac5c9fe0a7de4e85bf14fe5dc2079d",
+    "packages": [
+        {
+            "name": "hazaarlabs/hazaar-mvc",
+            "version": "2.4.11",
+            "source": {
+                "type": "git",
+                "url": "https://git.hazaarlabs.com/hazaar/hazaar-mvc.git",
+                "reference": "fa7a9f97a95e70cb54b6e87697b79f586653738e"
+            },
+            "require": {
+                "php": "^5.6 || ^7.0"
+            },
+            "require-dev": {
+                "phpunit/php-file-iterator": "1.4.5",
+                "phpunit/phpunit": "3.7.14"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Hazaar\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Jamie Carl",
+                    "email": "jamie@hazaarlabs.com",
+                    "homepage": "http://www.hazaarlabs.com",
+                    "role": "developer"
+                }
+            ],
+            "description": "The MVC framework that makes PHP not suck!",
+            "homepage": "http://hazaarmvc.com",
+            "keywords": [
+                "framework",
+                "hazaar",
+                "hmvc",
+                "mvc",
+                "php"
+            ],
+            "time": "2019-02-22T05:59:30+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": "^5.6 || ^7.0",
+        "ext-sockets": "*"
+    },
+    "platform-dev": []
+}
