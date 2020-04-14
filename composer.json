@@ -1,49 +1,49 @@
 {
-    "name": "hazaarlabs/hazaar-warlock",
-    "description": "A realtime signalling engine for Hazaar MVC",
-    "type": "library",
-    "homepage": "http://hazaarmvc.com",
-    "license": "Apache-2.0",
-    "authors": [
-        {
-            "name": "Jamie Carl",
-            "email": "jamie@hazaarlabs.com",
-            "homepage": "http://www.hazaarlabs.com",
-            "role": "developer"
-        }
-    ],
-    "support": {
-        "email": "support@hazaarlabs.com",
-        "issues": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/issues",
-        "wiki": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/wikis/home",
-        "docs": "https://hazaarmvc.com/docs",
-        "source": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/tree/master"
-    },
-    "keywords": [
-        "php",
-        "hazaar",
-        "hmvc",
-        "websockets",
-        "signals"
-    ],
-    "autoload": {
-        "psr-4": {
-            "Hazaar\\Warlock\\": "src/"
-        },
-        "classmap": [
-            "src/View/Helper/Warlock.php"
-        ]
-    },
-    "require": {
-        "php": "^5.6 || ^7.0",
-        "ext-sockets": "*",
-        "hazaarlabs/hazaar-mvc": ">=2.5.0"
-    },
-    "bin": [
-        "bin/warlock",
-        "bin/service"
-    ],
-    "extra": {
-        "hazaar-console-class": "Hazaar\\Warlock\\Console"
+  "name": "hazaarlabs/hazaar-warlock",
+  "description": "A realtime signalling engine for Hazaar MVC",
+  "type": "library",
+  "homepage": "http://hazaarmvc.com",
+  "license": "Apache-2.0",
+  "authors": [
+    {
+      "name": "Jamie Carl",
+      "email": "jamie@hazaarlabs.com",
+      "homepage": "http://www.hazaarlabs.com",
+      "role": "developer"
     }
+  ],
+  "support": {
+    "email": "support@hazaarlabs.com",
+    "issues": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/issues",
+    "wiki": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/wikis/home",
+    "docs": "https://hazaarmvc.com/docs",
+    "source": "https://git.hazaarlabs.com/hazaar/hazaar-mvc/tree/master"
+  },
+  "keywords": [
+    "php",
+    "hazaar",
+    "hmvc",
+    "websockets",
+    "signals"
+  ],
+  "autoload": {
+    "psr-4": {
+      "Hazaar\\Warlock\\": "src/"
+    },
+    "classmap": [
+      "src/View/Helper/Warlock.php"
+    ]
+  },
+  "require": {
+    "php": "^5.6 || ^7.0",
+    "ext-sockets": "*",
+    "hazaarlabs/hazaar-mvc": ">=2.5.0"
+  },
+  "bin": [
+    "bin/warlock",
+    "bin/service"
+  ],
+  "extra": {
+    "hazaar-console-class": "Hazaar\\Warlock\\Console"
+  }
 }
