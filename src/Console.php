@@ -6,9 +6,11 @@ class Console extends \Hazaar\Console\Module {
 
     private $config;
 
-    public function load(){
+    public function menu(){
 
         $group = $this->addMenuItem('Warlock', 'magic');
+
+        $group->addMenuItem('Statistics', 'statistics', 'tasks');
 
         $group->addMenuItem('Processes', 'processes', 'tasks');
 
@@ -22,6 +24,8 @@ class Console extends \Hazaar\Console\Module {
 
         $group->addMenuItem('Log File', 'log', 'history');
 
+        return $group;
+
     }
 
     public function init(){
@@ -30,19 +34,13 @@ class Console extends \Hazaar\Console\Module {
 
         $this->view->addHelper('warlock');
 
-        $this->view->link('css/controlpanel.css');
+        //$this->view->link('css/controlpanel.css');
 
-        $this->view->requires('js/controlpanel.js');
+        //$this->view->requires('js/controlpanel.js');
 
-        $this->view->hazaar->set('admintrigger', $this->config->admin->trigger);
+        //$this->view->hazaar->set('admintrigger', $this->config->admin->trigger);
 
-        $this->view->hazaar->set('admin_key', $this->config->admin->key);
-
-    }
-
-    public function status() {
-
-        return [];
+        //$this->view->hazaar->set('admin_key', $this->config->admin->key);
 
     }
 
@@ -92,6 +90,12 @@ class Console extends \Hazaar\Console\Module {
         }
 
         $this->view->graphs = $graphs;
+
+    }
+
+    public function statistics(){
+
+        $this->view('stats');
 
     }
 
