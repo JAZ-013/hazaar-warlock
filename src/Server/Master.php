@@ -1607,7 +1607,7 @@ class Master {
 
                 $this->log->write(W_NOTICE, 'Stopping running ' . $job->type);
 
-                $job->process->termiante();
+                $job->process->terminate();
 
             } else {
 

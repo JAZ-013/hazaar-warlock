@@ -279,6 +279,10 @@ var HazaarWarlock = function (options) {
         }, true);
         return this;
     };
+    this.cancel = function (job) {
+        this.__send('cancel', job);
+        return this;
+    };
     this.__kv_send = function (msg, payload, callback) {
         if (!(msg in this.__callbacks)) this.__callbacks[msg] = [];
         this.__callbacks[msg].push(callback);
