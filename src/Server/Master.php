@@ -997,7 +997,32 @@ class Master {
             if (!($client = $this->addClient($stream)))
                 $this->disconnect($stream);
 
-            if(!$client->initiateHandshake($buf)){
+            if(!$client->initiateHandshake($buf, $headers)){
+
+                if(array_key_exists('get', $headers)){
+
+                    $response = array(
+                        'HTTP/1.1 400 Bad Request',
+                        'Access-Control-Allow-Origin: *',
+                        'Date: ' . date('r')
+                    );
+
+                    if($query = $client->checkRequestURL($headers['get'], false)){
+
+                        if(array_key_exists('trigger', $query))
+                            $this->trigger($query['trigger'], (array_key_exists('data', $query) ? $query['data'] : null));
+
+                        $response[0] = 'HTTP/1.1 200 OK';
+
+                    }else{
+
+                        $response[0] = 'HTTP/1.1 404 Not Found';
+
+                    }
+
+                    $client->write(implode("\n", $response) . "\n");
+
+                }
 
                 $this->removeClient($stream);
 

@@ -105,6 +105,12 @@ class Warlock extends \Hazaar\View\Helper {
 
     }
 
+    public function url($action = null){
+
+        return new \Hazaar\Http\Uri('http://localhost:8000/example-warlock/' . $action);
+        
+    }
+
 }
 
 

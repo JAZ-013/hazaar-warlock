@@ -110,9 +110,10 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      *
      * @param mixed $socket
      * @param mixed $request
+     * @param array $headers Return parameter for request headers split out into an array.
      * @return boolean
      */
-    public function initiateHandshake($request) {
+    public function initiateHandshake($request, &$headers = null) {
 
         if(!($headers = $this->parseHeaders($request))){
 
@@ -250,7 +251,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      * @param mixed $url
      * @return \array|boolean
      */
-    protected function checkRequestURL($url) {
+    public function checkRequestURL($url, $requireCID = true) {
 
         $parts = parse_url($url);
 
@@ -258,8 +259,10 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         if (!array_key_exists('path', $parts))
             return false;
 
+        $allowed_path = '/' . APPLICATION_NAME . '/warlock';
+
         // Check that the path is correct based on the APPLICATION_NAME constant
-        if ($parts['path'] != '/' . APPLICATION_NAME . '/warlock')
+        if (substr($parts['path'], 0, strlen($allowed_path)) !== $allowed_path)
             return false;
 
         // Check to see if there is a query part as this should contain the CID
@@ -269,7 +272,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         // Get the CID
         parse_str($parts['query'], $query);
 
-        if (!array_key_exists('CID', $query))
+        if ($requireCID === true && !array_key_exists('CID', $query))
             return false;
 
         return $query;
@@ -348,7 +351,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
 
     }
 
-    private function write($frame){
+    public function write($frame){
 
         if (!is_resource($this->socket))
             return false;
