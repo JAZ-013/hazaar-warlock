@@ -493,13 +493,13 @@ class Master {
 
             $parent = dirname($path);
 
-            if(!is_writable($parent))
+            if(file_exists($parent) && !is_writable($parent))
                 throw new \Exception('Not writable! Can not create runtime path: ' . $path);
 
             // Try and create the directory automatically
             try {
 
-                mkdir($path, 0775);
+                mkdir($path, 0775, true);
 
             }
             catch(\Exception $e) {
