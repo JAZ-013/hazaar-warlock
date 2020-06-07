@@ -23,6 +23,8 @@ class Warlock extends \Hazaar\View\Helper {
 
     private $js_varname = 'warlock';
 
+    private $config;
+
     public function import() {
 
         $this->requires('html');
@@ -42,31 +44,31 @@ class Warlock extends \Hazaar\View\Helper {
 
         \Hazaar\Warlock\Config::$default_config['sys']['id'] = crc32(APPLICATION_PATH);
 
-        $config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
+        $this->config = new \Hazaar\Application\Config('warlock', APPLICATION_ENV, \Hazaar\Warlock\Config::$default_config);
 
-        $config->client['sid'] = $config->sys->id;
+        $this->config->client['sid'] = $this->config->sys->id;
 
-        if($config->client['port'] === null)
-            $config->client['port'] = $config->server['port'];
+        if($this->config->client['port'] === null)
+            $this->config->client['port'] = $this->config->server['port'];
 
-        if($config->client['server'] === null){
+        if($this->config->client['server'] === null){
 
-            if(trim($config->server['listen']) == '0.0.0.0')
-                $config->client['server'] = ake(explode(':', $_SERVER['HTTP_HOST']), 0, $_SERVER['SERVER_NAME']);
+            if(trim($this->config->server['listen']) == '0.0.0.0')
+                $this->config->client['server'] = ake(explode(':', $_SERVER['HTTP_HOST']), 0, $_SERVER['SERVER_NAME']);
             else
-                $config->client['server'] = $config->server['listen'];
+                $this->config->client['server'] = $this->config->server['listen'];
 
         }
 
-        if($config->client['applicationName'] === null)
-            $config->client['applicationName'] = APPLICATION_NAME;
+        if($this->config->client['applicationName'] === null)
+            $this->config->client['applicationName'] = APPLICATION_NAME;
 
-        $config->client['encoded'] = $config->server->encoded;
+        $this->config->client['encoded'] = $this->config->server->encoded;
 
         if(($user = ake($_SERVER, 'REMOTE_USER')))
-            $config->client['username'] = $user;
+            $this->config->client['username'] = $user;
 
-        $view->script("{$this->js_varname} = new HazaarWarlock(" . $config->client->toJSON() . ');');
+        $view->script("{$this->js_varname} = new HazaarWarlock(" . $this->config->client->toJSON() . ');');
 
     }
 
@@ -105,9 +107,22 @@ class Warlock extends \Hazaar\View\Helper {
 
     }
 
-    public function url($action = null){
+    public function triggerURL($trigger, $data = null){
 
-        return new \Hazaar\Http\Uri('http://localhost:8000/example-warlock/' . $action);
+        $query = array(
+            'trigger' => $trigger
+        );
+
+        if($data)
+            $query['data'] = ((is_array($data) || is_object($data)) ? json_encode($data) : $data);
+
+        $uri = 'http' . ($this->config->client['ssl'] ? 's' : '') 
+            . '://' . $this->config->client['server'] 
+            . ':' . $this->config->client['port']
+            . '/' . $this->config->client['applicationName']
+            . '/warlock?' . \http_build_query($query);
+
+        return new \Hazaar\Http\Uri($uri);
         
     }
 
