@@ -110,10 +110,9 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
      *
      * @param mixed $socket
      * @param mixed $request
-     * @param array $headers Return parameter for request headers split out into an array.
      * @return boolean
      */
-    public function initiateHandshake($request, &$headers = null) {
+    public function initiateHandshake($request) {
 
         if(!($headers = $this->parseHeaders($request))){
 
@@ -124,7 +123,7 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
         }
 
         if (!(array_key_exists('connection', $headers) && preg_match('/upgrade/', strtolower($headers['connection']))))
-            return false;
+            return $this->processHTTPRequest($headers);
 
         $this->log->write(W_DEBUG, "WEBSOCKETS<-HANDSHAKE: HOST=$this->address PORT=$this->port CLIENT=$this->id", $this->name);
 
@@ -276,6 +275,46 @@ class Client extends \Hazaar\Warlock\Protocol\WebSockets implements CommInterfac
             return false;
 
         return $query;
+
+    }
+
+    /**
+     * Simple function to handle a plain old HTTP request to trigger an event
+     * 
+     * @param array $headers The headers from the initiateHandshake function
+     * 
+     * @return boolean false, always so that the connection and client are closed.
+     */
+    private function processHTTPRequest($headers){
+
+        if(!array_key_exists('get', $headers))
+            return false;
+
+        $response = array(
+            'HTTP/1.1 400 Bad Request',
+            'Access-Control-Allow-Origin: *',
+            'Date: ' . date('r')
+        );
+
+        if($query = $this->checkRequestURL($headers['get'], false)){
+
+            if(array_key_exists('trigger', $query)){
+
+                Master::$instance->trigger($query['trigger'], (array_key_exists('data', $query) ? $query['data'] : null));
+
+                $response[0] = 'HTTP/1.1 200 OK';
+
+            }
+            
+        }else{
+
+            $response[0] = 'HTTP/1.1 404 Not Found';
+
+        }
+
+        $this->write(implode("\n", $response) . "\n");
+
+        return false;
 
     }
 
