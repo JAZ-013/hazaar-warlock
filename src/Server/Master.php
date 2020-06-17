@@ -631,7 +631,7 @@ class Master {
 
             foreach($this->config->schedule as $job){
 
-                if(!$job->has('exec'))
+                if(!$job->has('action'))
                     continue;
 
                 $application = (object)array(
@@ -639,7 +639,7 @@ class Master {
                     'env'  => APPLICATION_ENV
                 );
 
-                if(!($callable = $this->callable(ake($job, 'exec')))){
+                if(!($callable = $this->callable(ake($job, 'action')))){
 
                     $this->log->write(W_ERR, 'Warlock schedule config contains invalid callable.');
 
