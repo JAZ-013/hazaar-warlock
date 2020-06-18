@@ -301,7 +301,7 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function send($command, $payload = NULL) {
 
-        if (!is_string($command))
+        if (!(is_string($command) && $this->process))
             return false;
 
         $packet = Master::$protocol->encode($command, $payload); //Override the timestamp.
