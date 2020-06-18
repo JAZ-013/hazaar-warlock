@@ -652,7 +652,7 @@ class Master {
                 if($args = ake($job, 'args'))
                     $exec->params = $args->toArray();
 
-                $this->scheduleJob(ake($job, 'when'), $exec, $application, ake($job, 'tag'), ake($job, 'overwrite'));
+                $this->scheduleJob(ake($job, 'when'), $exec, $application, ake($job, 'tag', uniqid()), ake($job, 'overwrite', false));
 
             }
 
