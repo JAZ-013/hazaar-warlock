@@ -161,6 +161,9 @@ abstract class Service extends Process {
 
         parent::__construct($application, $protocol, getmypid());
 
+        if(method_exists($this, 'construct'))
+            $this->construct($this->application);
+            
     }
 
     function __destruct(){
