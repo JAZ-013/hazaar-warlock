@@ -439,7 +439,7 @@ abstract class Process {
     /**
      * @brief Execute code from standard input in the application context
      *
-     * @detail This method is will accept Hazaar Protocol commands from STDIN and execute them.
+     * @detail This method will accept Hazaar Protocol commands from STDIN and execute them.
      *
      * Exit codes:
      *
@@ -472,14 +472,14 @@ abstract class Process {
             if(!$service instanceof \Hazaar\Warlock\Service)
                 die("Could not find service named '$service_name'.\n");
 
-            $code = call_user_func(array($service, 'main'));
+            $exitcode = call_user_func(array($service, 'main'));
 
         }else{
 
             //Execution should wait here until we get a command
             $line = fgets(STDIN);
 
-            $code = 1;
+            $exitcode = 1;
 
             $payload = null;
 
@@ -496,9 +496,52 @@ abstract class Process {
 
                     case 'EXEC' :
 
-                        $container = new \Hazaar\Warlock\Container($application, $protocol);
+                        $code = null;
 
-                        $code = $container->exec($payload->exec, ake($payload, 'params'));
+                        if(is_array($payload->exec)){
+
+                            $class = new \ReflectionClass($payload->exec[0]);
+                
+                            $method = $class->getMethod($payload->exec[1]);
+                
+                            if($method->isStatic() && $method->isPublic()){
+                                
+                                $file = file($method->getFileName());
+                    
+                                $start_line = $method->getStartLine() - 1;
+                    
+                                $end_line = $method->getEndLine();
+                    
+                                if(preg_match('/function\s+\w+(\(.*)/', $file[$start_line], $matches))
+                                    $file[$start_line] = 'function' . $matches[1];
+                    
+                                if($namespace = $class->getNamespaceName())
+                                    $code = "namespace $namespace;\n\n";
+                    
+                                $code .= '$_function = ' . implode("\n", array_splice($file, $start_line, $end_line - $start_line)) . ';';
+                    
+                            }
+
+                        }else $code = '$_function = ' . $payload->exec . ';';
+
+                        if(is_string($code)){
+
+                            $container = new \Hazaar\Warlock\Container($application, $protocol);
+
+                            $exitcode = $container->exec($code, ake($payload, 'params'));
+
+                        }elseif($class instanceof \ReflectionClass 
+                            && $method instanceof \ReflectionMethod
+                            && $class->isInstantiable()
+                            && $class->isSubclassOf('Hazaar\\Warlock\\Process')
+                            && $method->isPublic()
+                            && !$method->isStatic()){
+
+                            $process = $class->newInstance($application, $protocol);
+
+                            $exitcode = $method->invokeArgs($process, ake($payload, 'params', array()));
+
+                        }else throw new \Exception('Method can not be executed.');
 
                         break;
 
@@ -506,7 +549,7 @@ abstract class Process {
 
                         if(!property_exists($payload, 'name')) {
 
-                            $code = 3;
+                            $exitcode = 3;
 
                             break;
 
@@ -519,11 +562,11 @@ abstract class Process {
 
                         if($service instanceof \Hazaar\Warlock\Service){
 
-                            $code = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
+                            $exitcode = call_user_func(array($service, 'main'), ake($payload, 'params'), ake($payload, 'dynamic', false));
 
                         } else {
 
-                            $code = 3;
+                            $exitcode = 3;
 
                         }
 
@@ -531,7 +574,7 @@ abstract class Process {
 
                     default:
 
-                        $code = 2;
+                        $exitcode = 2;
 
                         break;
 
@@ -541,7 +584,7 @@ abstract class Process {
 
         }
 
-        return $code;
+        return $exitcode;
 
     }
 

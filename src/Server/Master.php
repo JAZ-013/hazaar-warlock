@@ -631,8 +631,13 @@ class Master {
 
             foreach($this->config->schedule as $job){
 
-                if(!$job->has('action'))
+                if(!$job->has('action')){
+
+                    $this->log->write(W_ERR, 'Warlock schedule config has no \'action\' attribute.');
+
                     continue;
+
+                }
 
                 $application = (object)array(
                     'path' => APPLICATION_PATH,
@@ -694,10 +699,12 @@ class Master {
         if(is_array($value))
             return $value;
 
-        if(strpos($value, '::') === false)
-            return null;
+        if(strpos($value, '::') !== false)
+            return explode('::', $value, 2);
+        elseif(strpos($value, '->') !== false)
+            return explode('->', $value, 2);
 
-        return explode('::', $value, 2);
+        return null;
 
     }
 

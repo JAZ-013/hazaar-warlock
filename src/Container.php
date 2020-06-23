@@ -10,36 +10,9 @@ class Container extends Process {
 
     }
 
-    public function exec($function, $params){
+    public function exec($code, $params){
 
         $exitcode = 1;
-
-        $code = null;
-
-        if(is_array($function)){
-
-            $class = new \ReflectionClass($function[0]);
-
-            $method = $class->getMethod($function[1]);
-
-            if(!$method->isPublic())
-                throw new \Exception('Method is not public!');
-
-            $file = file($method->getFileName());
-
-            $start_line = $method->getStartLine() - 1;
-
-            $end_line = $method->getEndLine();
-
-            if(preg_match('/function\s+\w+(\(.*)/', $file[$start_line], $matches))
-                $file[$start_line] = 'function' . $matches[1];
-
-            if($namespace = $class->getNamespaceName())
-                $code = "namespace $namespace;\n\n";
-
-            $code .= '$_function = ' . implode("\n", array_splice($file, $start_line, $end_line - $start_line)) . ';';
-
-        }else $code = '$_function = ' . $function . ';';
 
         try{
 
