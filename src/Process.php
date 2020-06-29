@@ -492,6 +492,9 @@ abstract class Process {
                 if($tz = ake($payload, 'timezone'))
                     date_default_timezone_set($tz);
 
+                if($config = ake($payload, 'config'))
+                        $application->config->extend($config);
+
                 switch ($type) {
 
                     case 'EXEC' :
@@ -554,9 +557,6 @@ abstract class Process {
                             break;
 
                         }
-
-                        if($config = ake($payload, 'config'))
-                            $application->config->extend($config);
 
                         $service = self::getServiceClass($payload->name, $application, $protocol, false);
 
