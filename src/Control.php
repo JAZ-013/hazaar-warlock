@@ -141,23 +141,25 @@ class Control extends Process {
 
     private function makeCallable($callable){
 
-        if(!is_callable($callable))
-            throw new \Exception('Function must be callable!');
-
         if($callable instanceof \Closure){
 
             $callable = (string)new \Hazaar\Closure($callable);
 
-        }elseif(is_array($callable) && is_object($callable[0])){
+        }elseif(is_array($callable)){
 
-            $reflectionMethod = new \ReflectionMethod($callable[0], $callable[1]);
+            if(is_object($callable[0])){
 
-            $classname = get_class($callable[0]);
+                $reflectionMethod = new \ReflectionMethod($callable[0], $callable[1]);
 
-            if(!$reflectionMethod->isStatic())
-                throw new \Exception('Method ' . $callable[1] . ' of class ' . $classname . ' must be static');
+                $classname = get_class($callable[0]);
 
-            $callable[0] = $classname;
+                if(!$reflectionMethod->isStatic())
+                    throw new \Exception('Method ' . $callable[1] . ' of class ' . $classname . ' must be static');
+
+                $callable[0] = $classname;
+
+            }elseif(count($callable) !== 2)
+                throw new \Exception('Invalid callable definition!');
 
         }elseif(is_string($callable) && strpos($callable, '::')){
 
