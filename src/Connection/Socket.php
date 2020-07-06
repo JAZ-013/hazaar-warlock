@@ -62,6 +62,8 @@ final class Socket extends \Hazaar\Warlock\Protocol\WebSockets implements _Inter
 
             $this->socket_last_error = socket_last_error($this->socket);
 
+            error_clear_last();
+            
             socket_close($this->socket);
 
             $this->socket = null;
