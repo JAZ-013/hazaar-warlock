@@ -948,7 +948,7 @@ class Master {
             if(!array_key_exists($client->id, $queue))
                 continue;
 
-            $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIPE: EVENT=$event_id CLIENT=$client->id", $client->name);
+            $this->log->write(W_DEBUG, "CLIENT->UNSUBSCRIBE: EVENT=$event_id CLIENT=$client->id", $client->name);
 
             unset($queue[$client->id]);
 
