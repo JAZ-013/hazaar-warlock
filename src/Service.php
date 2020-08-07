@@ -4,6 +4,8 @@ namespace Hazaar\Warlock;
 
 require('Functions.php');
 
+require_once('Constants.php');
+
 define('W_LOCAL', -1);
 
 /**
@@ -910,6 +912,8 @@ abstract class Service extends Process {
 
     final public function send($command, $payload = null){
 
+        if(!$this->state > 0) return false;
+
         $result = parent::send($command, $payload);
 
         if($result === false){
@@ -925,6 +929,8 @@ abstract class Service extends Process {
     }
 
     final public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0){
+
+        if(!$this->state > 0) return false;
 
         $result = parent::recv($payload, $tv_sec, $tv_usec);
 
