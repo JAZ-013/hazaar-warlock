@@ -542,6 +542,9 @@ abstract class Process {
 
                             $process = $class->newInstance($application, $protocol);
 
+                            if($class->isSubclassOf('Hazaar\\Warlock\\Service'))
+                                $process->state = HAZAAR_SERVICE_RUNNING;
+
                             $exitcode = $method->invokeArgs($process, ake($payload, 'params', array()));
 
                         }else throw new \Exception('Method can not be executed.');
