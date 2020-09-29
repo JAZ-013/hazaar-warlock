@@ -134,7 +134,8 @@ abstract class Service extends Process {
 
         $this->__log_file = $warlock->sys['runtimepath'] . DIRECTORY_SEPARATOR . $this->name . '.log';
 
-        $this->__log = fopen($this->__log_file, 'a');
+        if(is_writable($this->__log_file))
+            $this->__log = fopen($this->__log_file, 'a');
 
         $this->log(W_LOCAL, "Service '{$this->name}' starting up");
 
@@ -212,31 +213,32 @@ abstract class Service extends Process {
 
     public function log($level, $message, $name = null){
 
-        if(!is_resource($this->__log))
-            return false;
-
         if($name === null)
             $name = $this->name;
 
-        if($level <= $this->__local_log_level){
+        if(is_resource($this->__log)){
+                
+            if($level <= $this->__local_log_level){
 
-            $label = ake($this->__log_levels, $level, 'NONE');
+                $label = ake($this->__log_levels, $level, 'NONE');
 
-            if(!is_array($message))
-                $message = array($message);
+                if(!is_array($message))
+                    $message = array($message);
 
-            foreach($message as $m){
+                foreach($message as $m){
 
-                $msg = date('Y-m-d H:i:s') . " - $this->name - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
+                    $msg = date('Y-m-d H:i:s') . " - $this->name - " . str_pad($label, $this->__str_pad, ' ', STR_PAD_LEFT) . ' - ' . $m . "\n";
 
-                fwrite($this->__log, $msg);
+                    fwrite($this->__log, $msg);
 
-                if($this->__remote === true && $this->config->silent !== true)
-                    echo $msg;
+                    if($this->__remote === true && $this->config->silent !== true)
+                        echo $msg;
+
+                }
+
+                fflush($this->__log);
 
             }
-
-            fflush($this->__log);
 
         }
 
