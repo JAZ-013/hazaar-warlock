@@ -134,7 +134,7 @@ abstract class Service extends Process {
 
         $this->__log_file = $warlock->sys['runtimepath'] . DIRECTORY_SEPARATOR . $this->name . '.log';
 
-        if(is_writable($this->__log_file))
+        if((file_exists($this->__log_file) && is_writable($this->__log_file)) || is_writable(dirname($this->__log_file)))
             $this->__log = fopen($this->__log_file, 'a');
 
         $this->log(W_LOCAL, "Service '{$this->name}' starting up");
