@@ -455,6 +455,8 @@ abstract class Process {
         if(!class_exists('\Hazaar\Warlock\Config'))
             throw new \Exception('Could not find default warlock config.  How is this even working!!?');
 
+        $_SERVER['WARLOCK_EXEC'] = 1;
+
         $defaults = \Hazaar\Warlock\Config::$default_config;
 
         $defaults['sys']['id'] = crc32(APPLICATION_PATH);
