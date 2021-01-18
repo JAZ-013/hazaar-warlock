@@ -130,7 +130,7 @@ class Control extends Process {
 
     static public function getInstance($autostart = null, $config = null, $require_connect = true){
 
-        $instance_key = hash('crc32b', $config['client']['server'] . $config['client']['port']);
+        $instance_key = hash('crc32b', ake($config, 'client.server') . ake($config, 'client.port'));
 
         if(!(array_key_exists($instance_key, Control::$instance) && Control::$instance[$instance_key] instanceof Control))
             Control::$instance[$instance_key] = new Control($autostart, $config, $instance_key, $require_connect);
