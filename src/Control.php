@@ -110,12 +110,21 @@ class Control extends Process {
         if($this->config->client['port'] === null)
             $this->config->client['port'] = $this->config->server['port'];
 
+        /**
+         * If no server is specified, look up the listen address of a local server config. This will override the
+         * address AND the port.  This ensures configs that have a different browser client-side address can be configured
+         * and work and the client side will connect to the correct localhost address/port
+         */
         if($this->config->client['server'] === null){
 
             if(trim($this->config->server['listen']) == '0.0.0.0')
                 $this->config->client['server'] = '127.0.0.1';
             else
                 $this->config->client['server'] = $this->config->server['listen'];
+
+            $this->config->client['port'] = $this->config->server['port'];
+
+            $this->config->client['ssl'] = false; //Disable SSL because we know the server doesn't support it (yet?).
 
         }
 
