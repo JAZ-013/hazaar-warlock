@@ -105,11 +105,13 @@ class Process extends \Hazaar\Model\Strict {
         if (!is_executable($php_binary))
             throw new \Exception('The PHP CLI binary exists but is not executable!');
 
-        $proc_cmd = basename($php_binary) . ' "' . $cmd . '"';
+        $proc_cmd = $php_binary . ' "' . basename($cmd) . '" -d --name ' . $this->tag;
 
         $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->id);
 
-        $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($php_binary), $env);
+        $this->log->write(W_DEBUG, 'CWD=' . dirname($cmd), $this->id);
+
+        $this->process = proc_open($proc_cmd, $descriptorspec, $pipes, dirname($cmd), $env);
 
         if(is_resource($this->process)){
 
