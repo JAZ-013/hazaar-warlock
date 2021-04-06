@@ -19,6 +19,14 @@ abstract class Process {
 
     protected $protocol;
 
+    static private $options = [
+        'service_name' => [ 'n', 'name', 'service_name', "\tStart a service directly from the command line." ],
+        'daemon' => ['d', 'daemon', null, "\t\t\t\tStart in daemon mode and wait for a startup packet." ],
+        'help' => [ null, 'help', null, "\t\t\t\tPrint this message and exit." ]
+    ];
+
+    static private $opt;
+
     function __construct(\Hazaar\Application $application, Protocol $protocol, $guid = null) {
 
         $this->start = time();
@@ -436,6 +444,68 @@ abstract class Process {
 
     }
 
+    static private function getopt(){
+
+        if(!self::$opt){
+
+            self::$opt = [0 => '', 1 => []];
+
+            foreach(self::$options as $name => $o){
+
+                if($o[0]) self::$opt[0] .= $o[0] . (is_string($o[2]) ? ':' : '');
+
+                if($o[1]) self::$opt[1][] = $o[1] . (is_string($o[2]) ? ':' : '');
+
+            }
+
+        }
+
+        $ops = getopt(self::$opt[0], self::$opt[1]);
+
+        $options = [];
+
+        foreach(self::$options as $name => $o){
+
+            $s = $l = false;
+
+            $sk = $lk = null;
+
+            if(($o[0] && ($s = array_key_exists($sk = rtrim($o[0], ':'), $ops))) || ($o[1] && ($l = array_key_exists($lk = rtrim($o[1], ':'), $ops))))
+                $options[$name] = is_string($o[2]) ? ($s ? $ops[$sk] : $ops[$lk]) : true;
+
+        }
+
+        if(ake($options, 'help') === true)
+            return self::showHelp();
+
+        return $options;
+
+    }
+
+    static private function showHelp(){
+
+        $script = basename($_SERVER['SCRIPT_FILENAME']);
+
+        $msg = "Syntax: $script [options]\nOptions:\n";
+        
+        foreach(self::$options as $o){
+
+            $avail = [];
+
+            if($o[0]) $avail[] = '-' . $o[0] . (is_string($o[2]) ? ' ' . $o[2] : '');
+
+            if($o[1]) $avail[] = '--' . $o[1] . (is_string($o[2]) ? '=' . $o[2] : '');
+
+            $msg .= '  ' . implode(', ', $avail) . $o[3] . "\n";
+
+        }
+
+        echo $msg;
+
+        return 0;
+
+    }
+
     /**
      * @brief Execute code from standard input in the application context
      *
@@ -450,10 +520,16 @@ abstract class Process {
      *
      * @since 1.0.0
      */
-    static public function runner(\Hazaar\Application $application, $service_name = null) {
+    static public function runner(\Hazaar\Application $application, $argv = null) {
+
+        $options = self::getopt();
+
+        $service_name = ake($options, 'service_name', null);
 
         if(!class_exists('\Hazaar\Warlock\Config'))
             throw new \Exception('Could not find default warlock config.  How is this even working!!?');
+
+        $exitcode = 1;
 
         $_SERVER['WARLOCK_EXEC'] = 1;
 
@@ -467,21 +543,10 @@ abstract class Process {
 
         $protocol = new Protocol($warlock->sys->id, $warlock->server->encoded);
 
-        if(is_string($service_name)){
-
-            $service = self::getServiceClass($service_name, $application, $protocol, true);
-
-            if(!$service instanceof \Hazaar\Warlock\Service)
-                die("Could not find service named '$service_name'.\n");
-
-            $exitcode = call_user_func(array($service, 'main'));
-
-        }else{
+        if(ake($options, 'daemon') === true){
 
             //Execution should wait here until we get a command
             $line = fgets(STDIN);
-
-            $exitcode = 1;
 
             $payload = null;
 
@@ -586,6 +651,19 @@ abstract class Process {
                 }
 
             }
+
+        }elseif(is_string($service_name)){
+
+            $service = self::getServiceClass($service_name, $application, $protocol, true);
+
+            if(!$service instanceof \Hazaar\Warlock\Service)
+                die("Could not find service named '$service_name'.\n");
+
+            $exitcode = call_user_func(array($service, 'main'));
+
+        }else{
+
+            $exitcode = self::showHelp();
 
         }
 
