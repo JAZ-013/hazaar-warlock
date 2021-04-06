@@ -32,7 +32,7 @@ abstract class Service extends Process {
 
     protected $config;
 
-    protected $state    = HAZAAR_SERVICE_INIT;
+    protected $state    = HAZAAR_SERVICE_NONE;
 
     protected $schedule = array();              //callback execution schedule
 
@@ -277,6 +277,8 @@ abstract class Service extends Process {
     final public function main($params = array(), $dynamic = false) {
 
         $this->log(W_LOCAL, "Service started");
+
+        $this->state = HAZAAR_SERVICE_INIT;
 
         if($this->config->log->rotate === true){
 
@@ -569,6 +571,7 @@ abstract class Service extends Process {
             $state = $this->state;
 
         $strings = array(
+            HAZAAR_SERVICE_NONE     => 'Not Ready',
             HAZAAR_SERVICE_ERROR    => 'Error',
             HAZAAR_SERVICE_INIT     => 'Initializing',
             HAZAAR_SERVICE_READY    => 'Ready',
@@ -914,7 +917,7 @@ abstract class Service extends Process {
 
     final public function send($command, $payload = null){
 
-        if(!$this->state > 0) return false;
+        if($this->state === HAZAAR_SERVICE_NONE) return false;
 
         $result = parent::send($command, $payload);
 
@@ -932,7 +935,7 @@ abstract class Service extends Process {
 
     final public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0){
 
-        if(!$this->state > 0) return false;
+        if($this->state === HAZAAR_SERVICE_NONE) return false;
 
         $result = parent::recv($payload, $tv_sec, $tv_usec);
 
