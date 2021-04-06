@@ -20,6 +20,8 @@ define('W_DECODE2', 6);
 /*
  * Service Status Codes
  */
+define('HAZAAR_SERVICE_NONE', null);
+
 define('HAZAAR_SERVICE_ERROR', -1);
 
 define('HAZAAR_SERVICE_INIT', 0);
