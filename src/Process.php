@@ -221,12 +221,16 @@ abstract class Process {
         if(!is_int($level))
             return false;
 
+        if(!is_string($name)) $name = null;
+
         return $this->send('LOG', array('level' => $level, 'msg' => $message, 'name' => $name));
 
     }
 
     public function debug($data, $name = null){
 
+        if(!is_string($name)) $name = null;
+        
         return $this->send('DEBUG', array('data' => $data, 'name' => $name));
 
     }
