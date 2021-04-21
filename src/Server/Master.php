@@ -986,14 +986,14 @@ class Master {
 
                 }
 
-                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . strlen($buf), $client->name);
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=$client->address PORT=$client->port BYTES=" . $bytes_received, $client->name);
 
             }else{
 
                 if ($bytes_received === 0)
                     return false;
 
-                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . strlen($buf), $client->name);
+                $this->log->write(W_DEBUG, "CLIENT<-RECV: HOST=stream BYTES=" . $bytes_received, $client->name);
 
             }
 
