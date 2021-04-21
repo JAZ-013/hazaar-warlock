@@ -114,16 +114,22 @@ class Process extends \Hazaar\Model\Strict {
             $proc_cmd = [
                 $php_binary,
                 basename($cmd),
-                '-d', 
-                '--name',
-                $this->tag
+                '-d'
             ];
+            
+            if($this->tag){
+                 
+                $proc_cmd[] = '--name';
+
+                $proc_cmd[] = $this->tag;
+
+            }
 
             $this->log->write(W_DEBUG, 'EXEC=' . implode(' ', $proc_cmd), $this->id);
 
         }else{
 
-            $proc_cmd = $php_binary . ' "' . basename($cmd) . '" -d --name ' . $this->tag;
+            $proc_cmd = $php_binary . ' "' . basename($cmd) . '" -d' . ($this->tag ? ' --name ' . $this->tag : '');
 
             $this->log->write(W_DEBUG, 'EXEC=' . $proc_cmd, $this->id);
 
