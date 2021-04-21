@@ -254,25 +254,12 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     private function processPacket(&$buffer = null){
 
-        if ($this->__buffer) {
-
-            $buffer = $this->__buffer . $buffer;
-
-            $this->__buffer = null;
-
-            return $this->processPacket($buffer);
-
-        }
-
         if (!$buffer || ($pos = strpos($buffer, "\n")) === false)
             return false;
 
         $packet = substr($buffer, 0, $pos);
 
-        if (strlen($buffer) > ($pos += 1))
-            $this->__buffer = substr($buffer, $pos);
-
-        $buffer = '';
+        $buffer = substr($buffer, $pos + 1);
 
         return $packet;
 
@@ -280,7 +267,9 @@ abstract class Job extends \Hazaar\Model\Strict implements CommInterface {
 
     public function recv(&$buf){
 
-        while($packet = $this->processPacket($buf)){
+        $this->__buffer .= $buf;
+
+        while($packet = $this->processPacket($this->__buffer)){
 
             $this->log->write(W_DECODE, "JOB<-PACKET: " . trim($packet, "\n"), $this->name);
 

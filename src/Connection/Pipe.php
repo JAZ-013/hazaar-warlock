@@ -83,16 +83,6 @@ final class Pipe implements _Interface {
 
     private function processPacket(&$buffer = null){
 
-        if ($this->buffer) {
-
-            $buffer = $this->buffer . $buffer;
-
-            $this->buffer = null;
-
-            return $this->processPacket($buffer);
-
-        }
-
         if (!$buffer)
             return false;
 
@@ -101,13 +91,7 @@ final class Pipe implements _Interface {
 
         $packet = substr($buffer, 0, $pos);
 
-        if (strlen($buffer) > ($pos += 1)) {
-
-            $this->buffer = substr($buffer, $pos);
-
-            $buffer = '';
-
-        }
+        $buffer = substr($buffer, $pos + 1);
 
         return $packet;
 
@@ -115,12 +99,16 @@ final class Pipe implements _Interface {
 
     public function recv(&$payload = null, $tv_sec = 3, $tv_usec = 0) {
 
-        while($packet = $this->processPacket()){
+        if($this->buffer && strpos($this->buffer, "\n") !== false){
+                
+            while($packet = $this->processPacket($this->buffer)){
 
-            if($packet === true)
-                break;
+                if($packet === true)
+                    break;
 
-            return $this->protocol->decode($packet, $payload);
+                return $this->protocol->decode($packet, $payload);
+
+            }
 
         }
 
@@ -131,13 +119,13 @@ final class Pipe implements _Interface {
         while(stream_select($read, $write, $except, $tv_sec, $tv_usec) > 0) {
 
             // will block to wait server response
-            $buffer = fread(STDIN, 65536);
+            $this->buffer .= $buffer = fread(STDIN, 65536);
 
             $this->bytes_received += ($bytes_received = strlen($buffer));
 
             if($bytes_received > 0) {
 
-                if(($packet = $this->processPacket($buffer)) === true)
+                if(($packet = $this->processPacket($this->buffer)) === true)
                     continue;
 
                 if($packet === false)
